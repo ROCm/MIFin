@@ -38,7 +38,7 @@ else()
     set(CMAKE_INSTALL_PREFIX "/opt/rocm" CACHE PATH "")
 endif()
 
-project ( tunerr C CXX )
+project ( fin C CXX )
 
 enable_testing()
 
@@ -86,9 +86,9 @@ add_compile_options(-std=c++14)
 # - HCC
 check_cxx_compiler_flag("--cuda-host-only -x hip" HAS_HIP)
 if(CMAKE_CXX_COMPILER MATCHES ".*hcc" OR CMAKE_CXX_COMPILER MATCHES ".*hipcc" OR HAS_HIP)
-    set(MIOPEN_DEFAULT_BACKEND "HIP")
+    set(FIN_DEFAULT_BACKEND "HIP")
 else()
-    set(MIOPEN_DEFAULT_BACKEND "OpenCL")
+    set(FIN_DEFAULT_BACKEND "OpenCL")
 endif()
 
 if(WIN32 AND CMAKE_CROSSCOMPILING)
@@ -99,14 +99,15 @@ endif()
 
 list(APPEND CMAKE_PREFIX_PATH /opt/rocm /opt/rocm/hcc /opt/rocm/hip)
 
-set( MIOPEN_BACKEND ${MIOPEN_DEFAULT_BACKEND} CACHE STRING
+set( FIN_BACKEND ${FIN_DEFAULT_BACKEND} CACHE STRING
     "Which of MIOpens's backends to use?" )
-set_property( CACHE MIOPEN_BACKEND PROPERTY STRINGS
+set_property( CACHE FIN_BACKEND PROPERTY STRINGS
     OpenCL HIP HIPOC )
 
 find_package(MIOpen REQUIRED PATHS /opt/rocm)
 # HIP is always required
 find_package(hip REQUIRED PATHS /opt/rocm)
+# probably not required
 target_flags(HIP_COMPILER_FLAGS hip::device)
 # Remove cuda arch flags
 string(REGEX REPLACE --cuda-gpu-arch=[a-z0-9]+ "" HIP_COMPILER_FLAGS "${HIP_COMPILER_FLAGS}")
@@ -116,27 +117,23 @@ message(STATUS "Hip compiler flags: ${HIP_COMPILER_FLAGS}")
 add_definitions("-DHIP_COMPILER_FLAGS=${HIP_COMPILER_FLAGS}")
 
 # OpenCL 1.2
-if( MIOPEN_BACKEND STREQUAL "OpenCL")
-    set(MIOPEN_BACKEND_OPENCL 1)
+if( FIN_BACKEND STREQUAL "OpenCL")
+    set(FIN_BACKEND_OPENCL 1)
     find_package( OpenCL REQUIRED )
-    find_program(MIOPEN_HIP_COMPILER hcc
+    find_program(FIN_HIP_COMPILER hcc
         PATH_SUFFIXES bin
         PATHS /opt/rocm
     )
-    set(MIOPEN_USE_MIOPENGEMM ON CACHE BOOL "")
-    if(MIOPEN_HIP_COMPILER)
-        message("hip compiler: ${MIOPEN_HIP_COMPILER}")
-    else()
-        message(FATAL_ERROR "hip compiler not found")
-    endif()
-
-    # scgemm not support opencl backend yet.
-    set(MIOPEN_USE_SCGEMM OFF)
+# if(MIOPEN_HIP_COMPILER)
+#        message("hip compiler: ${MIOPEN_HIP_COMPILER}")
+#    else()
+#        message(FATAL_ERROR "hip compiler not found")
+#    endif()
 endif()
 
 # HIP
-if( MIOPEN_BACKEND STREQUAL "HIP" OR MIOPEN_BACKEND STREQUAL "HIPOC")
-    set(MIOPEN_BACKEND_HIP 1)
+if( FIN_BACKEND STREQUAL "HIP" OR FIN_BACKEND STREQUAL "HIPOC")
+    set(FIN_BACKEND_HIP 1)
     set(MIOPEN_USE_MIOPENGEMM OFF CACHE BOOL "")
     find_program(HIP_OC_COMPILER clang-ocl
         PATH_SUFFIXES bin
@@ -172,25 +169,8 @@ if( MIOPEN_BACKEND STREQUAL "HIP" OR MIOPEN_BACKEND STREQUAL "HIPOC")
 
     set(MIOPEN_HIP_COMPILER ${CMAKE_CXX_COMPILER} CACHE PATH "")
 
-
-    # rocblas
-    set(MIOPEN_USE_ROCBLAS ON CACHE BOOL "")
-    if(MIOPEN_USE_ROCBLAS)
-        find_package(rocblas REQUIRED PATHS /opt/rocm)
-        message(STATUS "Build with rocblas")
-    else()
-        message(STATUS "Build without rocblas")
-    endif()
-
-    # scgemm
-    set(MIOPEN_USE_SCGEMM OFF CACHE BOOL "")
-    if(MIOPEN_USE_SCGEMM)
-        message(STATUS "Build with scgemm")
-    else()
-        message(STATUS "Build without scgemm")
-    endif()
 endif()
-message( STATUS "${MIOPEN_BACKEND} backend selected." )
+message( STATUS "${HIP_BACKEND} backend selected." )
 # look for and register extractkernel
 find_program(EXTRACTKERNEL_BIN extractkernel
     PATH_SUFFIXES bin
@@ -263,9 +243,9 @@ set(CPACK_DEBIAN_PACKAGE_DEPENDS "${MIOPEN_PACKAGE_REQS}, rocm-opencl-dev")
 set(CPACK_RPM_PACKAGE_REQUIRES "${MIOPEN_PACKAGE_REQS}, rocm-opencl-devel")
 
 rocm_create_package(
-    NAME MIOpen-${MIOPEN_BACKEND}
-    DESCRIPTION "AMD's DNN Library"
-    MAINTAINER "Paul Fultz II <paul.fultz@amd.com>"
+    NAME fin-${FIN_BACKEND}
+    DESCRIPTION "Fin MIOpen Driver"
+    MAINTAINER "Jehandad Khan <jehandad.khan@amd.com>"
     LDCONFIG
     # DEPENDS rocm-opencl rocm-utils hip-hcc tinygemm
 )
@@ -275,7 +255,7 @@ set(MIOPEN_TIDY_ERRORS ERRORS * -readability-inconsistent-declaration-parameter-
 if(CMAKE_CXX_COMPILER MATCHES ".*hcc" OR CMAKE_CXX_COMPILER MATCHES ".*clang\\+\\+")
     set(MIOPEN_TIDY_CHECKS -modernize-use-override -readability-non-const-parameter)
 # Enable tidy on hip
-elseif(MIOPEN_BACKEND STREQUAL "HIP")
+elseif(FIN_BACKEND STREQUAL "HIP")
     set(MIOPEN_TIDY_ERRORS ALL)
 
 endif()
