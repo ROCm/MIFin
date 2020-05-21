@@ -88,10 +88,6 @@ protected:
 #endif
 };
 
-template <> void Fin::InitDataType<int8_t>() { data_type = miopenInt8; }
-template <> void Fin::InitDataType<float>() { data_type = miopenFloat; }
-template <> void Fin::InitDataType<float16>() { data_type = miopenHalf; }
-template <> void Fin::InitDataType<bfloat16>() { data_type = miopenBFloat16; }
 // "std::is_same<Tgpu, float>{}" used to avoid "static_assert" compilation
 // error,
 // which occurs when the condition does not depend in any way on the template
@@ -100,12 +96,6 @@ template <typename Tgpu> void Fin::InitDataType() {
   static_assert(std::is_same<Tgpu, float>{}, "unsupported Tgpu");
 }
 
-void PadBufferSize(size_t &sz, int datatype_sz) {
-  size_t page_sz = (2 * 1024 * 1024) / datatype_sz;
-  if (sz % page_sz != 0) {
-    sz = ((sz + page_sz) / page_sz) * page_sz;
-  }
-}
 
 template <typename T>
 std::ostream &operator<<(std::ostream &os, const std::vector<T> &vs) {
@@ -116,4 +106,4 @@ std::ostream &operator<<(std::ostream &os, const std::vector<T> &vs) {
   return os;
 }
 } // namespace fin
-#endif // GUARD_MIOPEN_FIN_HPP
+#endif // GUARD_FIN_HPP

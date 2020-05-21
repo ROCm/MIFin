@@ -23,8 +23,8 @@
  * SOFTWARE.
  *
  *******************************************************************************/
-#ifndef GUARD_MIOPEN_CONV_FIN_HPP
-#define GUARD_MIOPEN_CONV_FIN_HPP
+#ifndef GUARD_CONV_FIN_HPP
+#define GUARD_CONV_FIN_HPP
 
 #include "input_flags.hpp"
 #include "fin.hpp"
@@ -98,7 +98,7 @@ class ConvFin : public Fin
     int AllocateBuffersAndCopy();
     int FindForward(int& ret_algo_count,
             std::vector<miopenConvAlgoPerf_t>& perf_results);
-    int RunForwardGPU();
+    int RunForwardGPU() { return 0;}
     int RunBackwardGPU() { return 0;}
     int GetandSetData();
     bool IsInputTensorTransform() const;
@@ -134,7 +134,6 @@ int ConvFin<Tgpu, Tref>::ParseCmdLineArgs(int argc, char* argv[])
     // TODO: add an argument for the json file or figure how to read it from a pipe (|)
     inflags.Parse(argc, argv);
 
-    auto num_iterations = inflags.GetValueInt("iter");
 #if 0
     if(num_iterations < 1)
     {
@@ -143,24 +142,6 @@ int ConvFin<Tgpu, Tref>::ParseCmdLineArgs(int argc, char* argv[])
     }
 #endif
     auto time_enabled = (inflags.GetValueInt("time") != 0);
-    int wall_enabled = 0;
-    int warmup_enabled = 0;
-    {
-        const int val = inflags.GetValueInt("wall");
-        if(val >= 1)
-        {
-            if(!time_enabled)
-            {
-                std::cout << "Info: '--wall " << val << "' is ignored because '--time' is not set"
-                          << std::endl;
-            }
-            else
-            {
-                wall_enabled   = (val >= 1);
-                warmup_enabled = (val >= 2);
-            }
-        }
-    }
 
     if(time_enabled)
     {
@@ -398,7 +379,7 @@ std::vector<int> ConvFin<Tgpu, Tref>::GetBiasTensorLengthsFromCmdLine()
 template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::SetConvDescriptorFromCmdLineArgs()
 {
-    int spatial_dim = inflags.GetValueInt("spatial_dim");
+    size_t spatial_dim = inflags.GetValueInt("spatial_dim");
 
     std::vector<int> in_spatial_lens(spatial_dim);
     std::vector<int> wei_spatial_lens(spatial_dim);
@@ -477,7 +458,7 @@ int ConvFin<Tgpu, Tref>::SetConvDescriptorFromCmdLineArgs()
         exit(0);
     }
 
-    miopenPaddingMode_t p_mode;
+    miopenPaddingMode_t p_mode = miopenPaddingSame;
     if((inflags.GetValueStr("pad_mode")) == "same")
         p_mode = miopenPaddingSame;
     else if((inflags.GetValueStr("pad_mode")) == "valid")
@@ -577,6 +558,7 @@ int ConvFin<Tgpu, Tref>::AllocateBuffersAndCopy()
      */
     srand(0);
     auto in_f = [&](auto idx) { 
+        (void)idx;
         if(is_int8)
         {
             float Data_scale = 127.0;
@@ -590,6 +572,7 @@ int ConvFin<Tgpu, Tref>::AllocateBuffersAndCopy()
         }
         };
     auto out_f = [&](auto idx) { 
+        (void)idx;
         if(is_int8)
         {
             return static_cast<Tgpu>(0); // int8 is inference only
@@ -601,6 +584,7 @@ int ConvFin<Tgpu, Tref>::AllocateBuffersAndCopy()
         }
         };
     auto wei_f = [&](auto idx) { 
+        (void)idx;
         if(is_int8)
         {
             float Data_scale = 127.0;
@@ -613,6 +597,7 @@ int ConvFin<Tgpu, Tref>::AllocateBuffersAndCopy()
         }
         };
     auto bias_f = [&](auto idx) { 
+        (void)idx;
         if(is_int8)
             return static_cast<float>(idx % 8) + RAN_GEN<float>(static_cast<float>(0.0), static_cast<float>(1.0));
         else
@@ -659,7 +644,9 @@ int ConvFin<Tgpu, Tref>::AllocateBuffersAndCopy()
         const auto wsSizeof =
             std::max(std::max(ws_sizeof_find_bwd, ws_sizeof_find_wrw), ws_sizeof_find_fwd);
         if(wsSizeof != 0)
-            workspace = tensor<Tgpu, Tref>{q, std::vector<unsigned int>{static_cast<int>(std::ceil(wsSizeof / sizeof(Tgpu)))}, true, true, [](auto idx){ return static_cast<Tgpu>(0);}};
+            workspace = tensor<Tgpu, Tref>{q, 
+                std::vector<unsigned int>{static_cast<unsigned int>(std::ceil(wsSizeof / sizeof(Tgpu)))}, 
+                true, true, [](auto idx){ (void)idx; return static_cast<Tgpu>(0);}};
     }
 #if 0
     if(inflags.GetValueInt("tensor_vect") == 1 && data_type == miopenInt8)

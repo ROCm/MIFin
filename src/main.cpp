@@ -26,7 +26,6 @@
  *******************************************************************************/
 #include <miopen/miopen.h>
 
-#include "config.h"
 #include "fin.hpp"
 #include "conv_fin.hpp"
 
@@ -65,9 +64,9 @@ int main(int argc, char *argv[]) {
     std::cout << " " << argv[i];
   std::cout << std::endl;
 
-
     fin::Fin* f = nullptr;
     f = new fin::ConvFin<float, float>();
+    (void)f;
   // auto f = std::make_unique<fin::ConvFin>(new fin::ConvFin<float, float>());
 #if 0
   else if(base_arg == "convfp16")

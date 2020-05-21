@@ -67,9 +67,6 @@ struct GPUMem
     ~GPUMem() { clReleaseMemObject(buf); }
 
     cl_mem buf;
-    size_t sz;
-    size_t data_sz;
-
 #elif FIN_BACKEND_HIP
 
     GPUMem(){};
@@ -97,9 +94,9 @@ struct GPUMem
     hipStream_t _q; // Place holder for opencl context
     uint32_t _ctx;
     void* buf;
+#endif
     size_t sz;
     size_t data_sz;
-#endif
 };
 
 } // namespace fin

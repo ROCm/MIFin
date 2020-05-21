@@ -34,8 +34,19 @@
 #include <gpu_mem.hpp>
 
 namespace fin {
+
 using half_float::half;
 typedef half float16;
+
+template <typename T>
+miopenDataType_t GetDataType();
+
+template <typename T>
+miopenDataType_t GetDataType()
+{
+    static_assert(true,  "Invalid data type");
+}
+
 template <typename Tgpu, typename Tcpu>
 struct tensor
 {
@@ -54,10 +65,11 @@ struct tensor
     std::vector<Tgpu> deviceData; // home for the GPU data on the CPU side
     GPUMem gpuData; // object representing the GPU data ON the GPU
     context_type ctx;
-    size_t size();
+    size_t size()
+    {
+        return gpuData.GetSize();
+    }
 
-    template <typename T>
-    miopenDataType_t GetDataType();
     tensor(){}
     template <typename F, typename U>
     tensor(accelerator_stream _q, std::vector<U> _plens, bool is_input, bool is_output, F f)
@@ -72,10 +84,10 @@ struct tensor
 #endif
         if(is_input)
             // TODO: check if the datatype is correct;
-            cpuData = std::vector<Tgpu>{size()};
+            cpuData = std::vector<Tgpu>(size(), static_cast<Tgpu>(0));
 
         if(is_output)
-            deviceData = std::vector<Tgpu>{size(), static_cast<Tgpu>(0)};
+            deviceData = std::vector<Tgpu>(size(), static_cast<Tgpu>(0));
 
         for(int i = 0; i < size(); i++)
         {
@@ -87,34 +99,16 @@ struct tensor
         }
 
         gpuData = GPUMem{ctx, size(), sizeof(Tgpu)};
+        int status = 0;
         if(is_input)
-            auto status = gpuData.ToGPU(q, cpuData.data());
+            status = gpuData.ToGPU(q, cpuData.data());
         else if(is_output)
-            auto status = gpuData.ToGPU(q, deviceData.data()); // to set the data to zero on the GPU
+            status = gpuData.ToGPU(q, deviceData.data()); // to set the data to zero on the GPU
+        // TODO: check status 
+        (void)status;
     }
 };
 } // namespace fin
 #if 0
-template <typename Tgpu, typename Tref>
-miopenDataType_t tensor<Tgpu, Tref>::GetDataType<int8_t>()
-{
-    data_type = miopenInt8;
-}
-template <>
-miopenDataType_t tensor::GetDataType<float>()
-{
-    data_type = miopenFloat;
-}
-template <>
-miopenDataType_t tensor::GetDataType<float16>()
-{
-    data_type = miopenHalf;
-}
-template <>
-miopenDataType_t tensor::GetDataType<bfloat16>()
-{
-    data_type = miopenBFloat16;
-}
 #endif
-
 #endif // GUARD_FIN_TENSOR_HPP
