@@ -24,6 +24,8 @@
 # 
 ################################################################################
 cmake_minimum_required( VERSION 2.8.12 )
+list(APPEND CMAKE_PREFIX_PATH /opt/rocm /opt/rocm/hip /opt/rocm/hcc /opt/rocm/opencl)
+find_package(miopen)
 
 find_package(Threads REQUIRED)
 
