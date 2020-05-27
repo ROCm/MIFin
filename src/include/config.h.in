@@ -27,6 +27,6 @@
 #define GUARD_FIN_CONFIG_H_IN
 
 #cmakedefine01 FIN_BACKEND_OPENCL
-#cmakedefine01 FIN_BACKEND_HCC
+#cmakedefine01 FIN_BACKEND_HIP
 
 #endif

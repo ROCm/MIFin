@@ -53,8 +53,7 @@ struct tensor
 #if FIN_BACKEND_OPENCL
     using context_type = cl_context;
     using accelerator_stream = cl_command_queue;
-    cl_command_queue q;
-
+    context_type ctx;
 #elif FIN_BACKEND_HIP
     using accelerator_stream = hipStream_t;
     using context_type = uint32_t;
@@ -64,7 +63,7 @@ struct tensor
     std::vector<Tgpu> cpuData; // version of the data for the CPU compute
     std::vector<Tgpu> deviceData; // home for the GPU data on the CPU side
     GPUMem gpuData; // object representing the GPU data ON the GPU
-    context_type ctx;
+    accelerator_stream q;
     size_t size()
     {
         return gpuData.GetSize();

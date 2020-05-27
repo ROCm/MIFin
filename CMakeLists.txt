@@ -124,6 +124,7 @@ if( FIN_BACKEND STREQUAL "OpenCL")
         PATH_SUFFIXES bin
         PATHS /opt/rocm
     )
+    find_package(miopengemm PATHS /opt/rocm)
 # if(MIOPEN_HIP_COMPILER)
 #        message("hip compiler: ${MIOPEN_HIP_COMPILER}")
 #    else()
