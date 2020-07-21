@@ -42,10 +42,18 @@ template <typename T>
 miopenDataType_t GetDataType();
 
 template <typename T>
-miopenDataType_t GetDataType()
+miopenDataType_t GetDataType() 
 {
     static_assert(true,  "Invalid data type");
+    return miopenFloat; // satisfy the compiler
 }
+#if FIN_BACKEND_OPENCL
+#define STATUS_SUCCESS CL_SUCCESS
+using status_t = cl_int;
+#else // FIN_BACKEND_HIP
+#define STATUS_SUCCESS 0
+using status_t = int;
+#endif
 
 template <typename Tgpu, typename Tcpu>
 struct tensor
@@ -64,31 +72,57 @@ struct tensor
     std::vector<Tgpu> deviceData; // home for the GPU data on the CPU side
     GPUMem gpuData; // object representing the GPU data ON the GPU
     accelerator_stream q;
-    size_t size()
-    {
-        return gpuData.GetSize();
-    }
+    bool is_input;
+    bool is_output;
 
     tensor(){}
-    template <typename F, typename U>
-    tensor(accelerator_stream _q, std::vector<U> _plens, bool is_input, bool is_output, F f)
-        : q(_q),  desc(GetDataType<Tgpu>(), _plens) /*,cpuData{size()}, 
+    template <typename U>
+    tensor(accelerator_stream _q, std::vector<U> _plens, bool _is_input, bool _is_output)
+        : desc(GetDataType<Tgpu>(), _plens), q(_q), is_input(_is_input), is_output(_is_output)  /*,cpuData{size()}, 
             gpuData{_ctx, size(), elem_size()} {}*/
     {
-        // Perhaps make is_output and is_input exclusive, however, if -F is 0 then all tensors are both inputs and outputs
 #if FIN_BACKEND_OPENCL
         clGetCommandQueueInfo(q, CL_QUEUE_CONTEXT, sizeof(cl_context), &ctx, nullptr);
 #elif FIN_BACKEND_HIP
         ctx = 0;
 #endif
+
+
+    }
+
+    status_t FromDevice()
+    {
+        status_t status = 0;
+        if(is_output)
+            status = gpuData.FromGPU(q, deviceData.data());
+        return status;
+    }
+
+    status_t ToDevice()
+    {
+        status_t status = 0;
+        if(is_input)
+            status = gpuData.ToGPU(q, cpuData.data());
+        else if(is_output)
+            status = gpuData.ToGPU(q, deviceData.data()); // to set the data to zero on the GPU
+        return status;
+    }
+
+    void AllocateBuffers()
+    {
         if(is_input)
             // TODO: check if the datatype is correct;
-            cpuData = std::vector<Tgpu>(size(), static_cast<Tgpu>(0));
+            cpuData = std::vector<Tgpu>(desc.GetNumBytes(), static_cast<Tgpu>(0));
 
         if(is_output)
-            deviceData = std::vector<Tgpu>(size(), static_cast<Tgpu>(0));
+            deviceData = std::vector<Tgpu>(desc.GetNumBytes(), static_cast<Tgpu>(0));
 
-        for(int i = 0; i < size(); i++)
+        gpuData = GPUMem{ctx, desc.GetNumBytes(), sizeof(Tgpu)};
+    }
+    template<typename F>
+    void FillBuffer(F f)
+    {
+        for(int i = 0; i < GetTensorSize(); i++)
         {
             if(is_input) // is input
                 cpuData[i] = f(i);
@@ -96,15 +130,11 @@ struct tensor
             else /// \ref move_rand
                 rand();
         }
+    }
 
-        gpuData = GPUMem{ctx, size(), sizeof(Tgpu)};
-        int status = 0;
-        if(is_input)
-            status = gpuData.ToGPU(q, cpuData.data());
-        else if(is_output)
-            status = gpuData.ToGPU(q, deviceData.data()); // to set the data to zero on the GPU
-        // TODO: check status 
-        (void)status;
+    size_t GetTensorSize()
+    {
+        return desc.GetElementSize();
     }
 };
 } // namespace fin

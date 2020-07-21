@@ -42,6 +42,27 @@
 
 namespace fin {
 
+struct relMem
+{
+#if FIN_BACKEND_OPENCL
+    void operator ()(cl_mem ptr)
+    {
+        clReleaseMemObject(ptr);
+    }
+#elif FIN_BACKEND_HIP
+    void operator ()(void* ptr)
+    {
+        hipFree(ptr);
+    }
+#endif
+};
+#if FIN_BACKEND_OPENCL
+    using gpu_mem_ptr = std::unique_ptr<cl_mem, relMem>;
+#elif FIN_BACKEND_HIP
+    using gpu_mem_ptr = std::unique_ptr<void, relMem>;
+#endif
+
+
 struct GPUMem
 {
 
@@ -49,51 +70,53 @@ struct GPUMem
     GPUMem(){};
     GPUMem(cl_context& ctx, size_t psz, size_t pdata_sz) : sz(psz), data_sz(pdata_sz)
     {
-        buf = clCreateBuffer(ctx, CL_MEM_READ_WRITE, data_sz * sz, nullptr, nullptr);
+        buf = gpu_mem_ptr{clCreateBuffer(ctx, CL_MEM_READ_WRITE, data_sz * sz, nullptr, nullptr)};
     }
 
     int ToGPU(cl_command_queue& q, void* p)
     {
-        return clEnqueueWriteBuffer(q, buf, CL_TRUE, 0, data_sz * sz, p, 0, nullptr, nullptr);
+        return clEnqueueWriteBuffer(q, buf.get(), CL_TRUE, 0, data_sz * sz, p, 0, nullptr, nullptr);
     }
     int FromGPU(cl_command_queue& q, void* p)
     {
-        return clEnqueueReadBuffer(q, buf, CL_TRUE, 0, data_sz * sz, p, 0, nullptr, nullptr);
+        return clEnqueueReadBuffer(q, buf.get(), CL_TRUE, 0, data_sz * sz, p, 0, nullptr, nullptr);
     }
 
-    cl_mem GetMem() { return buf; }
+    cl_mem GetMem() { return buf.get(); }
     size_t GetSize() { return sz * data_sz; }
 
-    ~GPUMem() { clReleaseMemObject(buf); }
+    // ~GPUMem() { clReleaseMemObject(buf); }
 
-    cl_mem buf;
+    gpu_mem_ptr buf;
 #elif FIN_BACKEND_HIP
 
     GPUMem(){};
     GPUMem(uint32_t ctx, size_t psz, size_t pdata_sz) : _ctx(ctx), sz(psz), data_sz(pdata_sz)
     {
-        hipMalloc(static_cast<void**>(&buf), data_sz * sz);
+        void* tmp = nullptr;
+        hipMalloc(static_cast<void**>(&(tmp)), data_sz * sz);
+        buf = gpu_mem_ptr{tmp};
     }
 
     int ToGPU(hipStream_t q, void* p)
     {
         _q = q;
-        return static_cast<int>(hipMemcpy(buf, p, data_sz * sz, hipMemcpyHostToDevice));
+        return static_cast<int>(hipMemcpy(buf.get(), p, data_sz * sz, hipMemcpyHostToDevice));
     }
     int FromGPU(hipStream_t q, void* p)
     {
         hipDeviceSynchronize();
         _q = q;
-        return static_cast<int>(hipMemcpy(p, buf, data_sz * sz, hipMemcpyDeviceToHost));
+        return static_cast<int>(hipMemcpy(p, buf.get(), data_sz * sz, hipMemcpyDeviceToHost));
     }
 
-    void* GetMem() { return buf; }
+    void* GetMem() { return buf.get(); }
     size_t GetSize() { return sz * data_sz; }
 
-    ~GPUMem() { hipFree(buf); }
+    // ~GPUMem() { hipFree(buf); }
     hipStream_t _q; // Place holder for opencl context
     uint32_t _ctx;
-    void* buf;
+    gpu_mem_ptr buf;
 #endif
     size_t sz;
     size_t data_sz;

@@ -33,6 +33,7 @@
 #include "input_flags.hpp"
 
 
+#include <nlohmann/json.hpp>
 #include <algorithm>
 #include <cfloat>
 #include <cstdio>
@@ -41,6 +42,8 @@
 #include <miopen/handle.hpp>
 #include <numeric>
 #include <vector>
+
+using json = nlohmann::json;
 
 #if FIN_BACKEND_OPENCL
 #if defined(__APPLE__) || defined(__MACOSX)
@@ -67,15 +70,10 @@ public:
     hipStream_t& GetStream() { return q; }
 #endif
   virtual ~Fin() { } // TODO: do we need this
-
-  virtual int AddCmdLineArgs() = 0;
-  virtual int ParseCmdLineArgs(int argc, char *argv[]) = 0;
-  virtual InputFlags &GetInputFlags() = 0;
-  virtual int GetandSetData() = 0;
-  virtual int AllocateBuffersAndCopy() = 0;
-  virtual int RunForwardGPU() = 0;
-  virtual int RunBackwardGPU() = 0;
-
+  
+  virtual int ProcessStep(const std::string& step_name) = 0;
+    
+  json output;
 protected:
   template <typename Tgpu> void InitDataType();
   miopen::Handle handle;
