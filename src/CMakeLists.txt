@@ -32,7 +32,7 @@ find_package(Threads REQUIRED)
 configure_file("${PROJECT_SOURCE_DIR}/src/include/config.h.in" "${PROJECT_BINARY_DIR}/src/include/config.h")
 
 include_directories(include "${PROJECT_BINARY_DIR}/src/include")
-add_executable(fin main.cpp fin.cpp input_flags.cpp conv_fin.cpp)
+add_executable(fin main.cpp fin.cpp input_flags.cpp)
 target_compile_definitions( fin PRIVATE -D__HIP_PLATFORM_HCC__=1 )
 target_link_libraries(fin MIOpen ${Boost_LIBRARIES})
 target_link_libraries(fin ${CMAKE_THREAD_LIBS_INIT})

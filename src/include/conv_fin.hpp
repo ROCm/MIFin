@@ -39,11 +39,6 @@
 #include <miopen/solver_id.hpp>
 #include <miopen/any_solver.hpp>
 
-#if 0
-#include <miopen/tensor_ops.hpp>
-#include <miopen/tensor.hpp>
-#endif 
-
 #include <boost/range/adaptor/sliced.hpp>
 
 #include <algorithm>
@@ -103,9 +98,6 @@ class ConvFin : public Fin
     int FillBuffers();
     int CopyToDevice();
     int CopyFromDevice();
-    int AllocateBuffersAndCopy();
-    int FindForward(int& ret_algo_count,
-            std::vector<miopenConvAlgoPerf_t>& perf_results);
     int RunGPU();
     int TestApplicability();
     int GetandSetData();
@@ -152,7 +144,6 @@ int ConvFin<Tgpu, Tref>::TestApplicability()
         miopen::solver::Id id(cur_id);
         if(id.IsValid() && id != miopen::solver::Id::gemm() && id != miopen::solver::Id::fft())
         {
-            std::cout << cur_id << ": " << id.ToString() << " algo: " << id.GetAlgo(miopen::conv::Direction::Forward) << std::endl;
             auto solver = id.GetSolver();
             try
             {
@@ -171,10 +162,6 @@ int ConvFin<Tgpu, Tref>::TestApplicability()
             break;
     }
     output["applicable_solvers"] = app_solvers;
-    for(auto& sol : app_solvers)
-    {
-        std::cout << sol << std::endl;
-    }
     return 0;
 }
 
@@ -669,216 +656,5 @@ int ConvFin<Tgpu, Tref>::FillBuffers()
     }
     return 0;
 }
-
-template <typename Tgpu, typename Tref>
-int ConvFin<Tgpu, Tref>::AllocateBuffersAndCopy()
-{
-    // AllocateBuffers();
-    // FillBuffers();
-    // CopyBuffers(); To GPU
-// TODO: Check if this is stil applicable
-#if 0
-    // Workaround: Pad buffers allocations to be a multiple of 2M
-    if(miopen::IsEnabled(MIOPEN_DRIVER_PAD_BUFFERS_2M{}))
-    {
-        // TODO: remove this, not relevant anymoore
-        size_t in_sz      = GetTensorSize(inputTensor);
-        size_t wei_sz     = GetTensorSize(weightTensor);
-        size_t out_sz     = GetTensorSize(outputTensor);
-        // PadBufferSize(in_sz, sizeof(Tgpu));
-        PadBufferSize(wei_sz, sizeof(Tgpu));
-        PadBufferSize(out_sz, sizeof(Tgpu));
-    }
-#endif
-    // TODO: Revisit this
-    // I am not convinced that we need to allocate ws similar to find mode
-    // since the main loop for fin is more like immediate mode on steroids
-#if 0
-    if(command["tensor_vect"] == 1 && data_type == miopenInt8)
-    {
-        data_type = miopenInt8x4;
-    }
-
-    if(IsInputTensorTransform())
-    {
-        std::vector<int> in_len_vect4(in_len.begin(), in_len.end()),
-            wei_len_vect4(wei_len.begin(), wei_len.end());
-        in_len_vect4[1] = ((in_len[1] + 3) / 4) * 4;
-        SetTensorNd(inputTensor_vect4, in_len_vect4, data_type);
-        wei_len_vect4[1] = ((wei_len[1] + 3) / 4) * 4;
-        SetTensorNd(weightTensor_vect4, wei_len_vect4, data_type);
-    }
-#endif
-    // TODO: incorporate it
-#if 0
-    miopenDataType_t y_type =
-        (data_type == miopenInt8 || data_type == miopenInt8x4) ? miopenFloat : data_type;
-    outputTensor.desc = miopen::TensorDescriptor{y_type, out_len};
-#endif
-// TODO: fix the fol by specializing the tensor template for int8 and replacing all Tgpu by float
-// The packing may be an arg to the tensor ctor
-#if 0
-    if(is_int8)
-        out_int8 = std::vector<float>(out_sz, static_cast<float>(0));
-    if(is_transform)
-    {
-        in_vect4_dev = std::unique_ptr<GPUMem>(
-            new GPUMem(ctx, GetTensorSize(inputTensor_vect4), sizeof(Tgpu)));
-        wei_vect4_dev = std::unique_ptr<GPUMem>(
-            new GPUMem(ctx, GetTensorSize(weightTensor_vect4), sizeof(Tgpu)));
-    }
-#endif
-
-#if 0
-// TODO: only for ref, remove once functionality verified
-    if(is_fwd || is_wrw) // is input
-        in = tensor<Tgpu>(miopen::deref(inputTensor).GetLengths());
-    if(is_bwd) // is output
-        din = std::vector<Tgpu>(in_sz, static_cast<Tgpu>(0));
-    din_host  = tensor<Tref>(miopen::deref(inputTensor).GetLengths());
-        for(int i = 0; i < in_sz; i++)
-        {
-            if(is_fwd || is_wrw) // is input
-                in.data[i] =
-                    Data_scale * RAN_GEN<Tgpu>(static_cast<Tgpu>(0.0), static_cast<Tgpu>(1.0));
-            else /// \ref move_rand
-                rand();
-        }
-    if(is_fwd || is_wrw) // is input
-    {
-        in_dev = std::unique_ptr<GPUMem>(new GPUMem(ctx, in_sz, sizeof(Tgpu)));
-        status |= in_dev->ToGPU(q, in.data.data());
-    }
-    if(is_bwd)
-    {
-        din_dev = std::unique_ptr<GPUMem>(new GPUMem(ctx, in_sz, sizeof(Tgpu)));
-        status |= din_dev->ToGPU(q, din.data());
-    }
-#endif
-
-    return miopenStatusSuccess;
-}
-
-template <typename Tgpu, typename Tref>
-int ConvFin<Tgpu, Tref>::FindForward(int& /*ret_algo_count*/,
-                                        std::vector<miopenConvAlgoPerf_t>& /*perf_results*/)
-{
-    // bool is_transform = IsInputTensorTransform();
-    if(convDesc.mode == miopenTranspose)
-    {
-    }
-    else
-    {
-        // JD: I pulled this bit out of MIOpen since the default method in MIOpen is Hybrid find which as seen below returns
-        // the best solution in the find db, Fin might prefer things a bit differently.
-        auto xDesc = inputTensor.desc;
-        auto wDesc = weightTensor.desc;
-        auto yDesc = outputTensor.desc;
-        auto x = inputTensor.gpuData.GetMem();
-        auto w = weightTensor.gpuData.GetMem();
-        auto y = outputTensor.gpuData.GetMem();
-        auto workSpace = workspace.gpuData.GetMem();
-        auto workSpaceSize = workspace.gpuData.size();
-
-        const miopen::ProblemDescription problem(xDesc, wDesc, yDesc, convDesc, miopen::conv::Direction::Forward);
-        
-        auto ctx = miopen::ConvolutionContext{problem};
-        ctx.SetStream(&handle);
-        ctx.DetectRocm();
-        miopen::ConvolutionUserBuffers bufs(workSpace, workSpaceSize);
-        bufs.SetFwd(x, w, y);
-        ctx.SetBufs(bufs);
-        
-        // all winograd solvers
-        const auto winogradSolvers = convDesc.FindWinogradSolutions(ctx);
-        for(const auto& sol : winogradSolvers)
-        {
-            auto id = miopen::solver::Id{sol.solver_id};
-            auto solver = id.GetSolver();
-            auto algo_name = id.GetAlgo(miopen::conv::Direction::Forward);
-            if(solver.IsApplicable(ctx))
-                std::cout << "bingo!" << std::endl;
-        }
-#if 0
-        if((fm.IsFast() || fm.IsHybrid()) && !use_winograd_only)
-        {
-            size_t count;
-            GetForwardSolutions(handle, wDesc, xDesc, yDesc, 1, &count, &sol);
-            use_immediate_solution = (count > 0) && !(fm.IsHybrid() && sol.time < 0);
-            // In Hybrid Find mode, we use Normal Find instead of Immediate fallback kernels.
-        }
-
-        if(use_immediate_solution)
-        {
-            CompileForwardSolution(handle, wDesc, xDesc, yDesc, sol.solution_id);
-            /// It is possible to measure actual execution time and return it to the caller.
-            /// \todo Consider if we need (and want to spend time) for this.
-            const auto id = solver::Id(sol.solution_id);
-            perf_db.push_back(
-                    {id.GetAlgo(conv::Direction::Forward), id.ToString(), sol.time, sol.workspace_size});
-        }
-        else
-        {
-            perf_db = miopen::UserFindDbRecord::TryLoad(handle, problem, [&](DbRecord& record) {
-                    DirConvFindCore(handle, // static function -> compile error
-                            inputTensor.desc,
-                            x,
-                            wDesc,
-                            w,
-                            yDesc,
-                            y,
-                            workspace.gpuData.GetMem(),
-                            workspace.gpuData.size(),
-                            convDesc,
-                            (command["search"] == 1) ? true : false);
-                            record,
-                            ctx,
-                            use_winograd_only);
-                    });
-        }
-
-        if(perf_db.empty())
-            FIN_THROW("Fwd Convolution cannot be executed due to incorrect params");
-
-        std::sort(begin(perf_db), end(perf_db));
-
-        for(const auto& entry : perf_db)
-            MIOPEN_LOG_I(entry.name << "\t" << entry.time << "\t" << entry.workspace);
-
-        *returnedAlgoCount = std::min(requestAlgoCount, static_cast<int>(perf_db.size()));
-
-        for(int i = 0; i < *returnedAlgoCount; i++)
-        {
-            perfResults[i].fwd_algo = StringToConvolutionFwdAlgo(perf_db[i].name);
-            perfResults[i].time     = perf_db[i].time;
-            perfResults[i].memory   = perf_db[i].workspace;
-        }
-
-        MIOPEN_LOG_I("FW Chosen Algorithm: " << perf_db[0].solver_id << " , " << perf_db[0].workspace
-                << ", "
-                << perf_db[0].time);
-#endif
-#if 0
-        const auto rc = miopenFindConvolutionForwardAlgorithm(
-                GetHandle(),
-                (is_transform ? inputTensor_vect4 : inputTensor),
-                (is_transform ? in_vect4_dev->GetMem() : in_dev->GetMem()),
-                (is_transform ? weightTensor_vect4 : weightTensor),
-                (is_transform ? wei_vect4_dev->GetMem() : wei_dev->GetMem()),
-                convDesc,
-                outputTensor,
-                out_dev->GetMem(),
-                request_algo_count,
-                &ret_algo_count,
-                perf_results.data(),
-                workspace_dev != nullptr ? workspace_dev->GetMem() : nullptr,
-                ws_sizeof_find_fwd,
-                (command["search"] == 1) ? true : false);
-#endif
-    }
-    return 0;
-}
-
-
 } // namespace fin
 #endif // GUARD_MIOPEN_CONV_FIN_HPP

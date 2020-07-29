@@ -41,27 +41,6 @@
 
 using json = nlohmann::json;
 
-// TODO: implement in the tensor class
-/*
-std::vector<int> GetTensorLengths(const miopen::TensorDescriptor &tensor) {
-
-  std::vector<int> tensor_len;
-  tensor_len.resize(tensor.GetSize());
-  std::copy(tensor.GetLengths().begin(), tensor.GetLengths().end(),
-            tensor_len.data());
-
-  return tensor_len;
-}
-
-// TODO: implement int he tensor class
-size_t GetTensorSize(const miopen::TensorDescriptor &tensor) {
-  std::vector<int> len = GetTensorLengths(tensor);
-  size_t sz =
-      std::accumulate(len.begin(), len.end(), 1, std::multiplies<int>());
-
-  return sz;
-}
-*/
 int main(int argc, char *argv[]) 
 {
     if(argc != 3)
@@ -89,7 +68,6 @@ int main(int argc, char *argv[])
     for(auto& it : j)
     {
         auto command = it;
-        std::cout << it << std::endl;
         fin::Fin* f = nullptr;
         // TODO : Move this to a factory function
         if(command["config"]["cmd"] == "conv")
@@ -98,14 +76,13 @@ int main(int argc, char *argv[])
         }
         else
         {
-            FIN_THROW("All hell breaks loose");
+            FIN_THROW("Invalid operation: " +  command["config"]["cmd"].get<std::string>());
             exit(-1);
         }
 
         for(auto & step_it : command["steps"])
         {
             std::string step = step_it.get<std::string>();
-            std::cout << "Processing step: " << step << std::endl;
             f->ProcessStep(step);           
         }
         final_output.push_back(f->output);

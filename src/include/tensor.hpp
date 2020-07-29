@@ -138,6 +138,4 @@ struct tensor
     }
 };
 } // namespace fin
-#if 0
-#endif
 #endif // GUARD_FIN_TENSOR_HPP

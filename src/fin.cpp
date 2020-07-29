@@ -54,25 +54,4 @@ std::string Fin::ParseBaseArg(const int argc, const char *argv[]) {
   else
     return arg;
 }
-#if 0
-Fin::Fin(const int argc, const char* argv[]) 
-{
-    auto base_arg = ParseBaseArg(argc, argv);
-    AddCmdLineArgs();
-    ParseCmdLineArgs(argc, argv);
-    GetAndSetData();
-    AllocateBuffersAndCopy();
-    data_type = miopenFloat;
-#if MIOPEN_BACKEND_OPENCL
-    // miopenCreate(&handle);
-    // Default constructor would do
-#elif MIOPEN_BACKEND_HIP
-    hipStream_t s;
-    hipStreamCreate(&s);
-    handle = miopen::Handle{s};
-#endif
-
-    q = handle->GetStream();
-}
-#endif
 } // namespace fin

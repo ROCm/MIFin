@@ -125,24 +125,7 @@ if( FIN_BACKEND STREQUAL "OpenCL")
         PATHS /opt/rocm
     )
     find_package(miopengemm PATHS /opt/rocm)
-# if(MIOPEN_HIP_COMPILER)
-#        message("hip compiler: ${MIOPEN_HIP_COMPILER}")
-#    else()
-#        message(FATAL_ERROR "hip compiler not found")
-#    endif()
 endif()
-
-# # HIP is always required
-# find_package(hip REQUIRED PATHS /opt/rocm)
-# # probably not required
-# target_flags(HIP_COMPILER_FLAGS hip::device)
-# # Remove cuda arch flags
-# string(REGEX REPLACE --cuda-gpu-arch=[a-z0-9]+ "" HIP_COMPILER_FLAGS "${HIP_COMPILER_FLAGS}")
-# 
-# message(STATUS "Hip compiler flags: ${HIP_COMPILER_FLAGS}")
-# 
-# add_definitions("-DHIP_COMPILER_FLAGS=${HIP_COMPILER_FLAGS}")
-
 
 # HIP
 if( FIN_BACKEND STREQUAL "HIP" OR FIN_BACKEND STREQUAL "HIPOC")
