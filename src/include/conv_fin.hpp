@@ -102,6 +102,7 @@ class ConvFin : public Fin
     int TestApplicability();
     int GetandSetData();
     bool IsInputTensorTransform() const;
+    int GetSolverList();
     json command;
     json job;
 
@@ -165,6 +166,30 @@ int ConvFin<Tgpu, Tref>::TestApplicability()
     return 0;
 }
 
+template< typename Tgpu, typename Tref>
+int ConvFin<Tgpu, Tref>::GetSolverList()
+{
+    uint64_t cur_id = 1;
+    constexpr uint64_t max_id = 200;
+    // pair.first = id, pair. second = string id
+    std::vector<std::pair<uint64_t, std::string> > solvers;
+    while(true)
+    {
+        miopen::solver::Id id(cur_id);
+
+        if(id.IsValid() && id != miopen::solver::Id::gemm() && id != miopen::solver::Id::fft())
+        {
+            solvers.push_back(std::make_pair(cur_id, id.ToString()));
+        }
+        cur_id++;
+        if(cur_id == max_id)
+            break;
+    }
+    output["all_solvers"] = solvers;
+    return 0;
+}
+
+
 template<typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::RunGPU()
 {
@@ -217,6 +242,8 @@ int ConvFin<Tgpu, Tref>::ProcessStep(const std::string& step_name)
         return CopyFromDevice();
     if(step_name == "applicability")
         return TestApplicability();
+    if(step_name == "get_solvers")
+        return GetSolverList();
     return 0;
 }
 
