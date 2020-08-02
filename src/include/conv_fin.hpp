@@ -38,6 +38,8 @@
 #include <miopen/conv_solution.hpp>
 #include <miopen/solver_id.hpp>
 #include <miopen/any_solver.hpp>
+#include <miopen/perf_field.hpp>
+#include <miopen/find_db.hpp>
 
 #include <boost/range/adaptor/sliced.hpp>
 
@@ -89,6 +91,7 @@ class ConvFin : public Fin
     int SetConvDescriptor();
     std::vector<size_t> GetOutputTensorLengths() const ;
     miopenDataType_t GetOutputType() const {return (data_type == miopenInt8 || data_type == miopenInt8x4) ? miopenFloat : data_type;}
+    miopen::conv::Direction GetDirection() const;
 
     int ProcessStep(const std::string& step_name) override;
 
@@ -101,8 +104,11 @@ class ConvFin : public Fin
     int RunGPU();
     int TestApplicability();
     int GetandSetData();
-    bool IsInputTensorTransform() const;
     int GetSolverList();
+    int MIOpenFind();
+
+    // Utility functions 
+    bool IsInputTensorTransform() const;
     json command;
     json job;
 
@@ -125,8 +131,63 @@ class ConvFin : public Fin
     bool is_bwd = false;
     bool is_wrw = false; // TODO: check redundancy with above
     int immediate_solution = 0;
+    std::vector<std::string> steps_processed;
 
 };
+
+template<typename Tgpu, typename Tref>
+miopen::conv::Direction ConvFin<Tgpu, Tref>::GetDirection() const
+{
+    return is_fwd ? miopen::conv::Direction::Forward : (is_bwd ? miopen::conv::Direction::BackwardData : miopen::conv::Direction::BackwardWeights);
+}
+
+template<typename Tgpu, typename Tref>
+int ConvFin<Tgpu, Tref>::MIOpenFind()
+{
+    if(GetDirection() != miopen::conv::Direction::Forward)
+        FIN_THROW("Unsupported convolution direction");
+    // Before this step is executed, the following steps should have been evaluted
+    // alloc_buf only if only timing is required
+    // alloc_buf, fill_buf and copy_buf_to_device if numerical accuracy would be checked ?? 
+    const miopen::ProblemDescription problem(inputTensor.desc, weightTensor.desc, outputTensor.desc, convDesc, GetDirection());
+    auto ctx = miopen::ConvolutionContext{problem};
+    ctx.SetStream(&handle);
+    ctx.DetectRocm();
+
+    miopen::ConvolutionUserBuffers bufs(workspace.gpuData.buf.get(), workspace.desc.GetNumBytes());
+    bufs.SetFwd(inputTensor.gpuData.buf.get(), weightTensor.gpuData.buf.get(), outputTensor.gpuData.buf.get());
+    ctx.SetBufs(bufs);
+
+    const bool is_winograd_only = convDesc.IsWinograd3x3SupportedAndFast(ctx);
+
+    std::vector<miopen::PerfField> perf_db;
+    // TODO: Copy out the DirConvFindCore function so we can note what all solvers were executed and what are their time/workspace numbers
+    // This info is hidden away by this EvaluateInvokers function which only reports the best numbers and not the rest.
+    perf_db = miopen::UserFindDbRecord::TryLoad(handle, problem, [&](miopen::DbRecord& record) {
+        convDesc.DirConvFindCore(handle, inputTensor.desc, inputTensor.gpuData.buf.get(), 
+                                 weightTensor.desc, weightTensor.gpuData.buf.get(), 
+                                 outputTensor.desc, outputTensor.gpuData.buf.get(), 
+                                 workspace.gpuData.buf.get(), workspace.desc.GetNumBytes(), 
+                                 false, record, ctx, is_winograd_only);
+    });
+    output["is_winograd_only"] = is_winograd_only;
+    // Convert from PerfField to map
+    using pdb_map_t = std::unordered_map<std::string, std::string>;
+    std::vector<pdb_map_t> find_result;
+
+    for(auto& kinder: perf_db)
+    {
+        pdb_map_t res_item;
+        res_item["algorithm"] = kinder.name;
+        res_item["solver_id"] = kinder.solver_id;
+        res_item["time"] = std::to_string(kinder.time);
+        res_item["workspace"] = std::to_string(kinder.workspace);
+        find_result.push_back(res_item);
+    }
+    output["miopen_find_result"] = find_result;
+    return 1;
+}
+
 
 template<typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::TestApplicability()
@@ -135,8 +196,7 @@ int ConvFin<Tgpu, Tref>::TestApplicability()
     // Create a convolution context and pass to isApplicable and get result
     uint64_t cur_id = 1;
     constexpr uint64_t max_id = 200;
-    auto dir = is_fwd ? miopen::conv::Direction::Forward : (is_bwd ? miopen::conv::Direction::BackwardData : miopen::conv::Direction::BackwardWeights);
-    miopen::ConvolutionContext ctx{inputTensor.desc, weightTensor.desc, outputTensor.desc, convDesc, dir};
+    miopen::ConvolutionContext ctx{inputTensor.desc, weightTensor.desc, outputTensor.desc, convDesc, GetDirection()};
     ctx.SetStream(&handle);
     ctx.DetectRocm();
     std::vector<std::string> app_solvers;
@@ -232,6 +292,7 @@ int ConvFin<Tgpu, Tref>::CopyFromDevice()
 template<typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::ProcessStep(const std::string& step_name)
 {
+    steps_processed.push_back(step_name);
     if(step_name == "alloc_buf")
         return AllocateBuffers();
     if(step_name == "fill_buf")
@@ -244,6 +305,8 @@ int ConvFin<Tgpu, Tref>::ProcessStep(const std::string& step_name)
         return TestApplicability();
     if(step_name == "get_solvers")
         return GetSolverList();
+    if(step_name == "miopen_find")
+        return MIOpenFind();
     return 0;
 }
 
