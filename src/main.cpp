@@ -32,6 +32,7 @@
 
 #include <miopen/tensor.hpp>
 #include <nlohmann/json.hpp>
+#include <typeinfo>
 
 
 #include <half.hpp>
@@ -47,7 +48,7 @@ using json = nlohmann::json;
     printf("Supported arguments:\n");
     printf("-i *input_json\n");
     printf("-o *output_json\n");
-    printf("\n")
+    printf("\n");
     exit(0);
 }
 
@@ -108,14 +109,19 @@ int main(int argc, char *argv[])
         auto command = it;
         fin::Fin* f = nullptr;
         // TODO : Move this to a factory function
-        if(command["config"]["cmd"] == "conv")
-        {
-            f = new fin::ConvFin<float, float>(command);
+        if(command.contains("config")){
+            if(command["config"]["cmd"] == "conv")
+            {
+                f = new fin::ConvFin<float, float>(command);
+            }
+            else
+            {
+                FIN_THROW("Invalid operation: " +  command["config"]["cmd"].get<std::string>());
+                exit(-1);
+            }
         }
-        else
-        {
-            FIN_THROW("Invalid operation: " +  command["config"]["cmd"].get<std::string>());
-            exit(-1);
+        else{
+            f = new fin::ConvFin<float, float>();
         }
 
         for(auto & step_it : command["steps"])

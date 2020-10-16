@@ -65,6 +65,7 @@ template <typename Tgpu, typename Tcpu>
 class ConvFin : public Fin
 {
     public:
+    ConvFin() : Fin(){}
     ConvFin(json _job) : Fin()
     {
         job = _job; // TODO: Verify all required fields are present, otherwise throw! 
@@ -240,10 +241,12 @@ int ConvFin<Tgpu, Tref>::TestApplicability()
 template< typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::GetSolverList()
 {
+    std::cout << "getting solvers" << std::endl;
     uint64_t cur_id = 1;
     constexpr uint64_t max_id = 200;
     // pair.first = id, pair. second = string id
     std::vector<std::pair<uint64_t, std::string> > solvers;
+    std::cout << "getting solvers" << std::endl;
     while(true)
     {
         miopen::solver::Id id(cur_id);
