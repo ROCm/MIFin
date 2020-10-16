@@ -163,12 +163,23 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
     std::vector<miopen::PerfField> perf_db;
     // TODO: Copy out the DirConvFindCore function so we can note what all solvers were executed and what are their time/workspace numbers
     // This info is hidden away by this EvaluateInvokers function which only reports the best numbers and not the rest.
+
+
+    //TODO: convDesc needs to be initialized before call below!!
     perf_db = miopen::UserFindDbRecord::TryLoad(handle, problem, [&](miopen::DbRecord& record) {
-        convDesc.DirConvFindCore(handle, inputTensor.desc, inputTensor.gpuData.buf.get(), 
-                                 weightTensor.desc, weightTensor.gpuData.buf.get(), 
-                                 outputTensor.desc, outputTensor.gpuData.buf.get(), 
-                                 workspace.gpuData.buf.get(), workspace.desc.GetNumBytes(), 
-                                 false, record, ctx, is_winograd_only);
+        convDesc.DirConvFindCore(handle,
+                                 inputTensor.desc,
+                                 inputTensor.gpuData.buf.get(), 
+                                 weightTensor.desc,
+                                 weightTensor.gpuData.buf.get(), 
+                                 outputTensor.desc,
+                                 outputTensor.gpuData.buf.get(), 
+                                 workspace.gpuData.buf.get(),
+                                 workspace.desc.GetNumBytes(), 
+                                 false,
+                                 record,
+                                 ctx,
+                                 is_winograd_only);
     });
     output["is_winograd_only"] = is_winograd_only;
     // Convert from PerfField to map

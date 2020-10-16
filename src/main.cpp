@@ -41,20 +41,58 @@
 
 using json = nlohmann::json;
 
+[[gnu::noreturn]] void Usage()
+{
+    printf("Usage: ./fin *input_json *output_json\n\n");
+    printf("Supported arguments:\n");
+    printf("-i *input_json\n");
+    printf("-o *output_json\n");
+    printf("\n")
+    exit(0);
+}
+
+
 int main(int argc, char *argv[]) 
 {
-    if(argc != 3)
+    std::vector<std::string> args(argv, argv+argc);
+    std::string ifile;
+    std::string ofile;
+    std::map<char, std::string> MapInputs = {};
+
+    for(auto &arg: args)
     {
-        std::cerr << "Fin requires two arguments" << std::endl;
-    }
-    boost::filesystem::path input_filename(argv[1]);
-    if(!boost::filesystem::exists(input_filename))
-    {
-        std::cerr << "File: " << input_filename.string() << " does not exist" << std::endl;
-        exit(-1);
+        if(arg == "--help" || arg == "-help" || arg == "-h")
+        {
+            Usage();
+        }
     }
 
-    boost::filesystem::path output_filename(argv[2]);
+    if(argc != 5)
+    {
+        std::cerr << "Invalid arguments" << std::endl;
+        Usage();
+    }
+
+    for(int i=0; i<args.size(); i++)
+    {
+        if(args[i] == "-i")
+        {
+            if(!boost::filesystem::exists(args[i+1]))
+            {
+                std::cerr << "File: " << args[i+1] << " does not exist" << std::endl;
+                exit(-1);
+            }
+            MapInputs[args[i].back()] = args[i+1];
+        }
+        if(args[i]=="-o")
+        {
+            ofile = args[i+1];
+            MapInputs[args[i].back()] = args[i+1];
+        }
+    }
+
+    boost::filesystem::path input_filename(MapInputs['i']);
+    boost::filesystem::path output_filename(MapInputs['o']);
 
 
     // The JSON is a list of commands, so we iterate over the list and then process each map
