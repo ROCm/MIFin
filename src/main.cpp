@@ -129,6 +129,7 @@ int main(int argc, char *argv[])
             std::string step = step_it.get<std::string>();
             f->ProcessStep(step);           
         }
+        f->output["config_tuna_id"] = command["config_tuna_id"];
         final_output.push_back(f->output);
     }
     o << std::setw(4) << final_output << std::endl;
