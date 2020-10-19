@@ -130,6 +130,8 @@ int main(int argc, char *argv[])
             f->ProcessStep(step);           
         }
         f->output["config_tuna_id"] = command["config_tuna_id"];
+        f->output["arch"] = command["arch"];
+        f->output["direction"] = command["direction"];
         final_output.push_back(f->output);
     }
     o << std::setw(4) << final_output << std::endl;
