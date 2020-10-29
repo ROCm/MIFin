@@ -161,7 +161,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
 
     const bool is_winograd_only = convDesc.IsWinograd3x3SupportedAndFast(ctx);
 
-    std::vector<miopen::PerfField> perf_db;
+    /*std::vector<miopen::PerfField> perf_db;
     // TODO: Copy out the DirConvFindCore function so we can note what all solvers were executed and what are their time/workspace numbers
     // This info is hidden away by this EvaluateInvokers function which only reports the best numbers and not the rest.
 
@@ -196,7 +196,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
         res_item["workspace"] = std::to_string(kinder.workspace);
         find_result.push_back(res_item);
     }
-    output["miopen_find_result"] = find_result;
+    output["miopen_find_result"] = find_result;*/
     return 1;
 }
 
