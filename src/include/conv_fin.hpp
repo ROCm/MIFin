@@ -159,7 +159,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
     bufs.SetFwd(inputTensor.gpuData.buf.get(), weightTensor.gpuData.buf.get(), outputTensor.gpuData.buf.get());
     ctx.SetBufs(bufs);
 
-    const bool is_winograd_only = convDesc.IsWinograd3x3SupportedAndFast(ctx);
+    //const bool is_winograd_only = convDesc.IsWinograd3x3SupportedAndFast(ctx);
 
     /*std::vector<miopen::PerfField> perf_db;
     // TODO: Copy out the DirConvFindCore function so we can note what all solvers were executed and what are their time/workspace numbers
@@ -215,7 +215,7 @@ int ConvFin<Tgpu, Tref>::TestApplicability()
     while(true)
     {
         miopen::solver::Id id(cur_id);
-        if(id.IsValid() && id != miopen::solver::Id::gemm() && id != miopen::solver::Id::fft())
+        if(id.IsValid() && id != miopen::solver::Id::gemm())
         {
             auto solver = id.GetSolver();
             try
