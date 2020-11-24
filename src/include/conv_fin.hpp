@@ -251,7 +251,8 @@ int ConvFin<Tgpu, Tref>::GetSolverList()
     {
         miopen::solver::Id id(cur_id);
 
-        if(id.IsValid() && id != miopen::solver::Id::gemm() && id != miopen::solver::Id::fft())
+        // if(id.IsValid() && id != miopen::solver::Id::gemm() && id != miopen::solver::Id::fft())
+        if(id.IsValid() && id != miopen::solver::Id::gemm())
         {
             solvers.push_back(std::make_pair(cur_id, id.ToString()));
         }
