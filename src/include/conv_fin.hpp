@@ -65,6 +65,7 @@ template <typename Tgpu, typename Tcpu>
 class ConvFin : public Fin
 {
     public:
+    ConvFin() : Fin(){}
     ConvFin(json _job) : Fin()
     {
         job = _job; // TODO: Verify all required fields are present, otherwise throw! 
@@ -158,17 +159,28 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
     bufs.SetFwd(inputTensor.gpuData.buf.get(), weightTensor.gpuData.buf.get(), outputTensor.gpuData.buf.get());
     ctx.SetBufs(bufs);
 
-    const bool is_winograd_only = convDesc.IsWinograd3x3SupportedAndFast(ctx);
+    //const bool is_winograd_only = convDesc.IsWinograd3x3SupportedAndFast(ctx);
 
-    std::vector<miopen::PerfField> perf_db;
+    /*std::vector<miopen::PerfField> perf_db;
     // TODO: Copy out the DirConvFindCore function so we can note what all solvers were executed and what are their time/workspace numbers
     // This info is hidden away by this EvaluateInvokers function which only reports the best numbers and not the rest.
+
+
+    //TODO: convDesc needs to be initialized before call below!!
     perf_db = miopen::UserFindDbRecord::TryLoad(handle, problem, [&](miopen::DbRecord& record) {
-        convDesc.DirConvFindCore(handle, inputTensor.desc, inputTensor.gpuData.buf.get(), 
-                                 weightTensor.desc, weightTensor.gpuData.buf.get(), 
-                                 outputTensor.desc, outputTensor.gpuData.buf.get(), 
-                                 workspace.gpuData.buf.get(), workspace.desc.GetNumBytes(), 
-                                 false, record, ctx, is_winograd_only);
+        convDesc.DirConvFindCore(handle,
+                                 inputTensor.desc,
+                                 inputTensor.gpuData.buf.get(), 
+                                 weightTensor.desc,
+                                 weightTensor.gpuData.buf.get(), 
+                                 outputTensor.desc,
+                                 outputTensor.gpuData.buf.get(), 
+                                 workspace.gpuData.buf.get(),
+                                 workspace.desc.GetNumBytes(), 
+                                 false,
+                                 record,
+                                 ctx,
+                                 is_winograd_only);
     });
     output["is_winograd_only"] = is_winograd_only;
     // Convert from PerfField to map
@@ -184,7 +196,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
         res_item["workspace"] = std::to_string(kinder.workspace);
         find_result.push_back(res_item);
     }
-    output["miopen_find_result"] = find_result;
+    output["miopen_find_result"] = find_result;*/
     return 1;
 }
 
@@ -203,7 +215,7 @@ int ConvFin<Tgpu, Tref>::TestApplicability()
     while(true)
     {
         miopen::solver::Id id(cur_id);
-        if(id.IsValid() && id != miopen::solver::Id::gemm() && id != miopen::solver::Id::fft())
+        if(id.IsValid() && id != miopen::solver::Id::gemm())
         {
             auto solver = id.GetSolver();
             try
@@ -229,15 +241,18 @@ int ConvFin<Tgpu, Tref>::TestApplicability()
 template< typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::GetSolverList()
 {
+    std::cout << "getting solvers" << std::endl;
     uint64_t cur_id = 1;
     constexpr uint64_t max_id = 200;
     // pair.first = id, pair. second = string id
     std::vector<std::pair<uint64_t, std::string> > solvers;
+    std::cout << "getting solvers" << std::endl;
     while(true)
     {
         miopen::solver::Id id(cur_id);
 
-        if(id.IsValid() && id != miopen::solver::Id::gemm() && id != miopen::solver::Id::fft())
+        // if(id.IsValid() && id != miopen::solver::Id::gemm() && id != miopen::solver::Id::fft())
+        if(id.IsValid() && id != miopen::solver::Id::gemm())
         {
             solvers.push_back(std::make_pair(cur_id, id.ToString()));
         }

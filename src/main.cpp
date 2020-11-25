@@ -32,6 +32,7 @@
 
 #include <miopen/tensor.hpp>
 #include <nlohmann/json.hpp>
+#include <typeinfo>
 
 
 #include <half.hpp>
@@ -41,20 +42,58 @@
 
 using json = nlohmann::json;
 
+[[gnu::noreturn]] void Usage()
+{
+    printf("Usage: ./fin *input_json *output_json\n\n");
+    printf("Supported arguments:\n");
+    printf("-i *input_json\n");
+    printf("-o *output_json\n");
+    printf("\n");
+    exit(0);
+}
+
+
 int main(int argc, char *argv[]) 
 {
-    if(argc != 3)
+    std::vector<std::string> args(argv, argv+argc);
+    std::string ifile;
+    std::string ofile;
+    std::map<char, std::string> MapInputs = {};
+
+    for(auto &arg: args)
     {
-        std::cerr << "Fin requires two arguments" << std::endl;
-    }
-    boost::filesystem::path input_filename(argv[1]);
-    if(!boost::filesystem::exists(input_filename))
-    {
-        std::cerr << "File: " << input_filename.string() << " does not exist" << std::endl;
-        exit(-1);
+        if(arg == "--help" || arg == "-help" || arg == "-h")
+        {
+            Usage();
+        }
     }
 
-    boost::filesystem::path output_filename(argv[2]);
+    if(argc != 5)
+    {
+        std::cerr << "Invalid arguments" << std::endl;
+        Usage();
+    }
+
+    for(int i=0; i<args.size(); i++)
+    {
+        if(args[i] == "-i")
+        {
+            if(!boost::filesystem::exists(args[i+1]))
+            {
+                std::cerr << "File: " << args[i+1] << " does not exist" << std::endl;
+                exit(-1);
+            }
+            MapInputs[args[i].back()] = args[i+1];
+        }
+        if(args[i]=="-o")
+        {
+            ofile = args[i+1];
+            MapInputs[args[i].back()] = args[i+1];
+        }
+    }
+
+    boost::filesystem::path input_filename(MapInputs['i']);
+    boost::filesystem::path output_filename(MapInputs['o']);
 
 
     // The JSON is a list of commands, so we iterate over the list and then process each map
@@ -70,14 +109,19 @@ int main(int argc, char *argv[])
         auto command = it;
         fin::Fin* f = nullptr;
         // TODO : Move this to a factory function
-        if(command["config"]["cmd"] == "conv")
-        {
-            f = new fin::ConvFin<float, float>(command);
+        if(command.contains("config")){
+            if(command["config"]["cmd"] == "conv")
+            {
+                f = new fin::ConvFin<float, float>(command);
+            }
+            else
+            {
+                FIN_THROW("Invalid operation: " +  command["config"]["cmd"].get<std::string>());
+                exit(-1);
+            }
         }
-        else
-        {
-            FIN_THROW("Invalid operation: " +  command["config"]["cmd"].get<std::string>());
-            exit(-1);
+        else{
+            f = new fin::ConvFin<float, float>();
         }
 
         for(auto & step_it : command["steps"])
@@ -85,6 +129,9 @@ int main(int argc, char *argv[])
             std::string step = step_it.get<std::string>();
             f->ProcessStep(step);           
         }
+        f->output["config_tuna_id"] = command["config_tuna_id"];
+        f->output["arch"] = command["arch"];
+        f->output["direction"] = command["direction"];
         final_output.push_back(f->output);
     }
     o << std::setw(4) << final_output << std::endl;

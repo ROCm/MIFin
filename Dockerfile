@@ -26,6 +26,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --allow-
     git \
     hsa-rocr-dev \
     hsakmt-roct-dev \
+    jq \
     lcov \
     libelf-dev \
     libfile-which-perl \
