@@ -51,12 +51,6 @@ include(ROCMInstallSymlinks)
 include(ROCMCreatePackage)
 include(CheckCXXCompilerFlag)
 
-set(FIN_ENABLE_SQLITE On CACHE BOOL "")
-set(FIN_ENABLE_SQLITE_KERN_CACHE On CACHE BOOL "")
-if(FIN_ENABLE_SQLITE)
-    find_package(PkgConfig)
-    pkg_check_modules(SQLITE3 REQUIRED sqlite3)
-endif()
 option( BUILD_DEV "Build for development only" OFF)
 
 # Strip symbols for release
@@ -106,6 +100,7 @@ set_property( CACHE FIN_BACKEND PROPERTY STRINGS
 
 # HIP is always required
 find_package(hip REQUIRED PATHS /opt/rocm)
+find_package(rocblas REQUIRED PATHS /opt/rocm)
 # probably not required
 target_flags(HIP_COMPILER_FLAGS hip::device)
 # Remove cuda arch flags

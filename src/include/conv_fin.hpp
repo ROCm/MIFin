@@ -40,7 +40,8 @@
 #include <miopen/any_solver.hpp>
 #include <miopen/perf_field.hpp>
 #include <miopen/find_db.hpp>
-
+#include <miopen/invoker.hpp>
+#include <miopen/conv/data_invoke_params.hpp>
 #include <boost/range/adaptor/sliced.hpp>
 
 #include <algorithm>
@@ -54,7 +55,7 @@
 #include <vector>
 #include <type_traits>
 #include <nlohmann/json.hpp>
-
+#include <limits>
 
 namespace fin {
 
@@ -145,58 +146,96 @@ miopen::conv::Direction ConvFin<Tgpu, Tref>::GetDirection() const
 template<typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::MIOpenFind()
 {
-    if(GetDirection() != miopen::conv::Direction::Forward)
-        FIN_THROW("Unsupported convolution direction");
     // Before this step is executed, the following steps should have been evaluted
     // alloc_buf only if only timing is required
     // alloc_buf, fill_buf and copy_buf_to_device if numerical accuracy would be checked ?? 
-    const miopen::ProblemDescription problem(inputTensor.desc, weightTensor.desc, outputTensor.desc, convDesc, GetDirection());
+    const auto conv_dir = GetDirection();
+    // assert(conv_dir == miopen::conv::Direction::Forward);
+    // The first arg to the DataInvokeParams changes based on direction
+    const miopen::ProblemDescription problem(inputTensor.desc, weightTensor.desc, outputTensor.desc, convDesc, conv_dir);
     auto ctx = miopen::ConvolutionContext{problem};
     ctx.SetStream(&handle);
     ctx.DetectRocm();
+    ctx.SetupFloats();
 
+    const auto network_config = ctx.BuildConfKey();
     miopen::ConvolutionUserBuffers bufs(workspace.gpuData.buf.get(), workspace.desc.GetNumBytes());
-    bufs.SetFwd(inputTensor.gpuData.buf.get(), weightTensor.gpuData.buf.get(), outputTensor.gpuData.buf.get());
+    if(conv_dir == miopen::conv::Direction::Forward)
+        bufs.SetFwd(inputTensor.gpuData.buf.get(), weightTensor.gpuData.buf.get(), outputTensor.gpuData.buf.get());
+    else if(conv_dir == miopen::conv::Direction::BackwardData)
+        bufs.SetBwd(inputTensor.gpuData.buf.get(), weightTensor.gpuData.buf.get(), outputTensor.gpuData.buf.get());
+    // else if(conv_dir == miopen::conv::Direction::WrW)
+    //     bufs.SetWrW(inputTensor.gpuData.buf.get(), weightTensor.gpuData.buf.get(), outputTensor.gpuData.buf.get());
+
+
     ctx.SetBufs(bufs);
+    
+    const auto invoke_ctx =
+        miopen::conv::DataInvokeParams{{inputTensor.desc, inputTensor.gpuData.buf.get(),
+                                        weightTensor.desc, weightTensor.gpuData.buf.get(),
+                                        outputTensor.desc, outputTensor.gpuData.buf.get()}, workspace.gpuData.buf.get(), workspace.desc.GetNumBytes()};
 
-    //const bool is_winograd_only = convDesc.IsWinograd3x3SupportedAndFast(ctx);
-
-    /*std::vector<miopen::PerfField> perf_db;
-    // TODO: Copy out the DirConvFindCore function so we can note what all solvers were executed and what are their time/workspace numbers
-    // This info is hidden away by this EvaluateInvokers function which only reports the best numbers and not the rest.
-
-
-    //TODO: convDesc needs to be initialized before call below!!
-    perf_db = miopen::UserFindDbRecord::TryLoad(handle, problem, [&](miopen::DbRecord& record) {
-        convDesc.DirConvFindCore(handle,
-                                 inputTensor.desc,
-                                 inputTensor.gpuData.buf.get(), 
-                                 weightTensor.desc,
-                                 weightTensor.gpuData.buf.get(), 
-                                 outputTensor.desc,
-                                 outputTensor.gpuData.buf.get(), 
-                                 workspace.gpuData.buf.get(),
-                                 workspace.desc.GetNumBytes(), 
-                                 false,
-                                 record,
-                                 ctx,
-                                 is_winograd_only);
-    });
-    output["is_winograd_only"] = is_winograd_only;
-    // Convert from PerfField to map
+    const bool is_winograd_only = convDesc.IsWinograd3x3SupportedAndFast(ctx);
     using pdb_map_t = std::unordered_map<std::string, std::string>;
     std::vector<pdb_map_t> find_result;
+    output["is_winograd_only"] = is_winograd_only;
 
-    for(auto& kinder: perf_db)
+    auto db             = GetDb(ctx);
+    const auto& map = miopen::solver::GetMapValueToAnySolver();
+    for(const auto& kinder : map)
     {
         pdb_map_t res_item;
-        res_item["algorithm"] = kinder.name;
-        res_item["solver_id"] = kinder.solver_id;
-        res_item["time"] = std::to_string(kinder.time);
-        res_item["workspace"] = std::to_string(kinder.workspace);
+        auto process_solver = [&]() -> bool {
+            const auto solver_id = miopen::solver::Id{kinder.first};
+            res_item["solver_id"] = solver_id.ToString();
+            const auto& s = kinder.second;
+            const auto algo = solver_id.GetAlgo(conv_dir);
+            res_item["algorithm"] = algo;
+            if(solver_id == miopen::solver::Id::gemm())
+            {
+                // TODO: deal with GEMM
+                res_item["reason"] = "GEMM has not solvers";
+                return false;
+            }
+            if(!s.IsApplicable(ctx))
+            {
+                res_item["reason"] = "Not Applicable";
+                return false;
+            }
+            const auto solution = s.FindSolution(ctx, db, {}); // auto tune is not expected here
+            res_item["workspace"] = solution.workspce_sz;
+            if(solution.workspce_sz > invoke_ctx.workSpaceSize)
+            {
+                res_item["reason"] = "Insufficient Workspace";
+                return false;
+            }
+
+            if(!solution.invoker_factory)
+            {
+                res_item["reason"] = "Invoker not implemented";
+                return false;
+            }
+            try {
+                const auto invoker = handle.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
+                invoker(handle, invoke_ctx);
+            }
+            catch (const std::exception& e) 
+            {
+                res_item["reason"]  = std::string("Invoker exeception: ") + e.what();
+                return false;
+            }
+            const auto time = handle.GetKernelTime(); 
+            res_item["time"] = std::to_string(time);
+            res_item["reason"] = "Success";
+            return true;
+        };
+
+        auto res = process_solver();
+        res_item["evaluated"] = std::to_string(res);
         find_result.push_back(res_item);
     }
-    output["miopen_find_result"] = find_result;*/
+
+    output["miopen_find_result"] = find_result;
     return 1;
 }
 
