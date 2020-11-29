@@ -361,24 +361,13 @@ int ConvFin<Tgpu, Tref>::TestApplicability()
 template< typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::GetSolverList()
 {
-    std::cout << "getting solvers" << std::endl;
-    uint64_t cur_id = 1;
-    constexpr uint64_t max_id = 200;
     // pair.first = id, pair. second = string id
     std::vector<std::pair<uint64_t, std::string> > solvers;
-    std::cout << "getting solvers" << std::endl;
-    while(true)
+    const auto& map = miopen::solver::GetMapValueToAnySolver();
+    for(const auto& kinder : map)
     {
-        miopen::solver::Id id(cur_id);
-
-        // if(id.IsValid() && id != miopen::solver::Id::gemm() && id != miopen::solver::Id::fft())
-        if(id.IsValid() && id != miopen::solver::Id::gemm())
-        {
-            solvers.push_back(std::make_pair(cur_id, id.ToString()));
-        }
-        cur_id++;
-        if(cur_id == max_id)
-            break;
+        miopen::solver::Id id(kinder.first);
+        solvers.push_back(std::make_pair(id.Value(), id.ToString()));
     }
     output["all_solvers"] = solvers;
     return 0;
