@@ -83,8 +83,6 @@ class ConvFin : public Fin
         command["bias"] = 0;
         // timing is always enabled
         handle.EnableProfiling(true);
-        // TODO: do we need these ?      
-        // TODO: What is the default value of direction in the db
         is_fwd = (_job["direction"].get<int>() == 0 || _job["direction"].get<int>() & 1);
         is_bwd = (_job["direction"].get<int>() == 0 || _job["direction"].get<int>() & 2);
         is_wrw = (_job["direction"].get<int>() == 0 || _job["direction"].get<int>() & 4);
@@ -92,7 +90,6 @@ class ConvFin : public Fin
         GetandSetData();
         // workspace_dev = nullptr; // TODO: replaced with a tensor class
         // the variable name is implementation dependent, checking size instead
-        InitDataType<Tgpu>();
     }
     void VerifyDevProps()
     {
@@ -800,67 +797,77 @@ int ConvFin<Tgpu, Tref>::CalcWorkspace()
     return  -1;
 }
 
+template<typename Tgpu>
+Tgpu init_in(bool is_int8, size_t idx)
+{
+    (void)idx;
+    if(is_int8)
+    {
+        float Data_scale = 127.0;
+        return static_cast<Tgpu>(Data_scale * RAN_GEN<float>(static_cast<float>(0.0), 
+                    static_cast<float>(1.0)));
+    }
+    else
+    {
+        Tgpu Data_scale = static_cast<Tgpu>(0.01);
+        return Data_scale * RAN_GEN<Tgpu>(static_cast<Tgpu>(0.0), static_cast<Tgpu>(1.0));
+    }
+
+}
+
+template<typename Tgpu>
+Tgpu init_out(bool is_int8, size_t idx)
+{
+    (void)idx;
+    if(is_int8)
+    {
+        return static_cast<Tgpu>(0); // int8 is inference only
+    }
+    else
+    {
+        Tgpu Data_scale = static_cast<Tgpu>(0.01);
+        return Data_scale * RAN_GEN<Tgpu>(static_cast<Tgpu>(0.0), static_cast<Tgpu>(1.0));
+    }
+
+}
+
+template<typename Tgpu>
+Tgpu init_wei(bool is_int8, size_t idx)
+{
+    (void)idx;
+    if(is_int8)
+    {
+        float Data_scale = 127.0;
+        return static_cast<Tgpu>(Data_scale * 2 * detail::RanGenWeights<float>());
+    }
+    else
+    {
+        Tgpu Data_scale = static_cast<Tgpu>(0.01);
+        return Data_scale * detail::RanGenWeights<Tgpu>();
+    }
+}
+
+template<typename Tgpu>
+Tgpu init_bias(bool is_int8, size_t idx)
+{
+    (void)idx;
+    (void)is_int8;
+    return static_cast<Tgpu>(idx % 8) + RAN_GEN<Tgpu>(static_cast<Tgpu>(0.0), static_cast<Tgpu>(1.0));
+}
+
 template<typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::FillBuffers()
 {
-    // TODO: Do we need to initialize d* tensors ? 
-    /* Unless seed is persistent between runs validation using cache stored in file is impossible.
-     */
+    // TODO: Do we need to initialized tensors ? 
     auto is_int8 = (data_type == miopenInt8 || data_type == miopenInt8x4);
     srand(0);
-    auto in_f = [&](auto idx) { 
-        (void)idx;
-        if(is_int8)
-        {
-            float Data_scale = 127.0;
-            return static_cast<Tgpu>(Data_scale * RAN_GEN<float>(static_cast<float>(0.0), 
-                                                                 static_cast<float>(1.0)));
-        }
-        else
-        {
-            Tgpu Data_scale = static_cast<Tgpu>(0.01);
-            return Data_scale * RAN_GEN<Tgpu>(static_cast<Tgpu>(0.0), static_cast<Tgpu>(1.0));
-        }
-        };
 
-    inputTensor.FillBuffer(in_f);
-    auto out_f = [&](auto idx) { 
-        (void)idx;
-        if(is_int8)
-        {
-            return static_cast<Tgpu>(0); // int8 is inference only
-        }
-        else
-        {
-            Tgpu Data_scale = static_cast<Tgpu>(0.01);
-            return Data_scale * RAN_GEN<Tgpu>(static_cast<Tgpu>(0.0), static_cast<Tgpu>(1.0));
-        }
-        };
-    outputTensor.FillBuffer(out_f);
-    auto wei_f = [&](auto idx) { 
-        (void)idx;
-        if(is_int8)
-        {
-            float Data_scale = 127.0;
-            return static_cast<Tgpu>(Data_scale * 2 * detail::RanGenWeights<float>());
-        }
-        else
-        {
-            Tgpu Data_scale = static_cast<Tgpu>(0.01);
-            return Data_scale * detail::RanGenWeights<Tgpu>();
-        }
-        };
-    weightTensor.FillBuffer(wei_f);
-    auto bias_f = [&](auto idx) { 
-        (void)idx;
-        if(is_int8)
-            return static_cast<float>(idx % 8) + RAN_GEN<float>(static_cast<float>(0.0), static_cast<float>(1.0));
-        else
-            return static_cast<Tgpu>(idx % 8) + RAN_GEN<Tgpu>(static_cast<Tgpu>(0.0), static_cast<Tgpu>(1.0));
-        };
+    inputTensor.FillBuffer(std::bind(init_in<Tgpu>, is_int8, std::placeholders::_1));
+    outputTensor.FillBuffer(std::bind(init_out<Tgpu>, is_int8, std::placeholders::_1));
+    weightTensor.FillBuffer(std::bind(init_wei<Tgpu>, is_int8, std::placeholders::_1));
     if(command["bias"].get<int>() != 0)
     {
-        biasTensor.FillBuffer(bias_f);
+        biasTensor.FillBuffer(std::bind(init_bias<Tgpu>, is_int8, std::placeholders::_1));
     }
     return 0;
 }

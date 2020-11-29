@@ -22,10 +22,6 @@ miopenDataType_t GetDataType<bfloat16>()
 {
      return miopenBFloat16;
 }
-template <> void Fin::InitDataType<int8_t>() { data_type = miopenInt8; }
-template <> void Fin::InitDataType<float>() { data_type = miopenFloat; }
-template <> void Fin::InitDataType<float16>() { data_type = miopenHalf; }
-template <> void Fin::InitDataType<bfloat16>() { data_type = miopenBFloat16; }
 [[gnu::noreturn]] void Fin::Usage() {
   std::cout << "Usage: ./MIOpenFin *base_arg* *other_args*\n";
   std::cout << "Supported Base Arguments: conv[fp16][bfp16]\n";

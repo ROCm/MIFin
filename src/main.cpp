@@ -30,6 +30,12 @@
 #include "conv_fin.hpp"
 #include "error.hpp"
 
+#include <half.hpp>
+#include <miopen/bfloat16.hpp>
+
+using half_float::half;
+typedef half float16;
+
 #include <miopen/tensor.hpp>
 #include <nlohmann/json.hpp>
 #include <typeinfo>
@@ -122,6 +128,14 @@ int main(int argc, char *argv[], char *envp[])
             if(command["config"]["cmd"] == "conv")
             {
                 f = new fin::ConvFin<float, float>(command);
+            }
+            else if(command["config"]["cmd"] == "convfp16")
+            {
+                f = new fin::ConvFin<float16, float>(command);
+            }
+            else if(command["config"]["cmd"] == "convbfp16")
+            {
+                f = new fin::ConvFin<bfloat16, float>(command);
             }
             else
             {
