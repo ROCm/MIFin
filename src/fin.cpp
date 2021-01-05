@@ -2,26 +2,10 @@
 
 namespace fin {
 
-template <>
-miopenDataType_t GetDataType<int8_t>()
-{
-    return miopenInt8;
-}
-template <>
-miopenDataType_t GetDataType<float>()
-{
-     return miopenFloat;
-}
-template <>
-miopenDataType_t GetDataType<float16>()
-{
-     return miopenHalf;
-}
-template <>
-miopenDataType_t GetDataType<bfloat16>()
-{
-     return miopenBFloat16;
-}
+template <> miopenDataType_t GetDataType<int8_t>() { return miopenInt8; }
+template <> miopenDataType_t GetDataType<float>() { return miopenFloat; }
+template <> miopenDataType_t GetDataType<float16>() { return miopenHalf; }
+template <> miopenDataType_t GetDataType<bfloat16>() { return miopenBFloat16; }
 [[gnu::noreturn]] void Fin::Usage() {
   std::cout << "Usage: ./MIOpenFin *base_arg* *other_args*\n";
   std::cout << "Supported Base Arguments: conv[fp16][bfp16]\n";
