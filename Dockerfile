@@ -46,6 +46,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --allow-
     python3-distutils \
     python3-venv \
     python-yaml \
+    rocm-dpkg \
     rocm-opencl \
     rocm-opencl-dev && \
     apt-get clean && \
