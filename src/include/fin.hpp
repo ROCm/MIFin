@@ -80,7 +80,6 @@ public:
   json output;
 protected:
   template <typename Tgpu> void InitDataType();
-  // miopen::Handle handle;
   miopenDataType_t data_type = miopenFloat; // the datatype passed in through the command line
 
 #if FIN_BACKEND_OPENCL
