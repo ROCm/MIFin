@@ -54,10 +54,6 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --allow-
 # Setup ubsan environment to printstacktrace
 ENV UBSAN_OPTIONS=print_stacktrace=1
 
-#HSA paths
-ENV HSA_HEADER_DIR="/opt/rocm/include/hsa"
-ENV HSA_LIBRARY_DIR="/opt/rocm/lib"
-
 # Install an init system
 RUN wget https://github.com/Yelp/dumb-init/releases/download/v1.2.0/dumb-init_1.2.0_amd64.deb
 RUN dpkg -i dumb-init_*.deb && rm dumb-init_*.deb
@@ -67,6 +63,9 @@ RUN pip install https://github.com/pfultz2/cget/archive/57b3289000fcdb3b7e424c60
 
 # Install rclone
 RUN pip install https://github.com/pfultz2/rclone/archive/master.tar.gz
+
+RUN ls /opt/rocm -al
+RUN /opt/rocm/bin/rocminfo
 
 # Install hcc from ROCm 3.0
 RUN rclone -b roc-3.0.x -c 286651a04d9c3a8e3052dd84b1822985498cd27d https://github.com/RadeonOpenCompute/hcc.git /hcc
