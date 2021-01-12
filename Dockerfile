@@ -54,6 +54,10 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --allow-
 # Setup ubsan environment to printstacktrace
 ENV UBSAN_OPTIONS=print_stacktrace=1
 
+#HSA paths
+ENV HSA_HEADER_DIR="/opt/rocm/include/hsa"
+ENV HSA_LIBRARY_DIR="/opt/rocm/lib"
+
 # Install an init system
 RUN wget https://github.com/Yelp/dumb-init/releases/download/v1.2.0/dumb-init_1.2.0_amd64.deb
 RUN dpkg -i dumb-init_*.deb && rm dumb-init_*.deb
