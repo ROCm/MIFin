@@ -68,6 +68,9 @@ RUN pip install https://github.com/pfultz2/cget/archive/57b3289000fcdb3b7e424c60
 # Install rclone
 RUN pip install https://github.com/pfultz2/rclone/archive/master.tar.gz
 
+RUN ls /opt/rocm*
+#RUN /opt/rocm/bin/rocminfo
+
 # Install hcc from ROCm 3.0
 RUN rclone -b roc-3.0.x -c 286651a04d9c3a8e3052dd84b1822985498cd27d https://github.com/RadeonOpenCompute/hcc.git /hcc
 RUN LDFLAGS=-fuse-ld=gold cget -p $PREFIX install hcc,/hcc  && rm -rf /hcc
