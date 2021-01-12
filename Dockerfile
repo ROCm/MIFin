@@ -8,9 +8,6 @@ RUN dpkg --add-architecture i386
 # Add rocm repository
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y curl apt-utils wget && apt-get install -y gnupg2
 RUN curl https://raw.githubusercontent.com/RadeonOpenCompute/ROCm-docker/master/add-rocm.sh | bash
-#RUN apt-get update && apt-get dist-upgrade -y && DEBIAN_FRONTEND=noninteractive apt-get install -y curl bzip2 apt-utils wget libnuma-dev
-#RUN wget -q -O - https://repo.radeon.com/rocm/rocm.gpg.key | apt-key add -
-#RUN echo 'deb [arch=amd64] https://repo.radeon.com/rocm/apt/debian/ xenial main' | tee /etc/apt/sources.list.d/rocm.list
 
 # Install dependencies required to build hcc
 # Ubuntu csomic contains llvm-7 required to build Tensile
@@ -68,10 +65,6 @@ RUN pip install https://github.com/pfultz2/cget/archive/57b3289000fcdb3b7e424c60
 # Install rclone
 RUN pip install https://github.com/pfultz2/rclone/archive/master.tar.gz
 
-RUN ls /opt/rocm*
-RUN ls /opt/rocm/opencl/bin/
-RUN PATH=/opt/rocm/opencl/bin/:$PATH clinfo
-
 # Install hcc from ROCm 3.0
 RUN rclone -b roc-3.0.x -c 286651a04d9c3a8e3052dd84b1822985498cd27d https://github.com/RadeonOpenCompute/hcc.git /hcc
 RUN LDFLAGS=-fuse-ld=gold cget -p $PREFIX install hcc,/hcc  && rm -rf /hcc
@@ -83,11 +76,8 @@ ENV PATH="/opt/rocm:${PATH}"
 RUN cget -p $PREFIX init --cxx $PREFIX/bin/hcc --std=c++14
 
 # Install dependencies
-#ADD dev-requirements.txt /dev-requirements.txt
 ADD requirements.txt /requirements.txt
 RUN CXXFLAGS='-isystem $PREFIX/include' cget -p $PREFIX install -f /requirements.txt
-#ADD min-requirements.txt /min-requirements.txt
-#RUN CXXFLAGS='-isystem $PREFIX/include' cget -p $PREFIX install -f /dev-requirements.txt
 
 # Install doc requirements
 #ADD doc/requirements.txt /doc-requirements.txt
