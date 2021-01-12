@@ -30,32 +30,36 @@
 #include <map>
 #include <string>
 
-struct Input {
-  std::string long_name;
-  char short_name;
-  std::string value;
-  std::string help_text;
-  std::string type;
+struct Input
+{
+    std::string long_name;
+    char short_name;
+    std::string value;
+    std::string help_text;
+    std::string type;
 };
 
-class InputFlags {
-  std::map<char, Input> MapInputs;
+class InputFlags
+{
+    std::map<char, Input> MapInputs;
 
-public:
-  InputFlags();
-  void AddInputFlag(const std::string &_long_name, char _short_name,
-                    const std::string &_value, const std::string &_help_text,
-                    const std::string &type);
-  void Parse(int argc, char *argv[]);
-  char FindShortName(const std::string &_long_name) const;
-  void Print() const;
+    public:
+    InputFlags();
+    void AddInputFlag(const std::string& _long_name,
+                      char _short_name,
+                      const std::string& _value,
+                      const std::string& _help_text,
+                      const std::string& type);
+    void Parse(int argc, char* argv[]);
+    char FindShortName(const std::string& _long_name) const;
+    void Print() const;
 
-  std::string GetValueStr(const std::string &_long_name) const;
-  int GetValueInt(const std::string &_long_name) const;
-  uint64_t GetValueUint64(const std::string &_long_name) const;
-  double GetValueDouble(const std::string &_long_name) const;
+    std::string GetValueStr(const std::string& _long_name) const;
+    int GetValueInt(const std::string& _long_name) const;
+    uint64_t GetValueUint64(const std::string& _long_name) const;
+    double GetValueDouble(const std::string& _long_name) const;
 
-  virtual ~InputFlags() {}
+    virtual ~InputFlags() {}
 };
 
 #endif //_MIOPEN_INPUT_FLAGS_HPP_
