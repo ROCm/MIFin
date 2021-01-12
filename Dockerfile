@@ -6,11 +6,11 @@ ARG PREFIX=/usr/local
 RUN dpkg --add-architecture i386
 
 # Add rocm repository
-#RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y curl apt-utils wget && apt-get install -y gnupg2
-#RUN curl https://raw.githubusercontent.com/RadeonOpenCompute/ROCm-docker/master/add-rocm.sh | bash
-RUN apt-get update && apt-get dist-upgrade -y && DEBIAN_FRONTEND=noninteractive apt-get install -y curl bzip2 apt-utils wget libnuma-dev
-RUN wget -q -O - https://repo.radeon.com/rocm/rocm.gpg.key | apt-key add -
-RUN echo 'deb [arch=amd64] https://repo.radeon.com/rocm/apt/debian/ xenial main' | tee /etc/apt/sources.list.d/rocm.list
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y curl apt-utils wget && apt-get install -y gnupg2
+RUN curl https://raw.githubusercontent.com/RadeonOpenCompute/ROCm-docker/master/add-rocm.sh | bash
+#RUN apt-get update && apt-get dist-upgrade -y && DEBIAN_FRONTEND=noninteractive apt-get install -y curl bzip2 apt-utils wget libnuma-dev
+#RUN wget -q -O - https://repo.radeon.com/rocm/rocm.gpg.key | apt-key add -
+#RUN echo 'deb [arch=amd64] https://repo.radeon.com/rocm/apt/debian/ xenial main' | tee /etc/apt/sources.list.d/rocm.list
 
 # Install dependencies required to build hcc
 # Ubuntu csomic contains llvm-7 required to build Tensile
@@ -49,7 +49,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --allow-
     python3-distutils \
     python3-venv \
     python-yaml \
-    rocm-dkms \
+    rocm-dev \
     rocm-opencl \
     rocm-opencl-dev && \
     apt-get clean && \
