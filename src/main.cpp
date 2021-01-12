@@ -142,17 +142,3 @@ int main(int argc, char *argv[], char *envp[]) {
   return 0;
 }
 
-// used for dev/debug
-/*
-const std::string cmd = R"([{ "steps": ["alloc_buf", "fill_buf",
-"copy_buf_to_device", "copy_buf_from_device", "applicability"], "tag" :
-"resnet50", "label" : "resnet_tuning", "direction" : 4, "arch" : "gfx906",
-"num_cu" : 64, "config" : { "in_w" : 28, "sources" : [ "issue_1760" ], "pad_d" :
-0, "out_channels" : 128, "dilation_d" : 1, "pad_w" : 1, "conv_stride_h" : 1,
-"conv_stride_d" : 1, "fusion_mode" : -1, "pad_mode" : "default", "in_h" : 28,
-"tags" : [ "resnet50" ], "in_d" : 1, "cmd" : "conv", "activMode" : -1, "fil_h" :
-3, "group_count" : 1, "dilation_h" : 1, "in_channels" : 128, "pad_h" : 1,
-"batchsize" : 32, "conv_stride_w" : 1, "conv_mode" : "conv", "recur" : 0,
-"fil_w" : 3, "spatial_dim" : 2, "fil_d" : 1, "trans_output_pad_d" : 0,
-"dilation_w" : 1 } } ])";
-*/
