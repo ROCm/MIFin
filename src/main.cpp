@@ -30,6 +30,12 @@
 #include "conv_fin.hpp"
 #include "error.hpp"
 
+#include <half.hpp>
+#include <miopen/bfloat16.hpp>
+
+using half_float::half;
+typedef half float16;
+
 #include <miopen/tensor.hpp>
 #include <nlohmann/json.hpp>
 #include <typeinfo>
@@ -53,7 +59,7 @@ using json = nlohmann::json;
 }
 
 
-int main(int argc, char *argv[]) 
+int main(int argc, char *argv[], char *envp[]) 
 {
     std::vector<std::string> args(argv, argv+argc);
     std::string ifile;
@@ -104,6 +110,15 @@ int main(int argc, char *argv[])
     i >> j;
     i.close();
     json final_output;
+    // Get the process env
+    std::vector<std::string> jenv;
+    for(auto env = envp; *env != nullptr; env++)
+        jenv.push_back(*env);
+    json res_item;
+
+    res_item["process_env"] = jenv;
+    final_output.push_back(res_item);
+    // process through the jobs
     for(auto& it : j)
     {
         auto command = it;
@@ -113,6 +128,14 @@ int main(int argc, char *argv[])
             if(command["config"]["cmd"] == "conv")
             {
                 f = new fin::ConvFin<float, float>(command);
+            }
+            else if(command["config"]["cmd"] == "convfp16")
+            {
+                f = new fin::ConvFin<float16, float>(command);
+            }
+            else if(command["config"]["cmd"] == "convbfp16")
+            {
+                f = new fin::ConvFin<bfloat16, float>(command);
             }
             else
             {
