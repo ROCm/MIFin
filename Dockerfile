@@ -8,7 +8,7 @@ RUN dpkg --add-architecture i386
 # Add rocm repository
 #RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y curl apt-utils wget && apt-get install -y gnupg2
 #RUN curl https://raw.githubusercontent.com/RadeonOpenCompute/ROCm-docker/master/add-rocm.sh | bash
-apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y curl bzip2 apt-utils wget
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y curl bzip2 apt-utils wget
 RUN wget -q -O - https://repo.radeon.com/rocm/rocm.gpg.key | apt-key add -
 RUN echo 'deb [arch=amd64] https://repo.radeon.com/rocm/apt/debian/ xenial main' | tee /etc/apt/sources.list.d/rocm.list
 
