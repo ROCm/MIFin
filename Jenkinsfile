@@ -164,25 +164,19 @@ pipeline {
                 stage('Clang Format') {
                     agent{ label rocmnode("rocmtest") }
                     environment{
-                        dir("src")
-                        {
-                            cmd = "find . -iname \'*.h\' \
-                                    -o -iname \'*.hpp\' \
-                                    -o -iname \'*.cpp\' \
-                                    -o -iname \'*.h.in\' \
-                                    -o -iname \'*.hpp.in\' \
-                                    -o -iname \'*.cpp.in\' \
-                                    -o -iname \'*.cl\' \
-                                    | grep -v 'build/' \
-                                    | grep -v 'base64' \
-                                    | xargs -n 1 -P 1 -I{} -t sh -c \'clang-format-3.8 -style=file {} | diff - {}\'"
-                        }
+                        cmd = "cd src; find . -iname \'*.h\' \
+                                -o -iname \'*.hpp\' \
+                                -o -iname \'*.cpp\' \
+                                -o -iname \'*.h.in\' \
+                                -o -iname \'*.hpp.in\' \
+                                -o -iname \'*.cpp.in\' \
+                                -o -iname \'*.cl\' \
+                                | grep -v 'build/' \
+                                | grep -v 'base64' \
+                                | xargs -n 1 -P 1 -I{} -t sh -c \'clang-format-3.8 -style=file {} | diff - {}\'"
                     }
                     steps{
-                        dir("src")
-                        {
-                            buildJob('hcc', '-DCMAKE_BUILD_TYPE=release', image, "", cmd)
-                        }
+                        buildJob('hcc', '-DCMAKE_BUILD_TYPE=release', image, "", cmd)
                     }
                 }
 
