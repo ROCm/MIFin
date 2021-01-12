@@ -61,7 +61,11 @@ public:
   Fin() {}
   void Usage();
   std::string ParseBaseArg(const int argc, const char* argv[]);
-  miopen::Handle& GetHandle() { return handle; }
+  miopen::Handle& GetHandle() 
+  {
+      static auto handle = miopen::Handle{};
+      return handle; 
+  }
   miopenDataType_t GetDataType() { return data_type; }
 
 #if FIN_BACKEND_OPENCL
@@ -76,7 +80,7 @@ public:
   json output;
 protected:
   template <typename Tgpu> void InitDataType();
-  miopen::Handle handle;
+  // miopen::Handle handle;
   miopenDataType_t data_type = miopenFloat; // the datatype passed in through the command line
 
 #if FIN_BACKEND_OPENCL

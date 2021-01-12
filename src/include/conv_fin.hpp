@@ -82,7 +82,7 @@ class ConvFin : public Fin
         command = _job["config"];
         command["bias"] = 0;
         // timing is always enabled
-        handle.EnableProfiling(true);
+        GetHandle().EnableProfiling(true);
         is_fwd = (_job["direction"].get<int>() == 0 || _job["direction"].get<int>() & 1);
         is_bwd = (_job["direction"].get<int>() == 0 || _job["direction"].get<int>() & 2);
         is_wrw = (_job["direction"].get<int>() == 0 || _job["direction"].get<int>() & 4);
@@ -175,7 +175,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
     // The first arg to the DataInvokeParams changes based on direction
     const miopen::ProblemDescription problem(inputTensor.desc, weightTensor.desc, outputTensor.desc, convDesc, conv_dir);
     auto ctx = miopen::ConvolutionContext{problem};
-    ctx.SetStream(&handle);
+    ctx.SetStream(&(GetHandle()));
     ctx.DetectRocm();
     ctx.SetupFloats();
 
@@ -197,8 +197,8 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
 
     auto db             = GetDb(ctx);
     json find_result;
-    const std::string arch = handle.GetDeviceName();
-    const size_t num_cu = handle.GetMaxComputeUnits();
+    const std::string arch = GetHandle().GetDeviceName();
+    const size_t num_cu = GetHandle().GetMaxComputeUnits();
     const auto& map = miopen::solver::GetMapValueToAnySolver();
     for(const auto& kinder : map)
     {
@@ -223,7 +223,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
             const auto solution = s.FindSolution(ctx, db, {}); // auto tune is not expected here
             res_item["workspace"] = solution.workspce_sz;
             // Get the binary
-            miopen::solver::PrecompileKernels(handle, solution.construction_params);
+            miopen::solver::PrecompileKernels(GetHandle(), solution.construction_params);
             json kernel_list;
             for(const auto& k : solution.construction_params)
             {
@@ -264,7 +264,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
                 return false;
             }
             try {
-                const auto invoker = handle.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
+                const auto invoker = GetHandle().PrepareInvoker(*solution.invoker_factory, solution.construction_params);
                 // This required because DataInvokeParams switches tensor order due to direction and it does not have a 
                 // copy constructor or a default constructor
                 if(conv_dir == miopen::conv::Direction::Forward)
@@ -274,7 +274,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
                                                          weightTensor.desc, weightTensor.gpuData.buf.get(),
                                                          outputTensor.desc, outputTensor.gpuData.buf.get()}, 
                                                          workspace.gpuData.buf.get(), workspace.desc.GetNumBytes()};
-                    invoker(handle, invoke_ctx);
+                    invoker(GetHandle(), invoke_ctx);
                 }
                 else if(conv_dir == miopen::conv::Direction::BackwardData)
                 {
@@ -283,7 +283,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
                                                          weightTensor.desc, weightTensor.gpuData.buf.get(),
                                                          inputTensor.desc, inputTensor.gpuData.buf.get()}, 
                                                          workspace.gpuData.buf.get(), workspace.desc.GetNumBytes()};
-                    invoker(handle, invoke_ctx);
+                    invoker(GetHandle(), invoke_ctx);
                 }
                 else if(conv_dir == miopen::conv::Direction::BackwardWeights)
                 {
@@ -292,7 +292,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
                                                          inputTensor.desc, inputTensor.gpuData.buf.get(), 
                                                          weightTensor.desc, weightTensor.gpuData.buf.get()},
                                                          workspace.gpuData.buf.get(), workspace.desc.GetNumBytes()};
-                    invoker(handle, invoke_ctx);
+                    invoker(GetHandle(), invoke_ctx);
                 }
                 else
                 {
@@ -304,7 +304,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
                 res_item["reason"]  = std::string("Invoker exeception: ") + e.what();
                 return false;
             }
-            const auto time = handle.GetKernelTime(); 
+            const auto time = GetHandle().GetKernelTime(); 
             res_item["time"] = time;
             res_item["reason"] = "Success";
 
@@ -329,7 +329,7 @@ int ConvFin<Tgpu, Tref>::TestApplicability()
     uint64_t cur_id = 1;
     constexpr uint64_t max_id = 200;
     miopen::ConvolutionContext ctx{inputTensor.desc, weightTensor.desc, outputTensor.desc, convDesc, GetDirection()};
-    ctx.SetStream(&handle);
+    ctx.SetStream(&(GetHandle()));
     ctx.DetectRocm();
     std::vector<std::string> app_solvers;
     while(true)
@@ -435,13 +435,13 @@ int ConvFin<Tgpu, Tref>::GetandSetData()
 
     // auto y_type = GetOutputType();
 
-    inputTensor = {handle.GetStream(), in_len, (is_fwd || is_wrw), is_bwd};
+    inputTensor = {GetHandle().GetStream(), in_len, (is_fwd || is_wrw), is_bwd};
 
-    weightTensor = {handle.GetStream(), wei_len, (is_fwd || is_bwd), is_wrw};
+    weightTensor = {GetHandle().GetStream(), wei_len, (is_fwd || is_bwd), is_wrw};
     // conv, input and weight tensor descriptors need to be set before we can know the 
     // output lengths
     auto out_len = GetOutputTensorLengths();
-    outputTensor = {handle.GetStream(), out_len, (is_bwd || is_wrw), is_fwd};
+    outputTensor = {GetHandle().GetStream(), out_len, (is_bwd || is_wrw), is_fwd};
 
     if(IsInputTensorTransform())
     {
@@ -450,8 +450,8 @@ int ConvFin<Tgpu, Tref>::GetandSetData()
         std::vector<int> wei_len_v4(wei_len.begin(), wei_len.end());
         wei_len_v4[1] = ((wei_len[1] + 3) / 4) * 4;
 
-        inputTensor_vect4 = {handle.GetStream(), in_len_v4, (is_fwd || is_wrw), is_bwd};
-        weightTensor_vect4 = {handle.GetStream(), wei_len_v4,(is_fwd || is_bwd), is_wrw};
+        inputTensor_vect4 = {GetHandle().GetStream(), in_len_v4, (is_fwd || is_wrw), is_bwd};
+        weightTensor_vect4 = {GetHandle().GetStream(), wei_len_v4,(is_fwd || is_bwd), is_wrw};
     }
 
     // Conv Desc is already setup from the job descriptor
@@ -460,9 +460,9 @@ int ConvFin<Tgpu, Tref>::GetandSetData()
     if(command["bias"].get<int>() != 0)
     {
         auto bias_len = GetBiasTensorLengths();
-        biasTensor = {handle.GetStream(), bias_len, true, true};
+        biasTensor = {GetHandle().GetStream(), bias_len, true, true};
     }
-    // TODO: further investigate the warmpup iteration, I dont think its necessary and can be handled in the main execution loop
+    // TODO: further investigate the warmpup iteration, I dont think its necessary and can be GetHandle()d in the main execution loop
     
     return (0);
 }
@@ -755,21 +755,21 @@ int ConvFin<Tgpu, Tref>::CalcWorkspace()
     auto is_transform = IsInputTensorTransform();
     {
         if(is_wrw)
-            ws_sizeof_find_wrw = convDesc.BackwardWeightsGetWorkSpaceSize(handle, outputTensor.desc, inputTensor.desc, weightTensor.desc);
+            ws_sizeof_find_wrw = convDesc.BackwardWeightsGetWorkSpaceSize(GetHandle(), outputTensor.desc, inputTensor.desc, weightTensor.desc);
         if(is_bwd )
         {
             ws_sizeof_find_bwd =  (convDesc.mode == miopenTranspose)
-                ? convDesc.ForwardGetWorkSpaceSize(handle, weightTensor.desc, outputTensor.desc, inputTensor.desc)
-                : convDesc.BackwardDataGetWorkSpaceSize(handle, weightTensor.desc, outputTensor.desc, inputTensor.desc); 
+                ? convDesc.ForwardGetWorkSpaceSize(GetHandle(), weightTensor.desc, outputTensor.desc, inputTensor.desc)
+                : convDesc.BackwardDataGetWorkSpaceSize(GetHandle(), weightTensor.desc, outputTensor.desc, inputTensor.desc); 
         }
         if(is_fwd)
         {
             ws_sizeof_find_fwd = (convDesc.mode == miopenTranspose)
-                ? convDesc.BackwardDataGetWorkSpaceSize(handle, 
+                ? convDesc.BackwardDataGetWorkSpaceSize(GetHandle(), 
                         (is_transform ? weightTensor_vect4.desc : weightTensor.desc),
                         (is_transform ? inputTensor_vect4.desc : inputTensor.desc),
                         outputTensor.desc)
-                : convDesc.ForwardGetWorkSpaceSize(handle,
+                : convDesc.ForwardGetWorkSpaceSize(GetHandle(),
                         (is_transform ? weightTensor_vect4.desc : weightTensor.desc),
                         (is_transform ? inputTensor_vect4.desc : inputTensor.desc),
                         outputTensor.desc);
