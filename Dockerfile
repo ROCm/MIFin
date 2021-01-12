@@ -68,9 +68,6 @@ RUN pip install https://github.com/pfultz2/cget/archive/57b3289000fcdb3b7e424c60
 # Install rclone
 RUN pip install https://github.com/pfultz2/rclone/archive/master.tar.gz
 
-#RUN ls /opt/rocm -al
-#RUN /opt/rocm/bin/rocminfo
-
 # Install hcc from ROCm 3.0
 RUN rclone -b roc-3.0.x -c 286651a04d9c3a8e3052dd84b1822985498cd27d https://github.com/RadeonOpenCompute/hcc.git /hcc
 RUN LDFLAGS=-fuse-ld=gold cget -p $PREFIX install hcc,/hcc  && rm -rf /hcc
@@ -82,12 +79,13 @@ ENV PATH="/opt/rocm:${PATH}"
 RUN cget -p $PREFIX init --cxx $PREFIX/bin/hcc --std=c++14
 
 # Install dependencies
-ADD dev-requirements.txt /dev-requirements.txt
+#ADD dev-requirements.txt /dev-requirements.txt
 ADD requirements.txt /requirements.txt
-ADD min-requirements.txt /min-requirements.txt
-RUN CXXFLAGS='-isystem $PREFIX/include' cget -p $PREFIX install -f /dev-requirements.txt
+RUN CXXFLAGS='-isystem $PREFIX/include' cget -p $PREFIX install -f /requirements.txt
+#ADD min-requirements.txt /min-requirements.txt
+#RUN CXXFLAGS='-isystem $PREFIX/include' cget -p $PREFIX install -f /dev-requirements.txt
 
 # Install doc requirements
-ADD doc/requirements.txt /doc-requirements.txt
-RUN pip install -r /doc-requirements.txt
+#ADD doc/requirements.txt /doc-requirements.txt
+#RUN pip install -r /doc-requirements.txt
 
