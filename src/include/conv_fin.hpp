@@ -65,8 +65,20 @@
 #include <nlohmann/json.hpp>
 #include <limits>
 
-namespace fin {
 
+namespace fin {
+struct FakeHandle {
+    FakeHandle(const std::string _device, const std::size_t _num_cu) : device(_device), num_cu(_num_cu)
+    {
+    }
+    std::string GetDeviceName() const
+    {
+        return device;
+    } 
+    std::size_t GetMaxComputeUnits() const {return num_cu;}
+    std::string device;
+    std::size_t num_cu;
+};
 using json = nlohmann::json;
 // TODO: Create a config class to encapsulate config 
 // related code, such as checking direction etc
@@ -82,12 +94,10 @@ class ConvFin : public Fin
         command = _job["config"];
         command["bias"] = 0;
         // timing is always enabled
-        GetHandle().EnableProfiling(true);
         is_fwd = (_job["direction"].get<int>() == 0 || _job["direction"].get<int>() & 1);
         is_bwd = (_job["direction"].get<int>() == 0 || _job["direction"].get<int>() & 2);
         is_wrw = (_job["direction"].get<int>() == 0 || _job["direction"].get<int>() & 4);
         SetConvDescriptor();
-        GetandSetData();
         // workspace_dev = nullptr; // TODO: replaced with a tensor class
         // the variable name is implementation dependent, checking size instead
     }
@@ -170,10 +180,12 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
     // Before this step is executed, the following steps should have been evaluted
     // alloc_buf only if only timing is required
     // alloc_buf, fill_buf and copy_buf_to_device if numerical accuracy would be checked ?? 
+    GetandSetData();
     const auto conv_dir = GetDirection();
     // assert(conv_dir == miopen::conv::Direction::Forward);
     // The first arg to the DataInvokeParams changes based on direction
     const miopen::ProblemDescription problem(inputTensor.desc, weightTensor.desc, outputTensor.desc, convDesc, conv_dir);
+    GetHandle().EnableProfiling(true);
     auto ctx = miopen::ConvolutionContext{problem};
     ctx.SetStream(&(GetHandle()));
     ctx.DetectRocm();
@@ -328,9 +340,19 @@ int ConvFin<Tgpu, Tref>::TestApplicability()
     // Create a convolution context and pass to isApplicable and get result
     uint64_t cur_id = 1;
     constexpr uint64_t max_id = 200;
+#if 0
     miopen::ConvolutionContext ctx{inputTensor.desc, weightTensor.desc, outputTensor.desc, convDesc, GetDirection()};
-    ctx.SetStream(&(GetHandle()));
+#endif
+    GetandSetData();
+    const auto conv_dir = GetDirection();
+    // assert(conv_dir == miopen::conv::Direction::Forward);
+    // The first arg to the DataInvokeParams changes based on direction
+    const miopen::ProblemDescription problem(inputTensor.desc, weightTensor.desc, outputTensor.desc, convDesc, conv_dir);
+    auto ctx = miopen::ConvolutionContext{problem};
+    auto fake_handle = FakeHandle("gfx906", 60);
+    ctx.SetStream(reinterpret_cast<miopen::Handle*>(&fake_handle));
     ctx.DetectRocm();
+    ctx.SetupFloats();
     std::vector<std::string> app_solvers;
     while(true)
     {
@@ -435,13 +457,16 @@ int ConvFin<Tgpu, Tref>::GetandSetData()
 
     // auto y_type = GetOutputType();
 
-    inputTensor = {GetHandle().GetStream(), in_len, (is_fwd || is_wrw), is_bwd};
+    // inputTensor = {GetHandle().GetStream(), in_len, (is_fwd || is_wrw), is_bwd};
+    inputTensor = {nullptr, in_len, (is_fwd || is_wrw), is_bwd};
 
-    weightTensor = {GetHandle().GetStream(), wei_len, (is_fwd || is_bwd), is_wrw};
+    // weightTensor = {GetHandle().GetStream(), wei_len, (is_fwd || is_bwd), is_wrw};
+    weightTensor = {nullptr, wei_len, (is_fwd || is_bwd), is_wrw};
     // conv, input and weight tensor descriptors need to be set before we can know the 
     // output lengths
     auto out_len = GetOutputTensorLengths();
-    outputTensor = {GetHandle().GetStream(), out_len, (is_bwd || is_wrw), is_fwd};
+    //  outputTensor = {GetHandle().GetStream(), out_len, (is_bwd || is_wrw), is_fwd};
+    outputTensor = {nullptr, out_len, (is_bwd || is_wrw), is_fwd};
 
     if(IsInputTensorTransform())
     {
@@ -450,8 +475,10 @@ int ConvFin<Tgpu, Tref>::GetandSetData()
         std::vector<int> wei_len_v4(wei_len.begin(), wei_len.end());
         wei_len_v4[1] = ((wei_len[1] + 3) / 4) * 4;
 
-        inputTensor_vect4 = {GetHandle().GetStream(), in_len_v4, (is_fwd || is_wrw), is_bwd};
-        weightTensor_vect4 = {GetHandle().GetStream(), wei_len_v4,(is_fwd || is_bwd), is_wrw};
+        // inputTensor_vect4 = {GetHandle().GetStream(), in_len_v4, (is_fwd || is_wrw), is_bwd};
+        // weightTensor_vect4 = {GetHandle().GetStream(), wei_len_v4,(is_fwd || is_bwd), is_wrw};
+        inputTensor_vect4 = {nullptr, in_len_v4, (is_fwd || is_wrw), is_bwd};
+        weightTensor_vect4 = {nullptr, wei_len_v4,(is_fwd || is_bwd), is_wrw};
     }
 
     // Conv Desc is already setup from the job descriptor
@@ -460,7 +487,8 @@ int ConvFin<Tgpu, Tref>::GetandSetData()
     if(command["bias"].get<int>() != 0)
     {
         auto bias_len = GetBiasTensorLengths();
-        biasTensor = {GetHandle().GetStream(), bias_len, true, true};
+        // biasTensor = {GetHandle().GetStream(), bias_len, true, true};
+        biasTensor = {nullptr, bias_len, true, true};
     }
     // TODO: further investigate the warmpup iteration, I dont think its necessary and can be GetHandle()d in the main execution loop
     
