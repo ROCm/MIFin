@@ -1,3 +1,4 @@
 RadeonOpenCompute/rocm-cmake@1abe21258481d4cf92f5bab0ef5956636c52f735 --build
+ROCmSoftwarePlatform/rocBLAS@9790a8658341bc665c11c311129ad0dfc533d5c4
 # ROCmSoftwarePlatform/MIOpen@9b2d37f9f1e4b5492ef8256cf8168363ca5fd2da 
 nlohmann/json
