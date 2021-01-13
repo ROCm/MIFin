@@ -157,7 +157,7 @@ pipeline {
                         cmd = "rm -rf build; mkdir build; cd build; CXX='clang++-3.8' cmake -DBUILD_DEV=On ..; make -j\$(nproc) -k analyze;"
                     }
                     steps{
-                        buildJob('hcc', '-DCMAKE_BUILD_TYPE=release', image, "", cmd)
+                        buildHipClangJob('clang++-3.8', '-DCMAKE_BUILD_TYPE=release', image, "", cmd)
                     }
                 }
 
@@ -176,7 +176,7 @@ pipeline {
                                 | xargs -n 1 -P 1 -I{} -t sh -c \'clang-format-3.8 -style=file {} | diff - {}\'"
                     }
                     steps{
-                        buildJob('hcc', '-DCMAKE_BUILD_TYPE=release', image, "", cmd)
+                        buildHipClangJob('clang++-3.8', '-DCMAKE_BUILD_TYPE=release', image, "", cmd)
                     }
                 }
 
