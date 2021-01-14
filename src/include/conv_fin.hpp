@@ -49,6 +49,11 @@
 #include <miopen/bz2.hpp>
 #include <miopen/md5.hpp>
 
+#if MIOPEN_BACKEND_NOGPU
+#include <miopen/kernel_cache.hpp>
+#include <miopen/nogpu/handle_impl.hpp>
+#endif
+
 
 #include <boost/range/adaptor/sliced.hpp>
 
@@ -67,18 +72,6 @@
 
 
 namespace fin {
-struct FakeHandle {
-    FakeHandle(const std::string _device, const std::size_t _num_cu) : device(_device), num_cu(_num_cu)
-    {
-    }
-    std::string GetDeviceName() const
-    {
-        return device;
-    } 
-    std::size_t GetMaxComputeUnits() const {return num_cu;}
-    std::string device;
-    std::size_t num_cu;
-};
 using json = nlohmann::json;
 // TODO: Create a config class to encapsulate config 
 // related code, such as checking direction etc
@@ -336,30 +329,29 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
 template<typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::TestApplicability()
 {
-    // Get a list of the solvers from the solver registry 
-    // Create a convolution context and pass to isApplicable and get result
-    uint64_t cur_id = 1;
-    constexpr uint64_t max_id = 200;
-#if 0
-    miopen::ConvolutionContext ctx{inputTensor.desc, weightTensor.desc, outputTensor.desc, convDesc, GetDirection()};
-#endif
     GetandSetData();
     const auto conv_dir = GetDirection();
-    // assert(conv_dir == miopen::conv::Direction::Forward);
-    // The first arg to the DataInvokeParams changes based on direction
     const miopen::ProblemDescription problem(inputTensor.desc, weightTensor.desc, outputTensor.desc, convDesc, conv_dir);
     auto ctx = miopen::ConvolutionContext{problem};
-    auto fake_handle = FakeHandle("gfx906", 60);
-    ctx.SetStream(reinterpret_cast<miopen::Handle*>(&fake_handle));
+    auto handle = miopen::Handle{};
+#if MIOPEN_BACKEND_NOGPU
+    handle.impl->device_name = job["arch"];
+    handle.impl->num_cu = job["num_cu"];
+#else
+    throw std::runtime_error("MIOpen needs to be compiled with the NOGPU backend to test applicability");
+#endif
+
+    ctx.SetStream(&handle);
     ctx.DetectRocm();
     ctx.SetupFloats();
     std::vector<std::string> app_solvers;
-    while(true)
+    const auto& map = miopen::solver::GetMapValueToAnySolver();
+    for(const auto& kinder : map)
     {
-        miopen::solver::Id id(cur_id);
+        miopen::solver::Id id(kinder.first);
+        auto solver = kinder.second;
         if(id.IsValid() && id != miopen::solver::Id::gemm())
         {
-            auto solver = id.GetSolver();
             try
             {
                 if(solver.IsApplicable(ctx))
@@ -372,9 +364,6 @@ int ConvFin<Tgpu, Tref>::TestApplicability()
                 std::cout << id.ToString() << " raised an exception" << std::endl;
             }
         }
-        cur_id++;
-        if(cur_id == max_id)
-            break;
     }
     output["applicable_solvers"] = app_solvers;
     return 0;
