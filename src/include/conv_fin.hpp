@@ -70,8 +70,8 @@
 #include <nlohmann/json.hpp>
 #include <limits>
 
-
 namespace fin {
+
 using json = nlohmann::json;
 // TODO: Create a config class to encapsulate config 
 // related code, such as checking direction etc
@@ -395,6 +395,10 @@ int ConvFin<Tgpu, Tref>::RunGPU()
 template<typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::CopyToDevice()
 {
+#if MIOPEN_BACKEND_NOGPU
+    throw std::runtime_error("Unable to copy buffers to device with NOGPU backend");
+    return -1;
+#else
     auto status = inputTensor.ToDevice();
     status |= inputTensor_vect4.ToDevice();
     status |= weightTensor.ToDevice();
@@ -402,11 +406,16 @@ int ConvFin<Tgpu, Tref>::CopyToDevice()
     status |= biasTensor.ToDevice();
     status |= workspace.ToDevice();
     return status;
+#endif
 }
 
 template<typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::CopyFromDevice()
 {
+#if MIOPEN_BACKEND_NOGPU
+    throw std::runtime_error("Unable to copy buffers to device with NOGPU backend");
+    return -1;
+#else
     auto status = inputTensor.FromDevice();
     status |= inputTensor_vect4.FromDevice();
     status |= weightTensor.FromDevice();
@@ -414,6 +423,7 @@ int ConvFin<Tgpu, Tref>::CopyFromDevice()
     status |= biasTensor.FromDevice();
     status |= workspace.FromDevice();
     return status;
+#endif
 }
 
 template<typename Tgpu, typename Tref>
@@ -446,16 +456,13 @@ int ConvFin<Tgpu, Tref>::GetandSetData()
 
     // auto y_type = GetOutputType();
 
-    // inputTensor = {GetHandle().GetStream(), in_len, (is_fwd || is_wrw), is_bwd};
-    inputTensor = {nullptr, in_len, (is_fwd || is_wrw), is_bwd};
+    inputTensor = {GetHandle().GetStream(), in_len, (is_fwd || is_wrw), is_bwd};
 
-    // weightTensor = {GetHandle().GetStream(), wei_len, (is_fwd || is_bwd), is_wrw};
-    weightTensor = {nullptr, wei_len, (is_fwd || is_bwd), is_wrw};
+    weightTensor = {GetHandle().GetStream(), wei_len, (is_fwd || is_bwd), is_wrw};
     // conv, input and weight tensor descriptors need to be set before we can know the 
     // output lengths
     auto out_len = GetOutputTensorLengths();
-    //  outputTensor = {GetHandle().GetStream(), out_len, (is_bwd || is_wrw), is_fwd};
-    outputTensor = {nullptr, out_len, (is_bwd || is_wrw), is_fwd};
+     outputTensor = {GetHandle().GetStream(), out_len, (is_bwd || is_wrw), is_fwd};
 
     if(IsInputTensorTransform())
     {
@@ -464,10 +471,8 @@ int ConvFin<Tgpu, Tref>::GetandSetData()
         std::vector<int> wei_len_v4(wei_len.begin(), wei_len.end());
         wei_len_v4[1] = ((wei_len[1] + 3) / 4) * 4;
 
-        // inputTensor_vect4 = {GetHandle().GetStream(), in_len_v4, (is_fwd || is_wrw), is_bwd};
-        // weightTensor_vect4 = {GetHandle().GetStream(), wei_len_v4,(is_fwd || is_bwd), is_wrw};
-        inputTensor_vect4 = {nullptr, in_len_v4, (is_fwd || is_wrw), is_bwd};
-        weightTensor_vect4 = {nullptr, wei_len_v4,(is_fwd || is_bwd), is_wrw};
+        inputTensor_vect4 = {GetHandle().GetStream(), in_len_v4, (is_fwd || is_wrw), is_bwd};
+        weightTensor_vect4 = {GetHandle().GetStream(), wei_len_v4,(is_fwd || is_bwd), is_wrw};
     }
 
     // Conv Desc is already setup from the job descriptor
@@ -476,8 +481,7 @@ int ConvFin<Tgpu, Tref>::GetandSetData()
     if(command["bias"].get<int>() != 0)
     {
         auto bias_len = GetBiasTensorLengths();
-        // biasTensor = {GetHandle().GetStream(), bias_len, true, true};
-        biasTensor = {nullptr, bias_len, true, true};
+        biasTensor = {GetHandle().GetStream(), bias_len, true, true};
     }
     // TODO: further investigate the warmpup iteration, I dont think its necessary and can be GetHandle()d in the main execution loop
     
@@ -750,12 +754,16 @@ float16 RanGenWeights()
 template<typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::AllocateBuffers()
 {
+#if MIOPEN_BACKEND_NOGPU
+    throw std::runtime_error("Unable to allocate buffers with NOGPU backend");
+#else
     inputTensor.AllocateBuffers();
     inputTensor_vect4.AllocateBuffers();
     weightTensor.AllocateBuffers();
     outputTensor.AllocateBuffers();
     biasTensor.AllocateBuffers();
     workspace.AllocateBuffers();
+#endif
     return 0;
 }
 
@@ -864,6 +872,9 @@ Tgpu init_bias(bool is_int8, size_t idx)
 template<typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::FillBuffers()
 {
+#if MIOPEN_BACKEND_NOGPU
+    throw std::runtime_error("Unable to fill buffers with NOGPU backend");
+#else
     // TODO: Do we need to initialized tensors ? 
     auto is_int8 = (data_type == miopenInt8 || data_type == miopenInt8x4);
     srand(0);

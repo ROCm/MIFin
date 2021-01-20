@@ -156,6 +156,8 @@ int main(int argc, char *argv[], char *envp[])
         final_output.push_back(f->output);
     }
     o << std::setw(4) << final_output << std::endl;
+    o.flush();
+    o.close();
   return 0;
 }
 
