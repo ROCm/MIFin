@@ -175,7 +175,8 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
     // The first arg to the DataInvokeParams changes based on direction
     const miopen::ProblemDescription problem(inputTensor.desc, weightTensor.desc, outputTensor.desc, convDesc, conv_dir);
     auto ctx = miopen::ConvolutionContext{problem};
-    ctx.SetStream(&(GetHandle()));
+    auto& h = GetHandle();
+    ctx.SetStream(&(h));
     ctx.DetectRocm();
     ctx.SetupFloats();
 
@@ -197,8 +198,9 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
 
     auto db             = GetDb(ctx);
     json find_result;
-    const std::string arch = GetHandle().GetDeviceName();
-    const size_t num_cu = GetHandle().GetMaxComputeUnits();
+    const auto& tgt_props = h.GetTargetProperties();
+    const std::string arch = tgt_props.Name();
+    const size_t num_cu = h.GetMaxComputeUnits();
     const auto& map = miopen::solver::GetMapValueToAnySolver();
     for(const auto& kinder : map)
     {
@@ -223,12 +225,12 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
             const auto solution = s.FindSolution(ctx, db, {}); // auto tune is not expected here
             res_item["workspace"] = solution.workspce_sz;
             // Get the binary
-            miopen::solver::PrecompileKernels(GetHandle(), solution.construction_params);
+            miopen::solver::PrecompileKernels(h, solution.construction_params);
             json kernel_list;
             for(const auto& k : solution.construction_params)
             {
                 json kernel;
-                const auto hsaco = miopen::LoadBinary(arch, num_cu, k.kernel_file, k.comp_options + " -mcpu=" + arch, false);
+                const auto hsaco = miopen::LoadBinary(tgt_props, num_cu, k.kernel_file, k.comp_options + " -mcpu=" + arch, false);
                 if(hsaco.empty())
                     throw std::runtime_error("Got empty code object");
                 // Compress the blob
@@ -264,7 +266,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
                 return false;
             }
             try {
-                const auto invoker = GetHandle().PrepareInvoker(*solution.invoker_factory, solution.construction_params);
+                const auto invoker = h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
                 // This required because DataInvokeParams switches tensor order due to direction and it does not have a 
                 // copy constructor or a default constructor
                 if(conv_dir == miopen::conv::Direction::Forward)
@@ -274,7 +276,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
                                                          weightTensor.desc, weightTensor.gpuData.buf.get(),
                                                          outputTensor.desc, outputTensor.gpuData.buf.get()}, 
                                                          workspace.gpuData.buf.get(), workspace.desc.GetNumBytes()};
-                    invoker(GetHandle(), invoke_ctx);
+                    invoker(h, invoke_ctx);
                 }
                 else if(conv_dir == miopen::conv::Direction::BackwardData)
                 {
@@ -283,7 +285,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
                                                          weightTensor.desc, weightTensor.gpuData.buf.get(),
                                                          inputTensor.desc, inputTensor.gpuData.buf.get()}, 
                                                          workspace.gpuData.buf.get(), workspace.desc.GetNumBytes()};
-                    invoker(GetHandle(), invoke_ctx);
+                    invoker(h, invoke_ctx);
                 }
                 else if(conv_dir == miopen::conv::Direction::BackwardWeights)
                 {
@@ -292,7 +294,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
                                                          inputTensor.desc, inputTensor.gpuData.buf.get(), 
                                                          weightTensor.desc, weightTensor.gpuData.buf.get()},
                                                          workspace.gpuData.buf.get(), workspace.desc.GetNumBytes()};
-                    invoker(GetHandle(), invoke_ctx);
+                    invoker(h, invoke_ctx);
                 }
                 else
                 {
@@ -304,7 +306,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
                 res_item["reason"]  = std::string("Invoker exeception: ") + e.what();
                 return false;
             }
-            const auto time = GetHandle().GetKernelTime(); 
+            const auto time = h.GetKernelTime(); 
             res_item["time"] = time;
             res_item["reason"] = "Success";
 
