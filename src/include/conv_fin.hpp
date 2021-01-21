@@ -49,7 +49,7 @@
 #include <miopen/bz2.hpp>
 #include <miopen/md5.hpp>
 
-#if MIOPEN_BACKEND_NOGPU
+#if MIOPEN_MODE_NOGPU
 #include <miopen/kernel_cache.hpp>
 #include <miopen/nogpu/handle_impl.hpp>
 #endif
@@ -180,7 +180,8 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
     const miopen::ProblemDescription problem(inputTensor.desc, weightTensor.desc, outputTensor.desc, convDesc, conv_dir);
     GetHandle().EnableProfiling(true);
     auto ctx = miopen::ConvolutionContext{problem};
-    ctx.SetStream(&(GetHandle()));
+    auto& h = GetHandle();
+    ctx.SetStream(&(h));
     ctx.DetectRocm();
     ctx.SetupFloats();
 
@@ -202,8 +203,9 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
 
     auto db             = GetDb(ctx);
     json find_result;
-    const std::string arch = GetHandle().GetDeviceName();
-    const size_t num_cu = GetHandle().GetMaxComputeUnits();
+    const auto& tgt_props = h.GetTargetProperties();
+    const std::string arch = tgt_props.Name();
+    const size_t num_cu = h.GetMaxComputeUnits();
     const auto& map = miopen::solver::GetMapValueToAnySolver();
     for(const auto& kinder : map)
     {
@@ -228,12 +230,12 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
             const auto solution = s.FindSolution(ctx, db, {}); // auto tune is not expected here
             res_item["workspace"] = solution.workspce_sz;
             // Get the binary
-            miopen::solver::PrecompileKernels(GetHandle(), solution.construction_params);
+            miopen::solver::PrecompileKernels(h, solution.construction_params);
             json kernel_list;
             for(const auto& k : solution.construction_params)
             {
                 json kernel;
-                const auto hsaco = miopen::LoadBinary(arch, num_cu, k.kernel_file, k.comp_options + " -mcpu=" + arch, false);
+                const auto hsaco = miopen::LoadBinary(tgt_props, num_cu, k.kernel_file, k.comp_options + " -mcpu=" + arch, false);
                 if(hsaco.empty())
                     throw std::runtime_error("Got empty code object");
                 // Compress the blob
@@ -269,7 +271,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
                 return false;
             }
             try {
-                const auto invoker = GetHandle().PrepareInvoker(*solution.invoker_factory, solution.construction_params);
+                const auto invoker = h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
                 // This required because DataInvokeParams switches tensor order due to direction and it does not have a 
                 // copy constructor or a default constructor
                 if(conv_dir == miopen::conv::Direction::Forward)
@@ -279,7 +281,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
                                                          weightTensor.desc, weightTensor.gpuData.buf.get(),
                                                          outputTensor.desc, outputTensor.gpuData.buf.get()}, 
                                                          workspace.gpuData.buf.get(), workspace.desc.GetNumBytes()};
-                    invoker(GetHandle(), invoke_ctx);
+                    invoker(h, invoke_ctx);
                 }
                 else if(conv_dir == miopen::conv::Direction::BackwardData)
                 {
@@ -288,7 +290,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
                                                          weightTensor.desc, weightTensor.gpuData.buf.get(),
                                                          inputTensor.desc, inputTensor.gpuData.buf.get()}, 
                                                          workspace.gpuData.buf.get(), workspace.desc.GetNumBytes()};
-                    invoker(GetHandle(), invoke_ctx);
+                    invoker(h, invoke_ctx);
                 }
                 else if(conv_dir == miopen::conv::Direction::BackwardWeights)
                 {
@@ -297,7 +299,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
                                                          inputTensor.desc, inputTensor.gpuData.buf.get(), 
                                                          weightTensor.desc, weightTensor.gpuData.buf.get()},
                                                          workspace.gpuData.buf.get(), workspace.desc.GetNumBytes()};
-                    invoker(GetHandle(), invoke_ctx);
+                    invoker(h, invoke_ctx);
                 }
                 else
                 {
@@ -309,7 +311,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
                 res_item["reason"]  = std::string("Invoker exeception: ") + e.what();
                 return false;
             }
-            const auto time = GetHandle().GetKernelTime(); 
+            const auto time = h.GetKernelTime(); 
             res_item["time"] = time;
             res_item["reason"] = "Success";
 
@@ -334,7 +336,7 @@ int ConvFin<Tgpu, Tref>::TestApplicability()
     const miopen::ProblemDescription problem(inputTensor.desc, weightTensor.desc, outputTensor.desc, convDesc, conv_dir);
     auto ctx = miopen::ConvolutionContext{problem};
     auto handle = miopen::Handle{};
-#if MIOPEN_BACKEND_NOGPU
+#if MIOPEN_MODE_NOGPU
     handle.impl->device_name = job["arch"];
     handle.impl->num_cu = job["num_cu"];
 #else
@@ -395,7 +397,7 @@ int ConvFin<Tgpu, Tref>::RunGPU()
 template<typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::CopyToDevice()
 {
-#if MIOPEN_BACKEND_NOGPU
+#if MIOPEN_MODE_NOGPU
     throw std::runtime_error("Unable to copy buffers to device with NOGPU backend");
     return -1;
 #else
@@ -412,7 +414,7 @@ int ConvFin<Tgpu, Tref>::CopyToDevice()
 template<typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::CopyFromDevice()
 {
-#if MIOPEN_BACKEND_NOGPU
+#if MIOPEN_MODE_NOGPU
     throw std::runtime_error("Unable to copy buffers to device with NOGPU backend");
     return -1;
 #else
@@ -462,7 +464,7 @@ int ConvFin<Tgpu, Tref>::GetandSetData()
     // conv, input and weight tensor descriptors need to be set before we can know the 
     // output lengths
     auto out_len = GetOutputTensorLengths();
-     outputTensor = {GetHandle().GetStream(), out_len, (is_bwd || is_wrw), is_fwd};
+    outputTensor = {GetHandle().GetStream(), out_len, (is_bwd || is_wrw), is_fwd};
 
     if(IsInputTensorTransform())
     {
@@ -754,7 +756,7 @@ float16 RanGenWeights()
 template<typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::AllocateBuffers()
 {
-#if MIOPEN_BACKEND_NOGPU
+#if MIOPEN_MODE_NOGPU
     throw std::runtime_error("Unable to allocate buffers with NOGPU backend");
 #else
     inputTensor.AllocateBuffers();
@@ -872,7 +874,7 @@ Tgpu init_bias(bool is_int8, size_t idx)
 template<typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::FillBuffers()
 {
-#if MIOPEN_BACKEND_NOGPU
+#if MIOPEN_MODE_NOGPU
     throw std::runtime_error("Unable to fill buffers with NOGPU backend");
 #else
     // TODO: Do we need to initialized tensors ? 
@@ -886,6 +888,7 @@ int ConvFin<Tgpu, Tref>::FillBuffers()
     {
         biasTensor.FillBuffer(std::bind(init_bias<Tgpu>, is_int8, std::placeholders::_1));
     }
+#endif
     return 0;
 }
 } // namespace fin
