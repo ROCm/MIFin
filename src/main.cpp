@@ -152,6 +152,9 @@ int main(int argc, char *argv[], char *envp[])
             std::string step = step_it.get<std::string>();
             f->ProcessStep(step);           
         }
+        f->output["config_tuna_id"] = command["config_tuna_id"];
+        f->output["arch"] = command["arch"];
+        f->output["direction"] = command["direction"];
         f->output["input"] = command;
         final_output.push_back(f->output);
     }
