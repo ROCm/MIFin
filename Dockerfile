@@ -49,7 +49,8 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --allow-
     rocm-dev \
     rocm-opencl \
     rocm-opencl-dev \
-    rocblas && \
+    rocblas \
+    miopen-hip && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
