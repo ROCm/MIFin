@@ -160,7 +160,7 @@ pipeline {
                         cmd = "rm -rf build; \
                                 mkdir build; \
                                 cd build; \
-                                apt install -y rocblas \
+                                apt install -y rocblas; \
                                 CXX='clang++-3.8' cmake -DBUILD_DEV=On ..; \
                                 make -j\$(nproc) -k analyze;"
                     }
@@ -194,7 +194,7 @@ pipeline {
                         cmd = "rm -rf build; \
                                 mkdir build; \
                                 cd build; \
-                                apt install -y rocblas \
+                                apt install -y rocblas; \
                                 CXX=/usr/local/bin/hcc cmake -DBUILD_DEV=On ..; \
                                 make -j\$(nproc) -k analyze;"
                     }
