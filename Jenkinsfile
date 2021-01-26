@@ -160,6 +160,8 @@ pipeline {
                         cmd = "rm -rf build; \
                                 mkdir build; \
                                 cd build; \
+                                ls /opt/rocm*; \
+                                apt update; \
                                 apt install -y rocblas; \
                                 CXX='clang++-3.8' cmake -DBUILD_DEV=On ..; \
                                 make -j\$(nproc) -k analyze;"
