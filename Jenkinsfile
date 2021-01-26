@@ -69,6 +69,7 @@ def buildJob(compiler, flags, image, prefixpath="/opt/rocm", cmd = ""){
         }
         def retimage
         try {
+            echo "build docker"
             retimage = docker.build("${image}", dockerArgs + '.')
             withDockerContainer(image: image, args: dockerOpts) {
                 timeout(time: 5, unit: 'MINUTES')
@@ -77,6 +78,7 @@ def buildJob(compiler, flags, image, prefixpath="/opt/rocm", cmd = ""){
                 }
             }
         } catch(Exception ex) {
+            echo "exception ocurred"
             retimage = docker.build("${image}", dockerArgs + "--no-cache .")
             withDockerContainer(image: image, args: dockerOpts) {
                 timeout(time: 5, unit: 'MINUTES')
@@ -92,6 +94,7 @@ def buildJob(compiler, flags, image, prefixpath="/opt/rocm", cmd = ""){
                 if(cmd == ""){
                     cmake_build(compiler, flags, prefixpath)
                 }else{
+                    echo "run shell command"
                     sh cmd
                 }
             }
