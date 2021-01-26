@@ -61,7 +61,7 @@ def buildJob(compiler, flags, image, prefixpath="/opt/rocm", cmd = ""){
 
         env.HSA_ENABLE_SDMA=0
         checkout scm
-        def dockerOpts="--device=/dev/kfd --device=/dev/dri --group-add video --cap-add=SYS_PTRACE --security-opt seccomp=unconfined"
+        def dockerOpts="--device=/dev/kfd --device=/dev/dri --group-add video --cap-add=SYS_PTRACE --security-opt seccomp=unconfined --privileged"
         def dockerArgs = "--build-arg PREFIX=${prefixpath} "
         if(prefixpath == "")
         {
