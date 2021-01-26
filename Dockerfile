@@ -48,7 +48,8 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --allow-
     python-yaml \
     rocm-dev \
     rocm-opencl \
-    rocm-opencl-dev && \
+    rocm-opencl-dev \
+    rocblas && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
