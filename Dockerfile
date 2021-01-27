@@ -6,7 +6,8 @@ ARG PREFIX=/usr/local
 RUN dpkg --add-architecture i386
 
 # Add rocm repository
-RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y curl apt-utils wget && apt-get install -y gnupg2
+RUN apt-get update
+RUN DEBIAN_FRONTEND=noninteractive apt-get install -y curl apt-utils wget gnupg2
 RUN curl https://raw.githubusercontent.com/RadeonOpenCompute/ROCm-docker/master/add-rocm.sh | bash
 
 # Install dependencies required to build hcc
