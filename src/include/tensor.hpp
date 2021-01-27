@@ -81,8 +81,9 @@ struct tensor
         : desc(GetDataType<Tgpu>(), _plens),
           q(_q),
           is_input(_is_input),
-          is_output(_is_output) /*,cpuData{size()},
-gpuData{_ctx, size(), elem_size()} {}*/
+          is_output(_is_output),
+          cpuData{size()},
+          gpuData{_ctx, size(), elem_size()} {}
     {
 #if FIN_BACKEND_OPENCL
         clGetCommandQueueInfo(q, CL_QUEUE_CONTEXT, sizeof(cl_context), &ctx, nullptr);
@@ -126,7 +127,7 @@ gpuData{_ctx, size(), elem_size()} {}*/
             if(is_input) // is input
                 cpuData[i] = f(i);
             // Data_scale * RAN_GEN<Tgpu>(static_cast<Tgpu>(0.0), static_cast<Tgpu>(1.0));
-            //else /// \ref move_rand
+            // else /// \ref move_rand
             //    rand();
         }
     }
