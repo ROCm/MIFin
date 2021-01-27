@@ -796,18 +796,17 @@ int ConvFin<Tgpu, Tref>::CalcWorkspace()
     }
     if(is_fwd)
     {
-        ws_sizeof_find_fwd =
-            (convDesc.mode == miopenTranspose)
-                ? convDesc.BackwardDataGetWorkSpaceSize(
-                      handle,
-                      (is_transform ? weightTensor_vect4.desc : weightTensor.desc),
-                      (is_transform ? inputTensor_vect4.desc : inputTensor.desc),
-                      outputTensor.desc)
-                : convDesc.ForwardGetWorkSpaceSize(
-                      handle,
-                      (is_transform ? weightTensor_vect4.desc : weightTensor.desc),
-                      (is_transform ? inputTensor_vect4.desc : inputTensor.desc),
-                      outputTensor.desc);
+        ws_sizeof_find_fwd = (convDesc.mode == miopenTranspose)
+                                ? convDesc.BackwardDataGetWorkSpaceSize(
+                                      handle,
+                                      (is_transform ? weightTensor_vect4.desc : weightTensor.desc),
+                                      (is_transform ? inputTensor_vect4.desc : inputTensor.desc),
+                                      outputTensor.desc)
+                                : convDesc.ForwardGetWorkSpaceSize(
+                                      handle,
+                                      (is_transform ? weightTensor_vect4.desc : weightTensor.desc),
+                                      (is_transform ? inputTensor_vect4.desc : inputTensor.desc),
+                                      outputTensor.desc);
     }
 
     const auto wsSizeof =
