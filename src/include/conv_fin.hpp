@@ -75,8 +75,8 @@ class ConvFin : public Fin
     public:
     ConvFin() : Fin() {}
     ConvFin(json _job) : Fin()
+        : job{_job} // TODO: Verify all required fields are present, otherwise throw!
     {
-        job = _job; // TODO: Verify all required fields are present, otherwise throw!
         VerifyDevProps();
         command         = _job["config"];
         command["bias"] = 0;
@@ -781,46 +781,44 @@ int ConvFin<Tgpu, Tref>::CalcWorkspace()
     size_t ws_sizeof_find_wrw = 0;
     size_t ws_sizeof_find_bwd = 0;
     auto is_transform         = IsInputTensorTransform();
-    {
-        if(is_wrw)
-            ws_sizeof_find_wrw = convDesc.BackwardWeightsGetWorkSpaceSize(
-                handle, outputTensor.desc, inputTensor.desc, weightTensor.desc);
-        if(is_bwd)
-        {
-            ws_sizeof_find_bwd =
-                (convDesc.mode == miopenTranspose)
-                    ? convDesc.ForwardGetWorkSpaceSize(
-                          handle, weightTensor.desc, outputTensor.desc, inputTensor.desc)
-                    : convDesc.BackwardDataGetWorkSpaceSize(
-                          handle, weightTensor.desc, outputTensor.desc, inputTensor.desc);
-        }
-        if(is_fwd)
-        {
-            ws_sizeof_find_fwd =
-                (convDesc.mode == miopenTranspose)
-                    ? convDesc.BackwardDataGetWorkSpaceSize(
-                          handle,
-                          (is_transform ? weightTensor_vect4.desc : weightTensor.desc),
-                          (is_transform ? inputTensor_vect4.desc : inputTensor.desc),
-                          outputTensor.desc)
-                    : convDesc.ForwardGetWorkSpaceSize(
-                          handle,
-                          (is_transform ? weightTensor_vect4.desc : weightTensor.desc),
-                          (is_transform ? inputTensor_vect4.desc : inputTensor.desc),
-                          outputTensor.desc);
-        }
 
-        const auto wsSizeof =
-            std::max(std::max(ws_sizeof_find_bwd, ws_sizeof_find_wrw), ws_sizeof_find_fwd);
-        if(wsSizeof != 0)
-            workspace = tensor<Tgpu, Tref>{q,
-                                           std::vector<unsigned int>{static_cast<unsigned int>(
-                                               std::ceil(wsSizeof / sizeof(Tgpu)))},
-                                           true,
-                                           false};
-        return wsSizeof;
+    if(is_wrw)
+        ws_sizeof_find_wrw = convDesc.BackwardWeightsGetWorkSpaceSize(
+            handle, outputTensor.desc, inputTensor.desc, weightTensor.desc);
+    if(is_bwd)
+    {
+        ws_sizeof_find_bwd =
+            (convDesc.mode == miopenTranspose)
+                ? convDesc.ForwardGetWorkSpaceSize(
+                      handle, weightTensor.desc, outputTensor.desc, inputTensor.desc)
+                : convDesc.BackwardDataGetWorkSpaceSize(
+                      handle, weightTensor.desc, outputTensor.desc, inputTensor.desc);
     }
-    return -1;
+    if(is_fwd)
+    {
+        ws_sizeof_find_fwd =
+            (convDesc.mode == miopenTranspose)
+                ? convDesc.BackwardDataGetWorkSpaceSize(
+                      handle,
+                      (is_transform ? weightTensor_vect4.desc : weightTensor.desc),
+                      (is_transform ? inputTensor_vect4.desc : inputTensor.desc),
+                      outputTensor.desc)
+                : convDesc.ForwardGetWorkSpaceSize(
+                      handle,
+                      (is_transform ? weightTensor_vect4.desc : weightTensor.desc),
+                      (is_transform ? inputTensor_vect4.desc : inputTensor.desc),
+                      outputTensor.desc);
+    }
+
+    const auto wsSizeof =
+        std::max(std::max(ws_sizeof_find_bwd, ws_sizeof_find_wrw), ws_sizeof_find_fwd);
+    if(wsSizeof != 0)
+        workspace = tensor<Tgpu, Tref>{q,
+                                       std::vector<unsigned int>{static_cast<unsigned int>(
+                                           std::ceil(wsSizeof / sizeof(Tgpu)))},
+                                       true,
+                                       false};
+    return wsSizeof;
 }
 
 template <typename Tgpu>

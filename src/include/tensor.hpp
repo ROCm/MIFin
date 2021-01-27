@@ -85,8 +85,6 @@ gpuData{_ctx, size(), elem_size()} {}*/
     {
 #if FIN_BACKEND_OPENCL
         clGetCommandQueueInfo(q, CL_QUEUE_CONTEXT, sizeof(cl_context), &ctx, nullptr);
-#elif FIN_BACKEND_HIP
-        ctx                  = 0;
 #endif
     }
 
@@ -127,8 +125,8 @@ gpuData{_ctx, size(), elem_size()} {}*/
             if(is_input) // is input
                 cpuData[i] = f(i);
             // Data_scale * RAN_GEN<Tgpu>(static_cast<Tgpu>(0.0), static_cast<Tgpu>(1.0));
-            else /// \ref move_rand
-                rand();
+            //else /// \ref move_rand
+            //    rand();
         }
     }
 
