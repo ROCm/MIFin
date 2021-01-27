@@ -331,7 +331,11 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
 template<typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::TestApplicability()
 {
+#if MIOPEN_MODE_NOGPU
     GetandSetData();
+#else
+    throw std::runtime_error("MIOpen needs to be compiled with the NOGPU backend to test applicability");
+#endif
     const auto conv_dir = GetDirection();
     const miopen::ProblemDescription problem(inputTensor.desc, weightTensor.desc, outputTensor.desc, convDesc, conv_dir);
     auto ctx = miopen::ConvolutionContext{problem};
@@ -339,6 +343,7 @@ int ConvFin<Tgpu, Tref>::TestApplicability()
 #if MIOPEN_MODE_NOGPU
     handle.impl->device_name = job["arch"];
     handle.impl->num_cu = job["num_cu"];
+    handle.impl->target_properties.Init(&handle);
 #else
     throw std::runtime_error("MIOpen needs to be compiled with the NOGPU backend to test applicability");
 #endif
@@ -351,6 +356,7 @@ int ConvFin<Tgpu, Tref>::TestApplicability()
     for(const auto& kinder : map)
     {
         miopen::solver::Id id(kinder.first);
+	std::cout << "Testing: " << id.ToString() << std::endl;
         auto solver = kinder.second;
         if(id.IsValid() && id != miopen::solver::Id::gemm())
         {
@@ -358,8 +364,11 @@ int ConvFin<Tgpu, Tref>::TestApplicability()
             {
                 if(solver.IsApplicable(ctx))
                 {
+		    std::cout << "Applicable: " << id.ToString() << std::endl;
                     app_solvers.push_back(id.ToString());
                 }
+		else
+		    std::cout << "Not Applicable: " << id.ToString() << std::endl;
             }
             catch(...)
             {
