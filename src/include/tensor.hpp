@@ -75,6 +75,7 @@ struct tensor
     bool is_output;
 
     tensor() {}
+    // cppcheck-suppress uninitMemberVar
     template <typename U>
     tensor(accelerator_stream _q, std::vector<U> _plens, bool _is_input, bool _is_output)
         : desc(GetDataType<Tgpu>(), _plens),

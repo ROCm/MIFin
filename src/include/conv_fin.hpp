@@ -75,7 +75,7 @@ class ConvFin : public Fin
     public:
     ConvFin() : Fin() {}
     ConvFin(json _job) : Fin()
-        : job{_job} // TODO: Verify all required fields are present, otherwise throw!
+        : job(_job) // TODO: Verify all required fields are present, otherwise throw!
     {
         VerifyDevProps();
         command         = _job["config"];
