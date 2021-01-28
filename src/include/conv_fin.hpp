@@ -339,6 +339,7 @@ int ConvFin<Tgpu, Tref>::TestApplicability()
 #if MIOPEN_MODE_NOGPU
     handle.impl->device_name = job["arch"];
     handle.impl->num_cu = job["num_cu"];
+    handle.impl->target_properties.Init(&handle);
 #else
     throw std::runtime_error("MIOpen needs to be compiled with the NOGPU backend to test applicability");
 #endif
@@ -346,6 +347,7 @@ int ConvFin<Tgpu, Tref>::TestApplicability()
     ctx.SetStream(&handle);
     ctx.DetectRocm();
     ctx.SetupFloats();
+    const auto network_config = ctx.BuildConfKey();
     std::vector<std::string> app_solvers;
     const auto& map = miopen::solver::GetMapValueToAnySolver();
     for(const auto& kinder : map)
@@ -357,13 +359,11 @@ int ConvFin<Tgpu, Tref>::TestApplicability()
             try
             {
                 if(solver.IsApplicable(ctx))
-                {
                     app_solvers.push_back(id.ToString());
-                }
             }
             catch(...)
             {
-                std::cout << id.ToString() << " raised an exception" << std::endl;
+                std::cout << id.ToString() << "(" << id.Value() << ")" << " raised an exception" << "for " << std::string(network_config) << " config: " << job << std::endl;
             }
         }
     }
