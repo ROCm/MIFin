@@ -331,7 +331,11 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
 template<typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::TestApplicability()
 {
+#if MIOPEN_MODE_NOGPU
     GetandSetData();
+#else
+    throw std::runtime_error("MIOpen needs to be compiled with the NOGPU backend to test applicability");
+#endif
     const auto conv_dir = GetDirection();
     const miopen::ProblemDescription problem(inputTensor.desc, weightTensor.desc, outputTensor.desc, convDesc, conv_dir);
     auto ctx = miopen::ConvolutionContext{problem};
@@ -353,6 +357,7 @@ int ConvFin<Tgpu, Tref>::TestApplicability()
     for(const auto& kinder : map)
     {
         miopen::solver::Id id(kinder.first);
+	std::cout << "Testing: " << id.ToString() << std::endl;
         auto solver = kinder.second;
         if(id.IsValid() && id != miopen::solver::Id::gemm())
         {
