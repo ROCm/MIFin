@@ -24,7 +24,7 @@ def cmake_build(compiler, flags, prefixpath="/opt/rocm"){
     def workspace_dir = pwd()
     def vcache = "/var/jenkins/.cache/miopen/vcache"
     def archive = (flags == '-DCMAKE_BUILD_TYPE=release')
-    def config_targets = "check doc MIOpenDriver"
+    def config_targets = "all" // "check doc MIOpenDriver"
     def test_flags = "--disable-verification-cache"
     def debug_flags = "-g -fno-omit-frame-pointer -fsanitize=undefined -fno-sanitize-recover=undefined"
     def compilerpath = ""
