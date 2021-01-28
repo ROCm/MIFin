@@ -26,7 +26,6 @@
 #ifndef GUARD_CONV_FIN_HPP
 #define GUARD_CONV_FIN_HPP
 
-#include "input_flags.hpp"
 #include "fin.hpp"
 #include "tensor.hpp"
 #include "random.hpp"
