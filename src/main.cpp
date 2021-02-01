@@ -36,6 +36,12 @@
 using half_float::half;
 typedef half float16;
 
+#include <half.hpp>
+#include <miopen/bfloat16.hpp>
+
+using half_float::half;
+typedef half float16;
+
 #include <miopen/tensor.hpp>
 #include <nlohmann/json.hpp>
 #include <typeinfo>
