@@ -29,7 +29,6 @@
 #include <half.hpp>
 #include <miopen/bfloat16.hpp>
 
-
 #include <miopen/tensor.hpp>
 #include <gpu_mem.hpp>
 
@@ -42,9 +41,9 @@ template <typename T>
 miopenDataType_t GetDataType();
 
 template <typename T>
-miopenDataType_t GetDataType() 
+miopenDataType_t GetDataType()
 {
-    static_assert(true,  "Invalid data type");
+    static_assert(true, "Invalid data type");
     return miopenFloat; // satisfy the compiler
 }
 #if FIN_BACKEND_OPENCL
@@ -52,42 +51,43 @@ miopenDataType_t GetDataType()
 using status_t = cl_int;
 #else // FIN_BACKEND_HIP
 #define STATUS_SUCCESS 0
-using status_t = int;
+using status_t               = int;
 #endif
 
 template <typename Tgpu, typename Tcpu>
 struct tensor
 {
 #if FIN_BACKEND_OPENCL
-    using context_type = cl_context;
+    using context_type       = cl_context;
     using accelerator_stream = cl_command_queue;
     context_type ctx;
 #elif FIN_BACKEND_HIP
     using accelerator_stream = hipStream_t;
-    using context_type = uint32_t;
-    context_type  ctx = 0;
+    using context_type       = uint32_t;
+    context_type ctx         = 0;
 #endif
     miopen::TensorDescriptor desc;
-    std::vector<Tgpu> cpuData; // version of the data for the CPU compute
+    std::vector<Tgpu> cpuData;    // version of the data for the CPU compute
     std::vector<Tgpu> deviceData; // home for the GPU data on the CPU side
-    GPUMem gpuData; // object representing the GPU data ON the GPU
+    GPUMem gpuData;               // object representing the GPU data ON the GPU
     accelerator_stream q;
     bool is_input;
     bool is_output;
 
-    tensor(){}
+    tensor() {}
+    // cppcheck-suppress uninitMemberVar
     template <typename U>
     tensor(accelerator_stream _q, std::vector<U> _plens, bool _is_input, bool _is_output)
-        : desc(GetDataType<Tgpu>(), _plens), q(_q), is_input(_is_input), is_output(_is_output)  /*,cpuData{size()}, 
-            gpuData{_ctx, size(), elem_size()} {}*/
+        : desc(GetDataType<Tgpu>(), _plens),
+          q(_q),
+          is_input(_is_input),
+          is_output(_is_output),
+          cpuData{size()},
+          gpuData{_ctx, size(), elem_size()} {}
     {
 #if FIN_BACKEND_OPENCL
         clGetCommandQueueInfo(q, CL_QUEUE_CONTEXT, sizeof(cl_context), &ctx, nullptr);
-#elif FIN_BACKEND_HIP
-        ctx = 0;
 #endif
-
-
     }
 
     status_t FromDevice()
@@ -119,7 +119,7 @@ struct tensor
 
         gpuData = GPUMem{ctx, desc.GetNumBytes(), sizeof(Tgpu)};
     }
-    template<typename F>
+    template <typename F>
     void FillBuffer(F f)
     {
         for(int i = 0; i < GetTensorSize(); i++)
@@ -127,15 +127,12 @@ struct tensor
             if(is_input) // is input
                 cpuData[i] = f(i);
             // Data_scale * RAN_GEN<Tgpu>(static_cast<Tgpu>(0.0), static_cast<Tgpu>(1.0));
-            else /// \ref move_rand
-                rand();
+            // else /// \ref move_rand
+            //    rand();
         }
     }
 
-    size_t GetTensorSize()
-    {
-        return desc.GetElementSize();
-    }
+    size_t GetTensorSize() { return desc.GetElementSize(); }
 };
 } // namespace fin
 #endif // GUARD_FIN_TENSOR_HPP

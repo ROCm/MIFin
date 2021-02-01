@@ -26,9 +26,9 @@
  *******************************************************************************/
 #include <miopen/miopen.h>
 
-#include "fin.hpp"
 #include "conv_fin.hpp"
 #include "error.hpp"
+#include "fin.hpp"
 
 #include <half.hpp>
 #include <miopen/bfloat16.hpp>
@@ -40,10 +40,9 @@ typedef half float16;
 #include <nlohmann/json.hpp>
 #include <typeinfo>
 
-
-#include <half.hpp>
 #include <algorithm>
 #include <cstdio>
+#include <half.hpp>
 #include <iostream>
 
 using json = nlohmann::json;
@@ -58,15 +57,14 @@ using json = nlohmann::json;
     exit(0);
 }
 
-
-int main(int argc, char *argv[], char *envp[]) 
+int main(int argc, char* argv[], char* envp[])
 {
-    std::vector<std::string> args(argv, argv+argc);
+    std::vector<std::string> args(argv, argv + argc);
     std::string ifile;
     std::string ofile;
     std::map<char, std::string> MapInputs = {};
 
-    for(auto &arg: args)
+    for(auto& arg : args)
     {
         if(arg == "--help" || arg == "-help" || arg == "-h")
         {
@@ -80,31 +78,32 @@ int main(int argc, char *argv[], char *envp[])
         Usage();
     }
 
-    for(int i=0; i<args.size(); i++)
+    for(int i = 0; i < args.size(); i++)
     {
         if(args[i] == "-i")
         {
-            if(!boost::filesystem::exists(args[i+1]))
+            if(!boost::filesystem::exists(args[i + 1]))
             {
-                std::cerr << "File: " << args[i+1] << " does not exist" << std::endl;
+                std::cerr << "File: " << args[i + 1] << " does not exist" << std::endl;
                 exit(-1);
             }
-            MapInputs[args[i].back()] = args[i+1];
+            MapInputs[args[i].back()] = args[i + 1];
         }
-        if(args[i]=="-o")
+        if(args[i] == "-o")
         {
-            ofile = args[i+1];
-            MapInputs[args[i].back()] = args[i+1];
+            ofile                     = args[i + 1];
+            MapInputs[args[i].back()] = args[i + 1];
         }
     }
 
     boost::filesystem::path input_filename(MapInputs['i']);
     boost::filesystem::path output_filename(MapInputs['o']);
 
-
-    // The JSON is a list of commands, so we iterate over the list and then process each map
+    // The JSON is a list of commands, so we iterate over the list and then
+    // process each map
     std::ifstream i(input_filename.string());
-    // TODO: fix the output writing so that interim results are not lost if one of the iterations crash
+    // TODO: fix the output writing so that interim results are not lost if one of
+    // the iterations crash
     std::ofstream o(output_filename.string());
     json j; //  = json::parse(cmd);
     i >> j;
@@ -122,9 +121,10 @@ int main(int argc, char *argv[], char *envp[])
     for(auto& it : j)
     {
         auto command = it;
-        fin::Fin* f = nullptr;
+        fin::Fin* f  = nullptr;
         // TODO : Move this to a factory function
-        if(command.contains("config")){
+        if(command.contains("config"))
+        {
             if(command["config"]["cmd"] == "conv")
             {
                 f = new fin::ConvFin<float, float>(command);
@@ -139,29 +139,25 @@ int main(int argc, char *argv[], char *envp[])
             }
             else
             {
-                FIN_THROW("Invalid operation: " +  command["config"]["cmd"].get<std::string>());
+                FIN_THROW("Invalid operation: " + command["config"]["cmd"].get<std::string>());
                 exit(-1);
             }
         }
-        else{
+        else
+        {
             f = new fin::ConvFin<float, float>();
         }
 
-        for(auto & step_it : command["steps"])
+        for(auto& step_it : command["steps"])
         {
             std::string step = step_it.get<std::string>();
-            f->ProcessStep(step);           
+            f->ProcessStep(step);
         }
         f->output["config_tuna_id"] = command["config_tuna_id"];
-        f->output["arch"] = command["arch"];
-        f->output["direction"] = command["direction"];
+        f->output["arch"]           = command["arch"];
+        f->output["direction"]      = command["direction"];
         final_output.push_back(f->output);
     }
     o << std::setw(4) << final_output << std::endl;
-  return 0;
+    return 0;
 }
-
-// used for dev/debug
-    /*
-    const std::string cmd = R"([{ "steps": ["alloc_buf", "fill_buf", "copy_buf_to_device", "copy_buf_from_device", "applicability"], "tag" : "resnet50", "label" : "resnet_tuning", "direction" : 4, "arch" : "gfx906", "num_cu" : 64, "config" : { "in_w" : 28, "sources" : [ "issue_1760" ], "pad_d" : 0, "out_channels" : 128, "dilation_d" : 1, "pad_w" : 1, "conv_stride_h" : 1, "conv_stride_d" : 1, "fusion_mode" : -1, "pad_mode" : "default", "in_h" : 28, "tags" : [ "resnet50" ], "in_d" : 1, "cmd" : "conv", "activMode" : -1, "fil_h" : 3, "group_count" : 1, "dilation_h" : 1, "in_channels" : 128, "pad_h" : 1, "batchsize" : 32, "conv_stride_w" : 1, "conv_mode" : "conv", "recur" : 0, "fil_w" : 3, "spatial_dim" : 2, "fil_d" : 1, "trans_output_pad_d" : 0, "dilation_w" : 1 } } ])";
-*/
