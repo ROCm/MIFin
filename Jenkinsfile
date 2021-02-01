@@ -149,19 +149,19 @@ pipeline {
                     }
                 }
 
-                stage('Hip Tidy') {
-                    agent{ label rocmnode("rocmtest") }
-                    environment{
-                        cmd = "rm -rf build; \
-                                mkdir build; \
-                                cd build; \
-                                CXX=/usr/local/bin/hcc cmake -DBUILD_DEV=On ..; \
-                                make -j\$(nproc) -k analyze;"
-                    }
-                    steps{
-                        buildJob('hcc', '-DCMAKE_BUILD_TYPE=release', image, "", cmd)
-                    }
-                }
+                // stage('Hip Tidy') {
+                //     agent{ label rocmnode("rocmtest") }
+                //     environment{
+                //         cmd = "rm -rf build; \
+                //                 mkdir build; \
+                //                 cd build; \
+                //                 CXX=/usr/local/bin/hcc cmake -DBUILD_DEV=On ..; \
+                //                 make -j\$(nproc) -k analyze;"
+                //     }
+                //     steps{
+                //         buildJob('hcc', '-DCMAKE_BUILD_TYPE=release', image, "", cmd)
+                //     }
+                // }
             }
         }
 
