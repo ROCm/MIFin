@@ -74,755 +74,870 @@ namespace fin {
 using json = nlohmann::json;
 // TODO: Create a config class to encapsulate config
 // related code, such as checking direction etc
-template <typename Tgpu, typename Tcpu> class ConvFin : public Fin {
-public:
-  ConvFin() : Fin() {}
-  ConvFin(json _job) : Fin() {
-    job =
-        _job; // TODO: Verify all required fields are present, otherwise throw!
-    VerifyDevProps();
-    command = _job["config"];
-    command["bias"] = 0;
-    // timing is always enabled
-    is_fwd =
-        (_job["direction"].get<int>() == 0 || _job["direction"].get<int>() & 1);
-    is_bwd =
-        (_job["direction"].get<int>() == 0 || _job["direction"].get<int>() & 2);
-    is_wrw =
-        (_job["direction"].get<int>() == 0 || _job["direction"].get<int>() & 4);
-    SetConvDescriptor();
-    // workspace_dev = nullptr; // TODO: replaced with a tensor class
-    // the variable name is implementation dependent, checking size instead
-  }
-  void VerifyDevProps() {
-    const std::string arch = job["arch"];
-    const size_t num_cu = job["num_cu"];
-    if (arch == "gfx900") {
-      assert(num_cu == 56 || num_cu == 64);
-    } else if (arch == "gfx906") {
-      assert(num_cu == 60 || num_cu == 64);
-    } else if (arch == "gfx908") {
-      assert(num_cu == 120);
-    } else
-      throw std::runtime_error("Invalid Arch Name");
-  }
+template <typename Tgpu, typename Tcpu>
+class ConvFin : public Fin
+{
+    public:
+    ConvFin() : Fin() {}
+    ConvFin(json _job) : Fin()
+    {
+        job = _job; // TODO: Verify all required fields are present, otherwise throw!
+        VerifyDevProps();
+        command         = _job["config"];
+        command["bias"] = 0;
+        // timing is always enabled
+        is_fwd = (_job["direction"].get<int>() == 0 || _job["direction"].get<int>() & 1);
+        is_bwd = (_job["direction"].get<int>() == 0 || _job["direction"].get<int>() & 2);
+        is_wrw = (_job["direction"].get<int>() == 0 || _job["direction"].get<int>() & 4);
+        SetConvDescriptor();
+        // workspace_dev = nullptr; // TODO: replaced with a tensor class
+        // the variable name is implementation dependent, checking size instead
+    }
+    void VerifyDevProps()
+    {
+        const std::string arch = job["arch"];
+        const size_t num_cu    = job["num_cu"];
+        if(arch == "gfx900")
+        {
+            assert(num_cu == 56 || num_cu == 64);
+        }
+        else if(arch == "gfx906")
+        {
+            assert(num_cu == 60 || num_cu == 64);
+        }
+        else if(arch == "gfx908")
+        {
+            assert(num_cu == 120);
+        }
+        else
+            throw std::runtime_error("Invalid Arch Name");
+    }
 
-  // Getters and setters
-  std::vector<int> GetInputTensorLengths();
-  std::vector<int> GetWeightTensorLengths();
-  std::vector<int> GetBiasTensorLengths();
-  int SetConvDescriptor();
-  std::vector<size_t> GetOutputTensorLengths() const;
-  miopenDataType_t GetOutputType() const {
-    return (data_type == miopenInt8 || data_type == miopenInt8x4) ? miopenFloat
-                                                                  : data_type;
-  }
-  miopen::conv::Direction GetDirection() const;
+    // Getters and setters
+    std::vector<int> GetInputTensorLengths();
+    std::vector<int> GetWeightTensorLengths();
+    std::vector<int> GetBiasTensorLengths();
+    int SetConvDescriptor();
+    std::vector<size_t> GetOutputTensorLengths() const;
+    miopenDataType_t GetOutputType() const
+    {
+        return (data_type == miopenInt8 || data_type == miopenInt8x4) ? miopenFloat : data_type;
+    }
+    miopen::conv::Direction GetDirection() const;
 
-  int ProcessStep(const std::string &step_name) override;
+    int ProcessStep(const std::string& step_name) override;
 
-  // Steps
-  int AllocateBuffers();
-  int CalcWorkspace();
-  int FillBuffers();
-  int CopyToDevice();
-  int CopyFromDevice();
-  int RunGPU();
-  int TestApplicability();
-  int GetandSetData();
-  int GetSolverList();
-  int MIOpenFind();
+    // Steps
+    int AllocateBuffers();
+    int CalcWorkspace();
+    int FillBuffers();
+    int CopyToDevice();
+    int CopyFromDevice();
+    int RunGPU();
+    int TestApplicability();
+    int GetandSetData();
+    int GetSolverList();
+    int MIOpenFind();
 
-  // Utility functions
-  bool IsInputTensorTransform() const;
-  json command;
-  json job;
+    // Utility functions
+    bool IsInputTensorTransform() const;
+    json command;
+    json job;
 
-  tensor<Tgpu, Tcpu> inputTensor;
-  tensor<Tgpu, Tcpu> inputTensor_vect4;
-  tensor<Tgpu, Tcpu> outputTensor;
-  tensor<Tgpu, Tcpu> weightTensor;
-  tensor<Tgpu, Tcpu> weightTensor_vect4;
-  tensor<Tgpu, Tcpu> biasTensor;
-  tensor<Tgpu, Tcpu> workspace;
-  miopen::ConvolutionDescriptor convDesc;
+    tensor<Tgpu, Tcpu> inputTensor;
+    tensor<Tgpu, Tcpu> inputTensor_vect4;
+    tensor<Tgpu, Tcpu> outputTensor;
+    tensor<Tgpu, Tcpu> weightTensor;
+    tensor<Tgpu, Tcpu> weightTensor_vect4;
+    tensor<Tgpu, Tcpu> biasTensor;
+    tensor<Tgpu, Tcpu> workspace;
+    miopen::ConvolutionDescriptor convDesc;
 
-  bool wrw_allowed = 0, bwd_allowed = 0, forward_allowed = 1;
-  bool is_fwd = true;
-  bool is_bwd = false;
-  bool is_wrw = false; // TODO: check redundancy with above
-  int immediate_solution = 0;
-  std::vector<std::string> steps_processed;
+    bool wrw_allowed = 0, bwd_allowed = 0, forward_allowed = 1;
+    bool is_fwd            = true;
+    bool is_bwd            = false;
+    bool is_wrw            = false; // TODO: check redundancy with above
+    int immediate_solution = 0;
+    std::vector<std::string> steps_processed;
 };
 
 template <typename Tgpu, typename Tref>
-miopen::conv::Direction ConvFin<Tgpu, Tref>::GetDirection() const {
-  return is_fwd ? miopen::conv::Direction::Forward
-                : (is_bwd ? miopen::conv::Direction::BackwardData
-                          : miopen::conv::Direction::BackwardWeights);
+miopen::conv::Direction ConvFin<Tgpu, Tref>::GetDirection() const
+{
+    return is_fwd ? miopen::conv::Direction::Forward
+                  : (is_bwd ? miopen::conv::Direction::BackwardData
+                            : miopen::conv::Direction::BackwardWeights);
 }
 
-template <typename Tgpu, typename Tref> int ConvFin<Tgpu, Tref>::MIOpenFind() {
-  // Before this step is executed, the following steps should have been evaluted
-  // alloc_buf only if only timing is required
-  // alloc_buf, fill_buf and copy_buf_to_device if numerical accuracy would be
-  // checked ??
-  GetandSetData();
-  const auto conv_dir = GetDirection();
-  // assert(conv_dir == miopen::conv::Direction::Forward);
-  // The first arg to the DataInvokeParams changes based on direction
-  const miopen::ProblemDescription problem(inputTensor.desc, weightTensor.desc,
-                                           outputTensor.desc, convDesc,
-                                           conv_dir);
-  GetHandle().EnableProfiling(true);
-  auto ctx = miopen::ConvolutionContext{problem};
-  auto &h = GetHandle();
-  ctx.SetStream(&(h));
-  ctx.DetectRocm();
-  ctx.SetupFloats();
+template <typename Tgpu, typename Tref>
+int ConvFin<Tgpu, Tref>::MIOpenFind()
+{
+    // Before this step is executed, the following steps should have been evaluted
+    // alloc_buf only if only timing is required
+    // alloc_buf, fill_buf and copy_buf_to_device if numerical accuracy would be
+    // checked ??
+    GetandSetData();
+    const auto conv_dir = GetDirection();
+    // assert(conv_dir == miopen::conv::Direction::Forward);
+    // The first arg to the DataInvokeParams changes based on direction
+    const miopen::ProblemDescription problem(
+        inputTensor.desc, weightTensor.desc, outputTensor.desc, convDesc, conv_dir);
+    GetHandle().EnableProfiling(true);
+    auto ctx = miopen::ConvolutionContext{problem};
+    auto& h  = GetHandle();
+    ctx.SetStream(&(h));
+    ctx.DetectRocm();
+    ctx.SetupFloats();
 
-  const auto network_config = ctx.BuildConfKey();
-  miopen::ConvolutionUserBuffers bufs(workspace.gpuData.buf.get(),
-                                      workspace.desc.GetNumBytes());
-  if (conv_dir == miopen::conv::Direction::Forward)
-    bufs.SetFwd(inputTensor.gpuData.buf.get(), weightTensor.gpuData.buf.get(),
-                outputTensor.gpuData.buf.get());
-  else if (conv_dir == miopen::conv::Direction::BackwardData)
-    bufs.SetBwd(inputTensor.gpuData.buf.get(), weightTensor.gpuData.buf.get(),
-                outputTensor.gpuData.buf.get());
-  else if (conv_dir == miopen::conv::Direction::BackwardWeights)
-    bufs.SetWrW(inputTensor.gpuData.buf.get(), weightTensor.gpuData.buf.get(),
-                outputTensor.gpuData.buf.get());
+    const auto network_config = ctx.BuildConfKey();
+    miopen::ConvolutionUserBuffers bufs(workspace.gpuData.buf.get(), workspace.desc.GetNumBytes());
+    if(conv_dir == miopen::conv::Direction::Forward)
+        bufs.SetFwd(inputTensor.gpuData.buf.get(),
+                    weightTensor.gpuData.buf.get(),
+                    outputTensor.gpuData.buf.get());
+    else if(conv_dir == miopen::conv::Direction::BackwardData)
+        bufs.SetBwd(inputTensor.gpuData.buf.get(),
+                    weightTensor.gpuData.buf.get(),
+                    outputTensor.gpuData.buf.get());
+    else if(conv_dir == miopen::conv::Direction::BackwardWeights)
+        bufs.SetWrW(inputTensor.gpuData.buf.get(),
+                    weightTensor.gpuData.buf.get(),
+                    outputTensor.gpuData.buf.get());
 
-  ctx.SetBufs(bufs);
+    ctx.SetBufs(bufs);
 
-  const bool is_winograd_only = convDesc.IsWinograd3x3SupportedAndFast(ctx);
-  output["is_winograd_only"] = is_winograd_only;
-  output["network_config"] = network_config;
+    const bool is_winograd_only = convDesc.IsWinograd3x3SupportedAndFast(ctx);
+    output["is_winograd_only"]  = is_winograd_only;
+    output["network_config"]    = network_config;
 
-  auto db = GetDb(ctx);
-  json find_result;
-  const auto &tgt_props = h.GetTargetProperties();
-  const std::string arch = tgt_props.Name();
-  const size_t num_cu = h.GetMaxComputeUnits();
-  const auto &map = miopen::solver::GetMapValueToAnySolver();
-  for (const auto &kinder : map) {
-    json res_item;
-    auto process_solver = [&]() -> bool {
-      const auto solver_id = miopen::solver::Id{kinder.first};
-      res_item["solver_id"] = solver_id.ToString();
-      const auto &s = kinder.second;
-      const auto algo = solver_id.GetAlgo(conv_dir);
-      res_item["algorithm"] = algo;
-      if (solver_id == miopen::solver::Id::gemm()) {
-        // TODO: deal with GEMM
-        res_item["reason"] = "GEMM has not solvers";
-        return false;
-      }
-      if (!s.IsApplicable(ctx)) {
-        res_item["reason"] = "Not Applicable";
-        return false;
-      }
-      const auto solution =
-          s.FindSolution(ctx, db, {}); // auto tune is not expected here
-      res_item["workspace"] = solution.workspce_sz;
-      // Get the binary
-      miopen::solver::PrecompileKernels(h, solution.construction_params);
-      json kernel_list;
-      for (const auto &k : solution.construction_params) {
-        json kernel;
-        const auto hsaco =
-            miopen::LoadBinary(tgt_props, num_cu, k.kernel_file,
-                               k.comp_options + " -mcpu=" + arch, false);
-        if (hsaco.empty())
-          throw std::runtime_error("Got empty code object");
-        // Compress the blob
-        auto md5_sum = miopen::md5(hsaco);
-        auto size = hsaco.size();
-        bool success = false;
-        auto compressed_hsaco = miopen::compress(hsaco, &success);
-        const auto encoded_hsaco = base64_encode(compressed_hsaco);
-        if (success) {
-          kernel["uncompressed_size"] = size;
-          kernel["md5_sum"] = md5_sum;
-          kernel["blob"] = encoded_hsaco;
-        } else {
-          kernel["md5_sum"] = "Failed to compress kernel";
-          kernel["uncompressed_size"] = 0;
-          kernel["blob"] = "";
+    auto db = GetDb(ctx);
+    json find_result;
+    const auto& tgt_props  = h.GetTargetProperties();
+    const std::string arch = tgt_props.Name();
+    const size_t num_cu    = h.GetMaxComputeUnits();
+    const auto& map        = miopen::solver::GetMapValueToAnySolver();
+    for(const auto& kinder : map)
+    {
+        json res_item;
+        auto process_solver = [&]() -> bool {
+            const auto solver_id  = miopen::solver::Id{kinder.first};
+            res_item["solver_id"] = solver_id.ToString();
+            const auto& s         = kinder.second;
+            const auto algo       = solver_id.GetAlgo(conv_dir);
+            res_item["algorithm"] = algo;
+            if(solver_id == miopen::solver::Id::gemm())
+            {
+                // TODO: deal with GEMM
+                res_item["reason"] = "GEMM has not solvers";
+                return false;
+            }
+            if(!s.IsApplicable(ctx))
+            {
+                res_item["reason"] = "Not Applicable";
+                return false;
+            }
+            const auto solution   = s.FindSolution(ctx, db, {}); // auto tune is not expected here
+            res_item["workspace"] = solution.workspce_sz;
+            // Get the binary
+            miopen::solver::PrecompileKernels(h, solution.construction_params);
+            json kernel_list;
+            for(const auto& k : solution.construction_params)
+            {
+                json kernel;
+                const auto hsaco = miopen::LoadBinary(
+                    tgt_props, num_cu, k.kernel_file, k.comp_options + " -mcpu=" + arch, false);
+                if(hsaco.empty())
+                    throw std::runtime_error("Got empty code object");
+                // Compress the blob
+                auto md5_sum             = miopen::md5(hsaco);
+                auto size                = hsaco.size();
+                bool success             = false;
+                auto compressed_hsaco    = miopen::compress(hsaco, &success);
+                const auto encoded_hsaco = base64_encode(compressed_hsaco);
+                if(success)
+                {
+                    kernel["uncompressed_size"] = size;
+                    kernel["md5_sum"]           = md5_sum;
+                    kernel["blob"]              = encoded_hsaco;
+                }
+                else
+                {
+                    kernel["md5_sum"]           = "Failed to compress kernel";
+                    kernel["uncompressed_size"] = 0;
+                    kernel["blob"]              = "";
+                }
+                kernel_list.push_back(kernel);
+            }
+            res_item["kernel_objects"] = kernel_list;
+            if(solution.workspce_sz > workspace.desc.GetNumBytes())
+            {
+                res_item["reason"] = "Insufficient Workspace";
+                return false;
+            }
+
+            if(!solution.invoker_factory)
+            {
+                res_item["reason"] = "Invoker not implemented";
+                return false;
+            }
+            try
+            {
+                const auto invoker =
+                    h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
+                // This required because DataInvokeParams switches tensor order due to
+                // direction and it does not have a
+                // copy constructor or a default constructor
+                if(conv_dir == miopen::conv::Direction::Forward)
+                {
+                    const auto invoke_ctx =
+                        miopen::conv::DataInvokeParams{{inputTensor.desc,
+                                                        inputTensor.gpuData.buf.get(),
+                                                        weightTensor.desc,
+                                                        weightTensor.gpuData.buf.get(),
+                                                        outputTensor.desc,
+                                                        outputTensor.gpuData.buf.get()},
+                                                       workspace.gpuData.buf.get(),
+                                                       workspace.desc.GetNumBytes()};
+                    invoker(h, invoke_ctx);
+                }
+                else if(conv_dir == miopen::conv::Direction::BackwardData)
+                {
+                    const auto invoke_ctx =
+                        miopen::conv::DataInvokeParams{{outputTensor.desc,
+                                                        outputTensor.gpuData.buf.get(),
+                                                        weightTensor.desc,
+                                                        weightTensor.gpuData.buf.get(),
+                                                        inputTensor.desc,
+                                                        inputTensor.gpuData.buf.get()},
+                                                       workspace.gpuData.buf.get(),
+                                                       workspace.desc.GetNumBytes()};
+                    invoker(h, invoke_ctx);
+                }
+                else if(conv_dir == miopen::conv::Direction::BackwardWeights)
+                {
+                    const auto invoke_ctx =
+                        miopen::conv::WrWInvokeParams{{outputTensor.desc,
+                                                       outputTensor.gpuData.buf.get(),
+                                                       inputTensor.desc,
+                                                       inputTensor.gpuData.buf.get(),
+                                                       weightTensor.desc,
+                                                       weightTensor.gpuData.buf.get()},
+                                                      workspace.gpuData.buf.get(),
+                                                      workspace.desc.GetNumBytes()};
+                    invoker(h, invoke_ctx);
+                }
+                else
+                {
+                    throw std::runtime_error("Invalid Direction");
+                }
+            }
+            catch(const std::exception& e)
+            {
+                res_item["reason"] = std::string("Invoker exeception: ") + e.what();
+                return false;
+            }
+            const auto time    = h.GetKernelTime();
+            res_item["time"]   = time;
+            res_item["reason"] = "Success";
+
+            return true;
+        };
+
+        auto res              = process_solver();
+        res_item["evaluated"] = res;
+        find_result.push_back(res_item);
+    }
+
+    output["miopen_find_result"] = find_result;
+    return 1;
+}
+
+template <typename Tgpu, typename Tref>
+int ConvFin<Tgpu, Tref>::TestApplicability()
+{
+#if MIOPEN_MODE_NOGPU
+    GetandSetData();
+#else
+    throw std::runtime_error("MIOpen needs to be compiled with the NOGPU backend "
+                             "to test applicability");
+#endif
+    const auto conv_dir = GetDirection();
+    const miopen::ProblemDescription problem(
+        inputTensor.desc, weightTensor.desc, outputTensor.desc, convDesc, conv_dir);
+    auto ctx    = miopen::ConvolutionContext{problem};
+    auto handle = miopen::Handle{};
+#if MIOPEN_MODE_NOGPU
+    handle.impl->device_name = job["arch"];
+    handle.impl->num_cu      = job["num_cu"];
+    handle.impl->target_properties.Init(&handle);
+#else
+    throw std::runtime_error("MIOpen needs to be compiled with the NOGPU backend "
+                             "to test applicability");
+#endif
+
+    ctx.SetStream(&handle);
+    ctx.DetectRocm();
+    ctx.SetupFloats();
+    const auto network_config = ctx.BuildConfKey();
+    std::vector<std::string> app_solvers;
+    const auto& map = miopen::solver::GetMapValueToAnySolver();
+    for(const auto& kinder : map)
+    {
+        miopen::solver::Id id(kinder.first);
+        std::cout << "Testing: " << id.ToString() << std::endl;
+        auto solver = kinder.second;
+        if(id.IsValid() && id != miopen::solver::Id::gemm())
+        {
+            try
+            {
+                if(solver.IsApplicable(ctx))
+                    app_solvers.push_back(id.ToString());
+            }
+            catch(...)
+            {
+                std::cout << id.ToString() << "(" << id.Value() << ")"
+                          << " raised an exception"
+                          << "for " << std::string(network_config) << " config: " << job
+                          << std::endl;
+            }
         }
-        kernel_list.push_back(kernel);
-      }
-      res_item["kernel_objects"] = kernel_list;
-      if (solution.workspce_sz > workspace.desc.GetNumBytes()) {
-        res_item["reason"] = "Insufficient Workspace";
-        return false;
-      }
+    }
+    output["applicable_solvers"] = app_solvers;
+    return 0;
+}
 
-      if (!solution.invoker_factory) {
-        res_item["reason"] = "Invoker not implemented";
-        return false;
-      }
-      try {
-        const auto invoker = h.PrepareInvoker(*solution.invoker_factory,
-                                              solution.construction_params);
-        // This required because DataInvokeParams switches tensor order due to
-        // direction and it does not have a
-        // copy constructor or a default constructor
-        if (conv_dir == miopen::conv::Direction::Forward) {
-          const auto invoke_ctx = miopen::conv::DataInvokeParams{
-              {inputTensor.desc, inputTensor.gpuData.buf.get(),
-               weightTensor.desc, weightTensor.gpuData.buf.get(),
-               outputTensor.desc, outputTensor.gpuData.buf.get()},
-              workspace.gpuData.buf.get(),
-              workspace.desc.GetNumBytes()};
-          invoker(h, invoke_ctx);
-        } else if (conv_dir == miopen::conv::Direction::BackwardData) {
-          const auto invoke_ctx = miopen::conv::DataInvokeParams{
-              {outputTensor.desc, outputTensor.gpuData.buf.get(),
-               weightTensor.desc, weightTensor.gpuData.buf.get(),
-               inputTensor.desc, inputTensor.gpuData.buf.get()},
-              workspace.gpuData.buf.get(),
-              workspace.desc.GetNumBytes()};
-          invoker(h, invoke_ctx);
-        } else if (conv_dir == miopen::conv::Direction::BackwardWeights) {
-          const auto invoke_ctx = miopen::conv::WrWInvokeParams{
-              {outputTensor.desc, outputTensor.gpuData.buf.get(),
-               inputTensor.desc, inputTensor.gpuData.buf.get(),
-               weightTensor.desc, weightTensor.gpuData.buf.get()},
-              workspace.gpuData.buf.get(),
-              workspace.desc.GetNumBytes()};
-          invoker(h, invoke_ctx);
-        } else {
-          throw std::runtime_error("Invalid Direction");
+template <typename Tgpu, typename Tref>
+int ConvFin<Tgpu, Tref>::GetSolverList()
+{
+    // pair.first = id, pair. second = string id
+    std::vector<std::pair<uint64_t, std::string>> solvers;
+    const auto& map = miopen::solver::GetMapValueToAnySolver();
+    for(const auto& kinder : map)
+    {
+        miopen::solver::Id id(kinder.first);
+        solvers.push_back(std::make_pair(id.Value(), id.ToString()));
+    }
+    output["all_solvers"] = solvers;
+    return 0;
+}
+
+template <typename Tgpu, typename Tref>
+int ConvFin<Tgpu, Tref>::RunGPU()
+{
+    assert(false);
+    return 0;
+}
+
+template <typename Tgpu, typename Tref>
+int ConvFin<Tgpu, Tref>::CopyToDevice()
+{
+#if MIOPEN_MODE_NOGPU
+    throw std::runtime_error("Unable to copy buffers to device with NOGPU backend");
+    return -1;
+#else
+    auto status = inputTensor.ToDevice();
+    status |= inputTensor_vect4.ToDevice();
+    status |= weightTensor.ToDevice();
+    status |= outputTensor.ToDevice();
+    status |= biasTensor.ToDevice();
+    status |= workspace.ToDevice();
+    return status;
+#endif
+}
+
+template <typename Tgpu, typename Tref>
+int ConvFin<Tgpu, Tref>::CopyFromDevice()
+{
+#if MIOPEN_MODE_NOGPU
+    throw std::runtime_error("Unable to copy buffers to device with NOGPU backend");
+    return -1;
+#else
+    auto status = inputTensor.FromDevice();
+    status |= inputTensor_vect4.FromDevice();
+    status |= weightTensor.FromDevice();
+    status |= outputTensor.FromDevice();
+    status |= biasTensor.FromDevice();
+    status |= workspace.FromDevice();
+    return status;
+#endif
+}
+
+template <typename Tgpu, typename Tref>
+int ConvFin<Tgpu, Tref>::ProcessStep(const std::string& step_name)
+{
+    steps_processed.push_back(step_name);
+    if(step_name == "alloc_buf")
+        return AllocateBuffers();
+    if(step_name == "fill_buf")
+        return FillBuffers();
+    if(step_name == "copy_buf_to_device")
+        return CopyToDevice();
+    if(step_name == "copy_buf_from_device")
+        return CopyFromDevice();
+    if(step_name == "applicability")
+        return TestApplicability();
+    if(step_name == "get_solvers")
+        return GetSolverList();
+    if(step_name == "miopen_find")
+        return MIOpenFind();
+    return 0;
+}
+
+template <typename Tgpu, typename Tref>
+int ConvFin<Tgpu, Tref>::GetandSetData()
+{
+    auto in_len  = GetInputTensorLengths();
+    auto wei_len = GetWeightTensorLengths();
+
+    // auto y_type = GetOutputType();
+
+    inputTensor = {GetHandle().GetStream(), in_len, (is_fwd || is_wrw), is_bwd};
+
+    weightTensor = {GetHandle().GetStream(), wei_len, (is_fwd || is_bwd), is_wrw};
+    // conv, input and weight tensor descriptors need to be set before we can know
+    // the
+    // output lengths
+    auto out_len = GetOutputTensorLengths();
+    outputTensor = {GetHandle().GetStream(), out_len, (is_bwd || is_wrw), is_fwd};
+
+    if(IsInputTensorTransform())
+    {
+        std::vector<int> in_len_v4(in_len.begin(), in_len.end());
+        in_len_v4[1] = ((in_len[1] + 3) / 4) * 4;
+        std::vector<int> wei_len_v4(wei_len.begin(), wei_len.end());
+        wei_len_v4[1] = ((wei_len[1] + 3) / 4) * 4;
+
+        inputTensor_vect4  = {GetHandle().GetStream(), in_len_v4, (is_fwd || is_wrw), is_bwd};
+        weightTensor_vect4 = {GetHandle().GetStream(), wei_len_v4, (is_fwd || is_bwd), is_wrw};
+    }
+
+    // Conv Desc is already setup from the job descriptor
+
+    if(command["bias"].get<int>() != 0)
+    {
+        auto bias_len = GetBiasTensorLengths();
+        biasTensor    = {GetHandle().GetStream(), bias_len, true, true};
+    }
+    // TODO: further investigate the warmpup iteration, I dont think its necessary
+    // and can be GetHandle()d in the main execution loop
+
+    return (0);
+}
+
+template <typename Tgpu, typename Tref>
+std::vector<int> ConvFin<Tgpu, Tref>::GetInputTensorLengths()
+{
+    std::vector<int> in_lens;
+
+    int spatial_dim = command["spatial_dim"];
+    in_lens.resize(2 + spatial_dim);
+
+    in_lens[0] = command["batchsize"];
+    in_lens[1] = command["in_channels"];
+
+    auto in_spatial_lens = boost::adaptors::slice(in_lens, 2, 2 + spatial_dim);
+
+    if(spatial_dim == 2)
+    {
+        in_spatial_lens[0] = command["in_h"];
+        in_spatial_lens[1] = command["in_w"];
+    }
+    else if(spatial_dim == 3)
+    {
+        in_spatial_lens[0] = command["in_d"];
+        in_spatial_lens[1] = command["in_h"];
+        in_spatial_lens[2] = command["in_w"];
+    }
+    else
+    {
+        FIN_THROW("unsupported convolution dimension");
+    }
+
+    return in_lens;
+}
+
+template <typename Tgpu, typename Tref>
+std::vector<int> ConvFin<Tgpu, Tref>::GetWeightTensorLengths()
+{
+    std::vector<int> wei_lens;
+
+    int spatial_dim = command["spatial_dim"];
+    wei_lens.resize(2 + spatial_dim);
+
+    auto wei_spatial_lens = boost::adaptors::slice(wei_lens, 2, 2 + spatial_dim);
+
+    int group_count = std::max(int(command["group_count"]), 1);
+
+    int wei_k_len = command["out_channels"];
+    int wei_c_len = command["in_channels"];
+
+    if(spatial_dim == 2)
+    {
+        wei_spatial_lens[0] = command["fil_h"];
+        wei_spatial_lens[1] = command["fil_w"];
+    }
+    else if(spatial_dim == 3)
+    {
+        wei_spatial_lens[0] = command["fil_d"];
+        wei_spatial_lens[1] = command["fil_h"];
+        wei_spatial_lens[2] = command["fil_w"];
+    }
+    else
+    {
+        FIN_THROW("unsupported convolution dimension");
+    }
+
+    if(group_count > 1)
+    {
+        if(wei_c_len % group_count != 0 || wei_k_len % group_count != 0 ||
+           group_count > wei_c_len || group_count > wei_k_len)
+        {
+            FIN_THROW("Invalid group number\n");
         }
-      } catch (const std::exception &e) {
-        res_item["reason"] = std::string("Invoker exeception: ") + e.what();
-        return false;
-      }
-      const auto time = h.GetKernelTime();
-      res_item["time"] = time;
-      res_item["reason"] = "Success";
-
-      return true;
-    };
-
-    auto res = process_solver();
-    res_item["evaluated"] = res;
-    find_result.push_back(res_item);
-  }
-
-  output["miopen_find_result"] = find_result;
-  return 1;
-}
-
-template <typename Tgpu, typename Tref>
-int ConvFin<Tgpu, Tref>::TestApplicability() {
-#if MIOPEN_MODE_NOGPU
-  GetandSetData();
-#else
-  throw std::runtime_error("MIOpen needs to be compiled with the NOGPU backend "
-                           "to test applicability");
-#endif
-  const auto conv_dir = GetDirection();
-  const miopen::ProblemDescription problem(inputTensor.desc, weightTensor.desc,
-                                           outputTensor.desc, convDesc,
-                                           conv_dir);
-  auto ctx = miopen::ConvolutionContext{problem};
-  auto handle = miopen::Handle{};
-#if MIOPEN_MODE_NOGPU
-  handle.impl->device_name = job["arch"];
-  handle.impl->num_cu = job["num_cu"];
-  handle.impl->target_properties.Init(&handle);
-#else
-  throw std::runtime_error("MIOpen needs to be compiled with the NOGPU backend "
-                           "to test applicability");
-#endif
-
-  ctx.SetStream(&handle);
-  ctx.DetectRocm();
-  ctx.SetupFloats();
-  const auto network_config = ctx.BuildConfKey();
-  std::vector<std::string> app_solvers;
-  const auto &map = miopen::solver::GetMapValueToAnySolver();
-  for (const auto &kinder : map) {
-    miopen::solver::Id id(kinder.first);
-    std::cout << "Testing: " << id.ToString() << std::endl;
-    auto solver = kinder.second;
-    if (id.IsValid() && id != miopen::solver::Id::gemm()) {
-      try {
-        if (solver.IsApplicable(ctx))
-          app_solvers.push_back(id.ToString());
-      } catch (...) {
-        std::cout << id.ToString() << "(" << id.Value() << ")"
-                  << " raised an exception"
-                  << "for " << std::string(network_config) << " config: " << job
-                  << std::endl;
-      }
     }
-  }
-  output["applicable_solvers"] = app_solvers;
-  return 0;
-}
 
-template <typename Tgpu, typename Tref>
-int ConvFin<Tgpu, Tref>::GetSolverList() {
-  // pair.first = id, pair. second = string id
-  std::vector<std::pair<uint64_t, std::string>> solvers;
-  const auto &map = miopen::solver::GetMapValueToAnySolver();
-  for (const auto &kinder : map) {
-    miopen::solver::Id id(kinder.first);
-    solvers.push_back(std::make_pair(id.Value(), id.ToString()));
-  }
-  output["all_solvers"] = solvers;
-  return 0;
-}
-
-template <typename Tgpu, typename Tref> int ConvFin<Tgpu, Tref>::RunGPU() {
-  assert(false);
-  return 0;
-}
-
-template <typename Tgpu, typename Tref>
-int ConvFin<Tgpu, Tref>::CopyToDevice() {
-#if MIOPEN_MODE_NOGPU
-  throw std::runtime_error(
-      "Unable to copy buffers to device with NOGPU backend");
-  return -1;
-#else
-  auto status = inputTensor.ToDevice();
-  status |= inputTensor_vect4.ToDevice();
-  status |= weightTensor.ToDevice();
-  status |= outputTensor.ToDevice();
-  status |= biasTensor.ToDevice();
-  status |= workspace.ToDevice();
-  return status;
-#endif
-}
-
-template <typename Tgpu, typename Tref>
-int ConvFin<Tgpu, Tref>::CopyFromDevice() {
-#if MIOPEN_MODE_NOGPU
-  throw std::runtime_error(
-      "Unable to copy buffers to device with NOGPU backend");
-  return -1;
-#else
-  auto status = inputTensor.FromDevice();
-  status |= inputTensor_vect4.FromDevice();
-  status |= weightTensor.FromDevice();
-  status |= outputTensor.FromDevice();
-  status |= biasTensor.FromDevice();
-  status |= workspace.FromDevice();
-  return status;
-#endif
-}
-
-template <typename Tgpu, typename Tref>
-int ConvFin<Tgpu, Tref>::ProcessStep(const std::string &step_name) {
-  steps_processed.push_back(step_name);
-  if (step_name == "alloc_buf")
-    return AllocateBuffers();
-  if (step_name == "fill_buf")
-    return FillBuffers();
-  if (step_name == "copy_buf_to_device")
-    return CopyToDevice();
-  if (step_name == "copy_buf_from_device")
-    return CopyFromDevice();
-  if (step_name == "applicability")
-    return TestApplicability();
-  if (step_name == "get_solvers")
-    return GetSolverList();
-  if (step_name == "miopen_find")
-    return MIOpenFind();
-  return 0;
-}
-
-template <typename Tgpu, typename Tref>
-int ConvFin<Tgpu, Tref>::GetandSetData() {
-  auto in_len = GetInputTensorLengths();
-  auto wei_len = GetWeightTensorLengths();
-
-  // auto y_type = GetOutputType();
-
-  inputTensor = {GetHandle().GetStream(), in_len, (is_fwd || is_wrw), is_bwd};
-
-  weightTensor = {GetHandle().GetStream(), wei_len, (is_fwd || is_bwd), is_wrw};
-  // conv, input and weight tensor descriptors need to be set before we can know
-  // the
-  // output lengths
-  auto out_len = GetOutputTensorLengths();
-  outputTensor = {GetHandle().GetStream(), out_len, (is_bwd || is_wrw), is_fwd};
-
-  if (IsInputTensorTransform()) {
-    std::vector<int> in_len_v4(in_len.begin(), in_len.end());
-    in_len_v4[1] = ((in_len[1] + 3) / 4) * 4;
-    std::vector<int> wei_len_v4(wei_len.begin(), wei_len.end());
-    wei_len_v4[1] = ((wei_len[1] + 3) / 4) * 4;
-
-    inputTensor_vect4 = {GetHandle().GetStream(), in_len_v4, (is_fwd || is_wrw),
-                         is_bwd};
-    weightTensor_vect4 = {GetHandle().GetStream(), wei_len_v4,
-                          (is_fwd || is_bwd), is_wrw};
-  }
-
-  // Conv Desc is already setup from the job descriptor
-
-  if (command["bias"].get<int>() != 0) {
-    auto bias_len = GetBiasTensorLengths();
-    biasTensor = {GetHandle().GetStream(), bias_len, true, true};
-  }
-  // TODO: further investigate the warmpup iteration, I dont think its necessary
-  // and can be GetHandle()d in the main execution loop
-
-  return (0);
-}
-
-template <typename Tgpu, typename Tref>
-std::vector<int> ConvFin<Tgpu, Tref>::GetInputTensorLengths() {
-  std::vector<int> in_lens;
-
-  int spatial_dim = command["spatial_dim"];
-  in_lens.resize(2 + spatial_dim);
-
-  in_lens[0] = command["batchsize"];
-  in_lens[1] = command["in_channels"];
-
-  auto in_spatial_lens = boost::adaptors::slice(in_lens, 2, 2 + spatial_dim);
-
-  if (spatial_dim == 2) {
-    in_spatial_lens[0] = command["in_h"];
-    in_spatial_lens[1] = command["in_w"];
-  } else if (spatial_dim == 3) {
-    in_spatial_lens[0] = command["in_d"];
-    in_spatial_lens[1] = command["in_h"];
-    in_spatial_lens[2] = command["in_w"];
-  } else {
-    FIN_THROW("unsupported convolution dimension");
-  }
-
-  return in_lens;
-}
-
-template <typename Tgpu, typename Tref>
-std::vector<int> ConvFin<Tgpu, Tref>::GetWeightTensorLengths() {
-  std::vector<int> wei_lens;
-
-  int spatial_dim = command["spatial_dim"];
-  wei_lens.resize(2 + spatial_dim);
-
-  auto wei_spatial_lens = boost::adaptors::slice(wei_lens, 2, 2 + spatial_dim);
-
-  int group_count = std::max(int(command["group_count"]), 1);
-
-  int wei_k_len = command["out_channels"];
-  int wei_c_len = command["in_channels"];
-
-  if (spatial_dim == 2) {
-    wei_spatial_lens[0] = command["fil_h"];
-    wei_spatial_lens[1] = command["fil_w"];
-  } else if (spatial_dim == 3) {
-    wei_spatial_lens[0] = command["fil_d"];
-    wei_spatial_lens[1] = command["fil_h"];
-    wei_spatial_lens[2] = command["fil_w"];
-  } else {
-    FIN_THROW("unsupported convolution dimension");
-  }
-
-  if (group_count > 1) {
-    if (wei_c_len % group_count != 0 || wei_k_len % group_count != 0 ||
-        group_count > wei_c_len || group_count > wei_k_len) {
-      FIN_THROW("Invalid group number\n");
+    miopenConvolutionMode_t mode;
+    if((command["conv_mode"]) == "conv")
+    {
+        mode = miopenConvolution;
     }
-  }
-
-  miopenConvolutionMode_t mode;
-  if ((command["conv_mode"]) == "conv") {
-    mode = miopenConvolution;
-  } else if ((command["conv_mode"]) == "trans") {
-    mode = miopenTranspose;
-  } else {
-    FIN_THROW("Incorrect Convolution Mode\n");
-  }
-
-  if (mode == miopenTranspose) {
-    wei_lens[0] = wei_c_len;
-    wei_lens[1] = wei_k_len / group_count;
-  } else {
-    wei_lens[0] = wei_k_len;
-    wei_lens[1] = wei_c_len / group_count;
-  }
-
-  return wei_lens;
-}
-
-template <typename Tgpu, typename Tref>
-std::vector<int> ConvFin<Tgpu, Tref>::GetBiasTensorLengths() {
-  int spatial_dim = command["spatial_dim"];
-
-  std::vector<int> bias_lens(2 + spatial_dim, 1);
-
-  bias_lens[1] = command["out_channels"];
-
-  return bias_lens;
-}
-
-template <typename Tgpu, typename Tref>
-int ConvFin<Tgpu, Tref>::SetConvDescriptor() {
-  size_t spatial_dim = command["spatial_dim"];
-
-  std::vector<int> in_spatial_lens(spatial_dim);
-  std::vector<int> wei_spatial_lens(spatial_dim);
-  std::vector<int> pads(spatial_dim);
-  std::vector<int> conv_strides(spatial_dim);
-  std::vector<int> conv_dilations(spatial_dim);
-  std::vector<int> trans_output_pads(spatial_dim);
-
-  if (spatial_dim == 2) {
-    in_spatial_lens[0] = command["in_h"];
-    in_spatial_lens[1] = command["in_w"];
-    wei_spatial_lens[0] = command["fil_h"];
-    wei_spatial_lens[1] = command["fil_w"];
-    pads[0] = command["pad_h"];
-    pads[1] = command["pad_w"];
-    conv_strides[0] = command["conv_stride_h"];
-    conv_strides[1] = command["conv_stride_w"];
-    conv_dilations[0] = command["dilation_h"];
-    conv_dilations[1] = command["dilation_w"];
-    trans_output_pads[0] = 0; // command["trans_output_pad_h"];
-    trans_output_pads[1] = 0; // command["trans_output_pad_w"];
-  } else if (spatial_dim == 3) {
-    in_spatial_lens[0] = command["in_d"];
-    in_spatial_lens[1] = command["in_h"];
-    in_spatial_lens[2] = command["in_w"];
-    wei_spatial_lens[0] = command["fil_d"];
-    wei_spatial_lens[1] = command["fil_h"];
-    wei_spatial_lens[2] = command["fil_w"];
-    pads[0] = command["pad_d"];
-    pads[1] = command["pad_h"];
-    pads[2] = command["pad_w"];
-    conv_strides[0] = command["conv_stride_d"];
-    conv_strides[1] = command["conv_stride_h"];
-    conv_strides[2] = command["conv_stride_w"];
-    conv_dilations[0] = command["dilation_d"];
-    conv_dilations[1] = command["dilation_h"];
-    conv_dilations[2] = command["dilation_w"];
-    trans_output_pads[0] = 0; // command["trans_output_pad_d"];
-    trans_output_pads[1] = 0; // command["trans_output_pad_h"];
-    trans_output_pads[2] = 0; // command["trans_output_pad_w"];
-  } else {
-    FIN_THROW("unsupported convolution dimension");
-  }
-
-  int out_c = command["out_channels"];
-  int in_c = command["in_channels"];
-  int group_count = std::max(int(command["group_count"]), 1);
-
-  if (group_count > 1) {
-    if (in_c % group_count != 0 || out_c % group_count != 0 ||
-        group_count > in_c || group_count > out_c) {
-      printf("Invalid group number\n");
-      exit(0);
+    else if((command["conv_mode"]) == "trans")
+    {
+        mode = miopenTranspose;
     }
-  }
-
-  miopenConvolutionMode_t c_mode;
-  if ((command["conv_mode"]) == "conv") {
-    c_mode = miopenConvolution;
-  } else if ((command["conv_mode"]) == "trans") {
-    c_mode = miopenTranspose;
-  } else {
-    printf("Incorrect Convolution Mode\n");
-    exit(0);
-  }
-
-  miopenPaddingMode_t p_mode = miopenPaddingSame;
-  if ((command["pad_mode"]) == "same")
-    p_mode = miopenPaddingSame;
-  else if ((command["pad_mode"]) == "valid")
-    p_mode = miopenPaddingValid;
-
-  // adjust padding based on user-defined padding mode
-  if (c_mode == miopenConvolution &&
-      (miopen::all_of(conv_dilations, [](auto v) { return v == 1; }) ||
-       miopen::all_of(wei_spatial_lens, [](auto v) { return v == 1; }))) {
-    if (p_mode == miopenPaddingSame) {
-      for (int i = 0; i < spatial_dim; ++i) {
-        pads[i] = (in_spatial_lens[i] % conv_strides[i] == 0)
-                      ? (std::max((wei_spatial_lens[i] - conv_strides[i]), 0))
-                      : (std::max((wei_spatial_lens[i] -
-                                   (in_spatial_lens[i] % conv_strides[i])),
-                                  0));
-        pads[i] /= 2;
-      }
-    } else if (p_mode == miopenPaddingValid) {
-      for (int i = 0; i < spatial_dim; ++i) {
-        pads[i] = 0;
-      }
+    else
+    {
+        FIN_THROW("Incorrect Convolution Mode\n");
     }
-  }
 
-  convDesc = miopen::ConvolutionDescriptor{
-      spatial_dim,       c_mode,     p_mode, pads, conv_strides, conv_dilations,
-      trans_output_pads, group_count};
+    if(mode == miopenTranspose)
+    {
+        wei_lens[0] = wei_c_len;
+        wei_lens[1] = wei_k_len / group_count;
+    }
+    else
+    {
+        wei_lens[0] = wei_k_len;
+        wei_lens[1] = wei_c_len / group_count;
+    }
 
-  return miopenStatusSuccess;
+    return wei_lens;
 }
 
 template <typename Tgpu, typename Tref>
-std::vector<size_t> ConvFin<Tgpu, Tref>::GetOutputTensorLengths() const {
-  return convDesc.GetForwardOutputTensor(inputTensor.desc, weightTensor.desc)
-      .GetLengths();
+std::vector<int> ConvFin<Tgpu, Tref>::GetBiasTensorLengths()
+{
+    int spatial_dim = command["spatial_dim"];
+
+    std::vector<int> bias_lens(2 + spatial_dim, 1);
+
+    bias_lens[1] = command["out_channels"];
+
+    return bias_lens;
 }
 
 template <typename Tgpu, typename Tref>
-bool ConvFin<Tgpu, Tref>::IsInputTensorTransform() const {
-  return (data_type == miopenInt8 && int(command["in_channels"]) % 4 != 0) ||
-         data_type == miopenInt8x4;
+int ConvFin<Tgpu, Tref>::SetConvDescriptor()
+{
+    size_t spatial_dim = command["spatial_dim"];
+
+    std::vector<int> in_spatial_lens(spatial_dim);
+    std::vector<int> wei_spatial_lens(spatial_dim);
+    std::vector<int> pads(spatial_dim);
+    std::vector<int> conv_strides(spatial_dim);
+    std::vector<int> conv_dilations(spatial_dim);
+    std::vector<int> trans_output_pads(spatial_dim);
+
+    if(spatial_dim == 2)
+    {
+        in_spatial_lens[0]   = command["in_h"];
+        in_spatial_lens[1]   = command["in_w"];
+        wei_spatial_lens[0]  = command["fil_h"];
+        wei_spatial_lens[1]  = command["fil_w"];
+        pads[0]              = command["pad_h"];
+        pads[1]              = command["pad_w"];
+        conv_strides[0]      = command["conv_stride_h"];
+        conv_strides[1]      = command["conv_stride_w"];
+        conv_dilations[0]    = command["dilation_h"];
+        conv_dilations[1]    = command["dilation_w"];
+        trans_output_pads[0] = 0; // command["trans_output_pad_h"];
+        trans_output_pads[1] = 0; // command["trans_output_pad_w"];
+    }
+    else if(spatial_dim == 3)
+    {
+        in_spatial_lens[0]   = command["in_d"];
+        in_spatial_lens[1]   = command["in_h"];
+        in_spatial_lens[2]   = command["in_w"];
+        wei_spatial_lens[0]  = command["fil_d"];
+        wei_spatial_lens[1]  = command["fil_h"];
+        wei_spatial_lens[2]  = command["fil_w"];
+        pads[0]              = command["pad_d"];
+        pads[1]              = command["pad_h"];
+        pads[2]              = command["pad_w"];
+        conv_strides[0]      = command["conv_stride_d"];
+        conv_strides[1]      = command["conv_stride_h"];
+        conv_strides[2]      = command["conv_stride_w"];
+        conv_dilations[0]    = command["dilation_d"];
+        conv_dilations[1]    = command["dilation_h"];
+        conv_dilations[2]    = command["dilation_w"];
+        trans_output_pads[0] = 0; // command["trans_output_pad_d"];
+        trans_output_pads[1] = 0; // command["trans_output_pad_h"];
+        trans_output_pads[2] = 0; // command["trans_output_pad_w"];
+    }
+    else
+    {
+        FIN_THROW("unsupported convolution dimension");
+    }
+
+    int out_c       = command["out_channels"];
+    int in_c        = command["in_channels"];
+    int group_count = std::max(int(command["group_count"]), 1);
+
+    if(group_count > 1)
+    {
+        if(in_c % group_count != 0 || out_c % group_count != 0 || group_count > in_c ||
+           group_count > out_c)
+        {
+            printf("Invalid group number\n");
+            exit(0);
+        }
+    }
+
+    miopenConvolutionMode_t c_mode;
+    if((command["conv_mode"]) == "conv")
+    {
+        c_mode = miopenConvolution;
+    }
+    else if((command["conv_mode"]) == "trans")
+    {
+        c_mode = miopenTranspose;
+    }
+    else
+    {
+        printf("Incorrect Convolution Mode\n");
+        exit(0);
+    }
+
+    miopenPaddingMode_t p_mode = miopenPaddingSame;
+    if((command["pad_mode"]) == "same")
+        p_mode = miopenPaddingSame;
+    else if((command["pad_mode"]) == "valid")
+        p_mode = miopenPaddingValid;
+
+    // adjust padding based on user-defined padding mode
+    if(c_mode == miopenConvolution &&
+       (miopen::all_of(conv_dilations, [](auto v) { return v == 1; }) ||
+        miopen::all_of(wei_spatial_lens, [](auto v) { return v == 1; })))
+    {
+        if(p_mode == miopenPaddingSame)
+        {
+            for(int i = 0; i < spatial_dim; ++i)
+            {
+                pads[i] =
+                    (in_spatial_lens[i] % conv_strides[i] == 0)
+                        ? (std::max((wei_spatial_lens[i] - conv_strides[i]), 0))
+                        : (std::max((wei_spatial_lens[i] - (in_spatial_lens[i] % conv_strides[i])),
+                                    0));
+                pads[i] /= 2;
+            }
+        }
+        else if(p_mode == miopenPaddingValid)
+        {
+            for(int i = 0; i < spatial_dim; ++i)
+            {
+                pads[i] = 0;
+            }
+        }
+    }
+
+    convDesc = miopen::ConvolutionDescriptor{spatial_dim,
+                                             c_mode,
+                                             p_mode,
+                                             pads,
+                                             conv_strides,
+                                             conv_dilations,
+                                             trans_output_pads,
+                                             group_count};
+
+    return miopenStatusSuccess;
+}
+
+template <typename Tgpu, typename Tref>
+std::vector<size_t> ConvFin<Tgpu, Tref>::GetOutputTensorLengths() const
+{
+    return convDesc.GetForwardOutputTensor(inputTensor.desc, weightTensor.desc).GetLengths();
+}
+
+template <typename Tgpu, typename Tref>
+bool ConvFin<Tgpu, Tref>::IsInputTensorTransform() const
+{
+    return (data_type == miopenInt8 && int(command["in_channels"]) % 4 != 0) ||
+           data_type == miopenInt8x4;
 }
 
 namespace detail {
 
-template <typename T> T RanGenWeights() {
-  return RAN_GEN<T>(static_cast<T>(-0.5), static_cast<T>(0.5));
+template <typename T>
+T RanGenWeights()
+{
+    return RAN_GEN<T>(static_cast<T>(-0.5), static_cast<T>(0.5));
 }
 
 // Shift FP16 distribution towards positive numbers,
 // otherwise Winograd FP16 validation fails.
-template <> float16 RanGenWeights() {
-  return RAN_GEN<float16>(static_cast<float16>(-1.0 / 3.0),
-                          static_cast<float16>(0.5));
+template <>
+float16 RanGenWeights()
+{
+    return RAN_GEN<float16>(static_cast<float16>(-1.0 / 3.0), static_cast<float16>(0.5));
 }
 
 } // namespace detail
 
 template <typename Tgpu, typename Tref>
-int ConvFin<Tgpu, Tref>::AllocateBuffers() {
+int ConvFin<Tgpu, Tref>::AllocateBuffers()
+{
 #if MIOPEN_MODE_NOGPU
-  throw std::runtime_error("Unable to allocate buffers with NOGPU backend");
+    throw std::runtime_error("Unable to allocate buffers with NOGPU backend");
 #else
-  inputTensor.AllocateBuffers();
-  inputTensor_vect4.AllocateBuffers();
-  weightTensor.AllocateBuffers();
-  outputTensor.AllocateBuffers();
-  biasTensor.AllocateBuffers();
-  workspace.AllocateBuffers();
+    inputTensor.AllocateBuffers();
+    inputTensor_vect4.AllocateBuffers();
+    weightTensor.AllocateBuffers();
+    outputTensor.AllocateBuffers();
+    biasTensor.AllocateBuffers();
+    workspace.AllocateBuffers();
 #endif
-  return 0;
+    return 0;
 }
 
 template <typename Tgpu, typename Tref>
-int ConvFin<Tgpu, Tref>::CalcWorkspace() {
-  // if(solver is known)
-  // Find workspace for solver using the GetSolution mechanism
-  // else
-  // if(!immediate_solution)
-  size_t ws_sizeof_find_fwd = 0;
-  size_t ws_sizeof_find_wrw = 0;
-  size_t ws_sizeof_find_bwd = 0;
-  auto is_transform = IsInputTensorTransform();
-  {
-    if (is_wrw)
-      ws_sizeof_find_wrw = convDesc.BackwardWeightsGetWorkSpaceSize(
-          GetHandle(), outputTensor.desc, inputTensor.desc, weightTensor.desc);
-    if (is_bwd) {
-      ws_sizeof_find_bwd = (convDesc.mode == miopenTranspose)
-                               ? convDesc.ForwardGetWorkSpaceSize(
-                                     GetHandle(), weightTensor.desc,
-                                     outputTensor.desc, inputTensor.desc)
-                               : convDesc.BackwardDataGetWorkSpaceSize(
-                                     GetHandle(), weightTensor.desc,
-                                     outputTensor.desc, inputTensor.desc);
+int ConvFin<Tgpu, Tref>::CalcWorkspace()
+{
+    // if(solver is known)
+    // Find workspace for solver using the GetSolution mechanism
+    // else
+    // if(!immediate_solution)
+    size_t ws_sizeof_find_fwd = 0;
+    size_t ws_sizeof_find_wrw = 0;
+    size_t ws_sizeof_find_bwd = 0;
+    auto is_transform         = IsInputTensorTransform();
+    {
+        if(is_wrw)
+            ws_sizeof_find_wrw = convDesc.BackwardWeightsGetWorkSpaceSize(
+                GetHandle(), outputTensor.desc, inputTensor.desc, weightTensor.desc);
+        if(is_bwd)
+        {
+            ws_sizeof_find_bwd =
+                (convDesc.mode == miopenTranspose)
+                    ? convDesc.ForwardGetWorkSpaceSize(
+                          GetHandle(), weightTensor.desc, outputTensor.desc, inputTensor.desc)
+                    : convDesc.BackwardDataGetWorkSpaceSize(
+                          GetHandle(), weightTensor.desc, outputTensor.desc, inputTensor.desc);
+        }
+        if(is_fwd)
+        {
+            ws_sizeof_find_fwd =
+                (convDesc.mode == miopenTranspose)
+                    ? convDesc.BackwardDataGetWorkSpaceSize(
+                          GetHandle(),
+                          (is_transform ? weightTensor_vect4.desc : weightTensor.desc),
+                          (is_transform ? inputTensor_vect4.desc : inputTensor.desc),
+                          outputTensor.desc)
+                    : convDesc.ForwardGetWorkSpaceSize(
+                          GetHandle(),
+                          (is_transform ? weightTensor_vect4.desc : weightTensor.desc),
+                          (is_transform ? inputTensor_vect4.desc : inputTensor.desc),
+                          outputTensor.desc);
+        }
+
+        const auto wsSizeof =
+            std::max(std::max(ws_sizeof_find_bwd, ws_sizeof_find_wrw), ws_sizeof_find_fwd);
+        if(wsSizeof != 0)
+            workspace = tensor<Tgpu, Tref>{q,
+                                           std::vector<unsigned int>{static_cast<unsigned int>(
+                                               std::ceil(wsSizeof / sizeof(Tgpu)))},
+                                           true,
+                                           false};
+        return wsSizeof;
     }
-    if (is_fwd) {
-      ws_sizeof_find_fwd =
-          (convDesc.mode == miopenTranspose)
-              ? convDesc.BackwardDataGetWorkSpaceSize(
-                    GetHandle(), (is_transform ? weightTensor_vect4.desc
-                                               : weightTensor.desc),
-                    (is_transform ? inputTensor_vect4.desc : inputTensor.desc),
-                    outputTensor.desc)
-              : convDesc.ForwardGetWorkSpaceSize(
-                    GetHandle(), (is_transform ? weightTensor_vect4.desc
-                                               : weightTensor.desc),
-                    (is_transform ? inputTensor_vect4.desc : inputTensor.desc),
-                    outputTensor.desc);
+    return -1;
+}
+
+template <typename Tgpu>
+Tgpu init_in(bool is_int8, size_t idx)
+{
+    (void)idx;
+    if(is_int8)
+    {
+        float Data_scale = 127.0;
+        return static_cast<Tgpu>(Data_scale *
+                                 RAN_GEN<float>(static_cast<float>(0.0), static_cast<float>(1.0)));
     }
-
-    const auto wsSizeof = std::max(
-        std::max(ws_sizeof_find_bwd, ws_sizeof_find_wrw), ws_sizeof_find_fwd);
-    if (wsSizeof != 0)
-      workspace = tensor<Tgpu, Tref>{
-          q, std::vector<unsigned int>{static_cast<unsigned int>(
-                 std::ceil(wsSizeof / sizeof(Tgpu)))},
-          true, false};
-    return wsSizeof;
-  }
-  return -1;
+    else
+    {
+        Tgpu Data_scale = static_cast<Tgpu>(0.01);
+        return Data_scale * RAN_GEN<Tgpu>(static_cast<Tgpu>(0.0), static_cast<Tgpu>(1.0));
+    }
 }
 
-template <typename Tgpu> Tgpu init_in(bool is_int8, size_t idx) {
-  (void)idx;
-  if (is_int8) {
-    float Data_scale = 127.0;
-    return static_cast<Tgpu>(
-        Data_scale *
-        RAN_GEN<float>(static_cast<float>(0.0), static_cast<float>(1.0)));
-  } else {
-    Tgpu Data_scale = static_cast<Tgpu>(0.01);
-    return Data_scale *
+template <typename Tgpu>
+Tgpu init_out(bool is_int8, size_t idx)
+{
+    (void)idx;
+    if(is_int8)
+    {
+        return static_cast<Tgpu>(0); // int8 is inference only
+    }
+    else
+    {
+        Tgpu Data_scale = static_cast<Tgpu>(0.01);
+        return Data_scale * RAN_GEN<Tgpu>(static_cast<Tgpu>(0.0), static_cast<Tgpu>(1.0));
+    }
+}
+
+template <typename Tgpu>
+Tgpu init_wei(bool is_int8, size_t idx)
+{
+    (void)idx;
+    if(is_int8)
+    {
+        float Data_scale = 127.0;
+        return static_cast<Tgpu>(Data_scale * 2 * detail::RanGenWeights<float>());
+    }
+    else
+    {
+        Tgpu Data_scale = static_cast<Tgpu>(0.01);
+        return Data_scale * detail::RanGenWeights<Tgpu>();
+    }
+}
+
+template <typename Tgpu>
+Tgpu init_bias(bool is_int8, size_t idx)
+{
+    (void)idx;
+    (void)is_int8;
+    return static_cast<Tgpu>(idx % 8) +
            RAN_GEN<Tgpu>(static_cast<Tgpu>(0.0), static_cast<Tgpu>(1.0));
-  }
 }
 
-template <typename Tgpu> Tgpu init_out(bool is_int8, size_t idx) {
-  (void)idx;
-  if (is_int8) {
-    return static_cast<Tgpu>(0); // int8 is inference only
-  } else {
-    Tgpu Data_scale = static_cast<Tgpu>(0.01);
-    return Data_scale *
-           RAN_GEN<Tgpu>(static_cast<Tgpu>(0.0), static_cast<Tgpu>(1.0));
-  }
-}
-
-template <typename Tgpu> Tgpu init_wei(bool is_int8, size_t idx) {
-  (void)idx;
-  if (is_int8) {
-    float Data_scale = 127.0;
-    return static_cast<Tgpu>(Data_scale * 2 * detail::RanGenWeights<float>());
-  } else {
-    Tgpu Data_scale = static_cast<Tgpu>(0.01);
-    return Data_scale * detail::RanGenWeights<Tgpu>();
-  }
-}
-
-template <typename Tgpu> Tgpu init_bias(bool is_int8, size_t idx) {
-  (void)idx;
-  (void)is_int8;
-  return static_cast<Tgpu>(idx % 8) +
-         RAN_GEN<Tgpu>(static_cast<Tgpu>(0.0), static_cast<Tgpu>(1.0));
-}
-
-template <typename Tgpu, typename Tref> int ConvFin<Tgpu, Tref>::FillBuffers() {
+template <typename Tgpu, typename Tref>
+int ConvFin<Tgpu, Tref>::FillBuffers()
+{
 #if MIOPEN_MODE_NOGPU
-  throw std::runtime_error("Unable to fill buffers with NOGPU backend");
+    throw std::runtime_error("Unable to fill buffers with NOGPU backend");
 #else
-  // TODO: Do we need to initialized tensors ?
-  auto is_int8 = (data_type == miopenInt8 || data_type == miopenInt8x4);
-  srand(0);
+    // TODO: Do we need to initialized tensors ?
+    auto is_int8 = (data_type == miopenInt8 || data_type == miopenInt8x4);
+    srand(0);
 
-  inputTensor.FillBuffer(
-      std::bind(init_in<Tgpu>, is_int8, std::placeholders::_1));
-  outputTensor.FillBuffer(
-      std::bind(init_out<Tgpu>, is_int8, std::placeholders::_1));
-  weightTensor.FillBuffer(
-      std::bind(init_wei<Tgpu>, is_int8, std::placeholders::_1));
-  if (command["bias"].get<int>() != 0) {
-    biasTensor.FillBuffer(
-        std::bind(init_bias<Tgpu>, is_int8, std::placeholders::_1));
-  }
+    inputTensor.FillBuffer(std::bind(init_in<Tgpu>, is_int8, std::placeholders::_1));
+    outputTensor.FillBuffer(std::bind(init_out<Tgpu>, is_int8, std::placeholders::_1));
+    weightTensor.FillBuffer(std::bind(init_wei<Tgpu>, is_int8, std::placeholders::_1));
+    if(command["bias"].get<int>() != 0)
+    {
+        biasTensor.FillBuffer(std::bind(init_bias<Tgpu>, is_int8, std::placeholders::_1));
+    }
 #endif
-  return 0;
+    return 0;
 }
 } // namespace fin
 #endif // GUARD_MIOPEN_CONV_FIN_HPP
