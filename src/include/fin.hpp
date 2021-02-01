@@ -31,14 +31,13 @@
 #include "config.h"
 #include "tensor.hpp"
 
-
-#include <nlohmann/json.hpp>
 #include <algorithm>
 #include <cfloat>
 #include <cstdio>
 #include <cstdlib>
 #include <memory>
 #include <miopen/handle.hpp>
+#include <nlohmann/json.hpp>
 #include <numeric>
 #include <vector>
 
@@ -55,36 +54,37 @@ using json = nlohmann::json;
 #endif
 
 namespace fin {
-class Fin{
+class Fin {
 public:
   Fin() {}
   void Usage();
-  std::string ParseBaseArg(const int argc, const char* argv[]);
-  miopen::Handle& GetHandle() 
-  {
-      static auto handle = miopen::Handle{};
-      return handle; 
+  std::string ParseBaseArg(const int argc, const char *argv[]);
+  miopen::Handle &GetHandle() {
+    static auto handle = miopen::Handle{};
+    return handle;
   }
   miopenDataType_t GetDataType() { return data_type; }
 
 #if FIN_BACKEND_OPENCL
-    cl_command_queue& GetStream() { return q; }
+  cl_command_queue &GetStream() { return q; }
 #elif FIN_BACKEND_HIP
-    hipStream_t& GetStream() { return q; }
+  hipStream_t &GetStream() { return q; }
 #endif
-  virtual ~Fin() { } // TODO: do we need this
-  
-  virtual int ProcessStep(const std::string& step_name) = 0;
-    
+  virtual ~Fin() {} // TODO: do we need this
+
+  virtual int ProcessStep(const std::string &step_name) = 0;
+
   json output;
+
 protected:
   template <typename Tgpu> void InitDataType();
-  miopenDataType_t data_type = miopenFloat; // the datatype passed in through the command line
+  miopenDataType_t data_type =
+      miopenFloat; // the datatype passed in through the command line
 
 #if FIN_BACKEND_OPENCL
-    cl_command_queue q;
+  cl_command_queue q;
 #elif FIN_BACKEND_HIP
-    hipStream_t q;
+  hipStream_t q;
 #endif
 };
 
@@ -95,7 +95,6 @@ protected:
 template <typename Tgpu> void Fin::InitDataType() {
   static_assert(std::is_same<Tgpu, float>{}, "unsupported Tgpu");
 }
-
 
 template <typename T>
 std::ostream &operator<<(std::ostream &os, const std::vector<T> &vs) {
