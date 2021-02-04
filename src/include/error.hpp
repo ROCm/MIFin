@@ -4,8 +4,7 @@
 #include <iostream>
 #include <string>
 
-namespace fin
-{
+namespace fin {
 
 struct Exception : std::exception
 {
@@ -22,7 +21,7 @@ struct Exception : std::exception
 };
 }
 #define FIN_THROW(...)                                                    \
-    do                                                                       \
-    {                                                                        \
+    do                                                                    \
+    {                                                                     \
         throw fin::Exception(__VA_ARGS__).SetContext(__FILE__, __LINE__); \
     } while(false)

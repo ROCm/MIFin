@@ -45,23 +45,16 @@ namespace fin {
 struct relMem
 {
 #if FIN_BACKEND_OPENCL
-    void operator ()(cl_mem ptr)
-    {
-        clReleaseMemObject(ptr);
-    }
+    void operator()(cl_mem ptr) { clReleaseMemObject(ptr); }
 #elif FIN_BACKEND_HIP
-    void operator ()(void* ptr)
-    {
-        hipFree(ptr);
-    }
+    void operator()(void* ptr) { hipFree(ptr); }
 #endif
 };
 #if FIN_BACKEND_OPENCL
-    using gpu_mem_ptr = std::unique_ptr<cl_mem, relMem>;
+using gpu_mem_ptr = std::unique_ptr<cl_mem, relMem>;
 #elif FIN_BACKEND_HIP
-    using gpu_mem_ptr = std::unique_ptr<void, relMem>;
+using gpu_mem_ptr = std::unique_ptr<void, relMem>;
 #endif
-
 
 struct GPUMem
 {

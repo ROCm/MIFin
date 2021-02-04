@@ -32,7 +32,6 @@
 #include "tensor.hpp"
 #include "input_flags.hpp"
 
-
 #include <nlohmann/json.hpp>
 #include <algorithm>
 #include <cfloat>
@@ -56,31 +55,34 @@ using json = nlohmann::json;
 #endif
 
 namespace fin {
-class Fin{
-public:
-  Fin() {}
-  void Usage();
-  std::string ParseBaseArg(const int argc, const char* argv[]);
-  miopen::Handle& GetHandle() 
-  {
-      static auto handle = miopen::Handle{};
-      return handle; 
-  }
-  miopenDataType_t GetDataType() { return data_type; }
+class Fin
+{
+    public:
+    Fin() {}
+    void Usage();
+    std::string ParseBaseArg(const int argc, const char* argv[]);
+    miopen::Handle& GetHandle()
+    {
+        static auto handle = miopen::Handle{};
+        return handle;
+    }
+    miopenDataType_t GetDataType() { return data_type; }
 
 #if FIN_BACKEND_OPENCL
     cl_command_queue& GetStream() { return q; }
 #elif FIN_BACKEND_HIP
     hipStream_t& GetStream() { return q; }
 #endif
-  virtual ~Fin() { } // TODO: do we need this
-  
-  virtual int ProcessStep(const std::string& step_name) = 0;
-    
-  json output;
-protected:
-  template <typename Tgpu> void InitDataType();
-  miopenDataType_t data_type = miopenFloat; // the datatype passed in through the command line
+    virtual ~Fin() {} // TODO: do we need this
+
+    virtual int ProcessStep(const std::string& step_name) = 0;
+
+    json output;
+
+    protected:
+    template <typename Tgpu>
+    void InitDataType();
+    miopenDataType_t data_type = miopenFloat; // the datatype passed in through the command line
 
 #if FIN_BACKEND_OPENCL
     cl_command_queue q;
@@ -93,18 +95,20 @@ protected:
 // error,
 // which occurs when the condition does not depend in any way on the template
 // parameters.
-template <typename Tgpu> void Fin::InitDataType() {
-  static_assert(std::is_same<Tgpu, float>{}, "unsupported Tgpu");
+template <typename Tgpu>
+void Fin::InitDataType()
+{
+    static_assert(std::is_same<Tgpu, float>{}, "unsupported Tgpu");
 }
 
-
 template <typename T>
-std::ostream &operator<<(std::ostream &os, const std::vector<T> &vs) {
-  os << "{ size: " << vs.size() << ", entries: ";
-  for (auto &v : vs)
-    os << v << " ";
-  os << "}";
-  return os;
+std::ostream& operator<<(std::ostream& os, const std::vector<T>& vs)
+{
+    os << "{ size: " << vs.size() << ", entries: ";
+    for(auto& v : vs)
+        os << v << " ";
+    os << "}";
+    return os;
 }
 } // namespace fin
 #endif // GUARD_FIN_HPP

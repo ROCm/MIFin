@@ -6,7 +6,8 @@ ARG PREFIX=/usr/local
 RUN dpkg --add-architecture i386
 
 # Add rocm repository
-RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y curl apt-utils wget && apt-get install -y gnupg2
+RUN apt-get update
+RUN DEBIAN_FRONTEND=noninteractive apt-get install -y curl apt-utils wget gnupg2
 RUN curl https://raw.githubusercontent.com/RadeonOpenCompute/ROCm-docker/master/add-rocm.sh | bash
 
 # Install dependencies required to build hcc
@@ -15,9 +16,9 @@ RUN sh -c "echo deb http://mirrors.kernel.org/ubuntu xenial main universe | tee 
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --allow-unauthenticated \
     apt-utils \
     build-essential \
-    clang-3.8 \
-    clang-format-3.8 \
-    clang-tidy-3.8 \
+    clang-3.9 \
+    clang-format-3.9 \
+    clang-tidy-3.9 \
     cmake \
     comgr \
     curl \
@@ -46,8 +47,12 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --allow-
     python3-distutils \
     python3-venv \
     python-yaml \
+    cppcheck \
+    rocm-dev \
     rocm-opencl \
-    rocm-opencl-dev && \
+    rocm-opencl-dev \
+    rocblas \
+    miopen-hip && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
@@ -75,12 +80,10 @@ ENV PATH="/opt/rocm:${PATH}"
 RUN cget -p $PREFIX init --cxx $PREFIX/bin/hcc --std=c++14
 
 # Install dependencies
-ADD dev-requirements.txt /dev-requirements.txt
 ADD requirements.txt /requirements.txt
-ADD min-requirements.txt /min-requirements.txt
-RUN CXXFLAGS='-isystem $PREFIX/include' cget -p $PREFIX install -f /dev-requirements.txt
+RUN CXXFLAGS='-isystem $PREFIX/include' cget -p $PREFIX install -f /requirements.txt
 
 # Install doc requirements
-ADD doc/requirements.txt /doc-requirements.txt
-RUN pip install -r /doc-requirements.txt
+#ADD doc/requirements.txt /doc-requirements.txt
+#RUN pip install -r /doc-requirements.txt
 
