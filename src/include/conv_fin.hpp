@@ -313,7 +313,6 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
     const bool is_winograd_only = convDesc.IsWinograd3x3SupportedAndFast(ctx);
     output["is_winograd_only"]  = is_winograd_only;
     output["network_config"]    = network_config;
-    output["config_db_key"]     = ""; // TODO: serialize the problem_description
     std::ostringstream ss;
     problem.Serialize(ss);
     output["db_key"] = ss.str();
@@ -506,7 +505,9 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
     const bool is_winograd_only = convDesc.IsWinograd3x3SupportedAndFast(ctx);
     output["is_winograd_only"]  = is_winograd_only;
     output["network_config"]    = network_config;
-    output["config_db_key"]     = ""; // TODO: serialize the problem_description
+    std::ostringstream ss;
+    problem.Serialize(ss);
+    output["db_key"] = ss.str();
     miopen::ConvolutionUserBuffers bufs(workspace.gpuData.buf.get(), workspace.desc.GetNumBytes());
     if(conv_dir == miopen::conv::Direction::Forward)
         bufs.SetFwd(inputTensor.gpuData.buf.get(),
@@ -565,6 +566,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
                     throw std::runtime_error("Got empty code object");
                 // Compress the blob
                 auto md5_sum          = miopen::md5(hsaco);
+                kernel["md5_sum"]     = md5_sum;
                 auto size             = hsaco.size();
                 bool success          = false;
                 auto compressed_hsaco = miopen::compress(hsaco, &success);
@@ -572,14 +574,13 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
                 {
                     const auto encoded_hsaco    = base64_encode(compressed_hsaco);
                     kernel["uncompressed_size"] = size;
-                    kernel["md5_sum"]           = md5_sum;
                     kernel["blob"]              = encoded_hsaco;
                 }
                 else
                 {
-                    kernel["md5_sum"]           = "Failed to compress kernel";
+                    const auto encoded_hsaco    = base64_encode(hsaco);
                     kernel["uncompressed_size"] = 0;
-                    kernel["blob"]              = "";
+                    kernel["blob"]              = encoded_hsaco;
                 }
                 kernel_list.push_back(kernel);
             }
