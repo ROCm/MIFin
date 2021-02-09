@@ -30,6 +30,7 @@
 #include <half.hpp>
 #include <miopen/bfloat16.hpp>
 
+#include <miopen/tensor.hpp>
 #include <gpu_mem.hpp>
 #include <miopen/tensor.hpp>
 
@@ -76,18 +77,18 @@ struct tensor
     bool is_output;
 
     tensor() {}
+    // cppcheck-suppress uninitMemberVar
     template <typename U>
     tensor(accelerator_stream _q, std::vector<U> _plens, bool _is_input, bool _is_output)
         : desc(GetDataType<Tgpu>(), _plens),
           q(_q),
           is_input(_is_input),
-          is_output(_is_output) /*,cpuData{size()},
-  gpuData{_ctx, size(), elem_size()} {}*/
+          is_output(_is_output),
+          cpuData{size()},
+          gpuData{_ctx, size(), elem_size()} {}
     {
 #if FIN_BACKEND_OPENCL
         clGetCommandQueueInfo(q, CL_QUEUE_CONTEXT, sizeof(cl_context), &ctx, nullptr);
-#elif FIN_BACKEND_HIP
-        ctx                  = 0;
 #endif
     }
 
