@@ -16,9 +16,9 @@ RUN sh -c "echo deb http://mirrors.kernel.org/ubuntu xenial main universe | tee 
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --allow-unauthenticated \
     apt-utils \
     build-essential \
-    clang-3.8 \
-    clang-format-3.8 \
-    clang-tidy-3.8 \
+    clang-3.9 \
+    clang-format-3.9 \
+    clang-tidy-3.9 \
     cmake \
     comgr \
     curl \

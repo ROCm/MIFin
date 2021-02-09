@@ -31,13 +31,13 @@
 #include "config.h"
 #include "tensor.hpp"
 
+#include <nlohmann/json.hpp>
 #include <algorithm>
 #include <cfloat>
 #include <cstdio>
 #include <cstdlib>
 #include <memory>
 #include <miopen/handle.hpp>
-#include <nlohmann/json.hpp>
 #include <numeric>
 #include <vector>
 

@@ -122,11 +122,11 @@ pipeline {
                         cmd = "rm -rf build; \
                                 mkdir build; \
                                 cd build; \
-                                CXX='clang++-3.8' cmake -DBUILD_DEV=On ..; \
+                                CXX='clang++-3.9' cmake -DBUILD_DEV=On ..; \
                                 make -j\$(nproc) -k analyze;"
                     }
                     steps{
-                        buildJob('clang++-3.8', '-DCMAKE_BUILD_TYPE=release', image, "", cmd)
+                        buildJob('clang++-3.9', '-DCMAKE_BUILD_TYPE=release', image, "", cmd)
                     }
                 }
 
@@ -142,10 +142,10 @@ pipeline {
                                 -o -iname \'*.cl\' \
                                 | grep -v 'build/' \
                                 | grep -v 'base64' \
-                                | xargs -n 1 -P 1 -I{} -t sh -c \'clang-format-3.8 -style=file {} | diff - {}\'"
+                                | xargs -n 1 -P 1 -I{} -t sh -c \'clang-format-3.9 -style=file {} | diff - {}\'"
                     }
                     steps{
-                        buildJob('clang++-3.8', '-DCMAKE_BUILD_TYPE=release', image, "", cmd)
+                        buildJob('clang++-3.9', '-DCMAKE_BUILD_TYPE=release', image, "", cmd)
                     }
                 }
 
