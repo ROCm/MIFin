@@ -218,8 +218,8 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
     {
         json res_item;
         // remove the sys and user db files
-        boost::filesystem::remove(miopen::GetCachePath(true));
-        boost::filesystem::remove(miopen::GetCachePath(false));
+        boost::filesystem::remove_all(miopen::GetCachePath(true));
+        boost::filesystem::remove_all(miopen::GetCachePath(false));
         auto process_solver = [&]() -> bool {
             const auto solver_id  = miopen::solver::Id{kinder.first};
             res_item["solver_id"] = solver_id.ToString();
@@ -229,7 +229,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
             if(solver_id == miopen::solver::Id::gemm())
             {
                 // TODO: deal with GEMM
-                res_item["reason"] = "GEMM has not solvers";
+                res_item["reason"] = "GEMM has no solvers";
                 return false;
             }
             if(!s.IsApplicable(ctx))
@@ -237,7 +237,15 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
                 res_item["reason"] = "Not Applicable";
                 return false;
             }
-            const auto solution   = s.FindSolution(ctx, db, {}); // auto tune is not expected here
+            try
+            {
+                const auto solution = s.FindSolution(ctx, db, {}); // auto tune is not expected here
+            }
+            catch
+            {
+                res_item["reason"] = "Solver throws exception";
+                return true;
+            }
             res_item["workspace"] = solution.workspce_sz;
             // Get the binary
             json kernel_list;
