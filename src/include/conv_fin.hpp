@@ -237,24 +237,30 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
                 res_item["reason"] = "Not Applicable";
                 return false;
             }
+            miopen::solver::ConvSolution solution;
             try
             {
-                const auto solution = s.FindSolution(ctx, db, {}); // auto tune is not expected here
+                solution = s.FindSolution(ctx, db, {}); // auto tune is not expected here
             }
-            catch
+            catch(const std::exception& e)
             {
-                res_item["reason"] = "Solver throws exception";
+                res_item["reason"] = std::string("Solver throws exception") + e.what();
                 return true;
             }
+            res_item["reason"]    = "Success";
             res_item["workspace"] = solution.workspce_sz;
             // Get the binary
             json kernel_list;
             for(const auto& k : solution.construction_params)
             {
                 json kernel;
-                handle.LoadProgram(k.kernel_file, k.comp_options, false, "");
-                const auto hsaco = miopen::LoadBinary(
-                    tgt_props, num_cu, k.kernel_file, k.comp_options + " -mcpu=" + arch, false);
+                auto comp_opts = k.comp_options;
+                if(comp_opts[0] != ' ')
+                    comp_opts    = ' ' + comp_opts;
+                auto p           = handle.LoadProgram(k.kernel_file, comp_opts, false, "");
+                const auto hsaco = p.IsCodeObjectInMemory()
+                                       ? p.GetCodeObjectBlob()
+                                       : miopen::LoadFile(p.GetCodeObjectPathname().string());
                 if(hsaco.empty())
                     throw std::runtime_error("Got empty code object");
                 // Compress the blob
