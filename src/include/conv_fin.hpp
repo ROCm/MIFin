@@ -344,6 +344,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
         json res_item;
         boost::system::error_code ec;
         boost::filesystem::remove_all(miopen::GetCachePath(false), ec);
+        boost::filesystem::remove_all(miopen::GetCachePath(true), ec);
         if(ec)
         {
             std::cout << "Error while removing MIOpen cache: " << ec.message();
@@ -392,9 +393,8 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
                     comp_opts = ' ' + comp_opts;
                 if(miopen::md5(hsaco) == md5_sum)
                 {
-                    miopen::SaveBinary(
-                        hsaco, tgt_props, num_cu, kernel_file, comp_opts + " -mcpu=" + arch, false);
-                    h.ClearKernels(solver_id.GetAlgo(conv_dir), network_config);
+                    auto p = miopen::Program{kernel_file, hsaco};
+                    h.AddProgram(p, kernel_file, comp_opts);
                 }
                 else
                 {
