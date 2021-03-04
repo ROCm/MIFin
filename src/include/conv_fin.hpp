@@ -217,8 +217,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
     for(const auto& kinder : map)
     {
         json res_item;
-        // remove the sys and user db files
-        boost::filesystem::remove_all(miopen::GetCachePath(true));
+        // remove the user db files
         boost::filesystem::remove_all(miopen::GetCachePath(false));
         auto process_solver = [&]() -> bool {
             const auto solver_id  = miopen::solver::Id{kinder.first};
