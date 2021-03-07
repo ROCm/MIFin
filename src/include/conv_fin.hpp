@@ -140,6 +140,7 @@ class ConvFin : public Fin
     int MIOpenFind();
     int MIOpenFindCompile();
     int MIOpenFindEval();
+    json MIOpenGEMM();
 
     // Utility functions
     bool IsInputTensorTransform() const;
@@ -298,6 +299,106 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
 
     output["miopen_find_compile_result"] = find_result;
     return 1;
+}
+
+template <typename Tgpu, typename Tref>
+json ConvFin<Tgpu, Tref>::MIOpenGEMM()
+{
+// Before this step is executed, the following steps should have been evaluated
+// alloc_buf only if only timing is required
+// alloc_buf, fill_buf and copy_buf_to_device if numerical accuracy would be
+// checked ??
+#if MIOPEN_MODE_NOGPU
+    throw std::runtime_error("Unable to run MIOpenGEMM, Invalid MIOpen backend: HIPNOGPU");
+#endif
+    const auto conv_dir = GetDirection();
+    GetHandle().EnableProfiling(true);
+    auto& h = GetHandle();
+
+    json res_item;
+    // Get the GEMM workspace size
+    size_t ws_sz    = 0;
+    bool applicable = false;
+    if(conv_dir == miopen::conv::Direction::Forward)
+    {
+        ws_sz = convDesc.ForwardGetValidWorkSpaceSizeGemm(
+            h, weightTensor.desc, inputTensor.desc, outputTensor.desc);
+        applicable =
+            convDesc.IsGemmApplicableFwd(weightTensor.desc, inputTensor.desc, outputTensor.desc);
+    }
+    else if(conv_dir == miopen::conv::Direction::BackwardData)
+    {
+        ws_sz = convDesc.BackwardGetValidWorkSpaceSizeGemm(
+            outputTensor.desc, weightTensor.desc, inputTensor.desc);
+        applicable =
+            convDesc.IsGemmApplicableBwd(outputTensor.desc, weightTensor.desc, inputTensor.desc);
+    }
+    else if(conv_dir == miopen::conv::Direction::BackwardWeights)
+    {
+        ws_sz = convDesc.WrwGetValidWorkSpaceSizeGemm(
+            outputTensor.desc, inputTensor.desc, weightTensor.desc);
+        applicable =
+            convDesc.IsGemmApplicableWrw(outputTensor.desc, inputTensor.desc, weightTensor.desc);
+    }
+
+    if(ws_sz > workspace.desc.GetNumBytes())
+    {
+        std::cout << "Allocating " << ws_sz << " bytes for workspace" << std::endl;
+        workspace = tensor<Tgpu, Tref>{
+            q, std::vector<unsigned int>{static_cast<unsigned int>(ws_sz)}, true, false};
+        workspace.AllocateBuffers();
+    }
+    std::string algo = "";
+    if(conv_dir == miopen::conv::Direction::Forward)
+    {
+        algo = "miopenConvolutionFwdAlgoGEMM";
+        if(applicable)
+        {
+            const auto tensors = miopen::ConvFwdTensors{inputTensor.desc,
+                                                        inputTensor.gpuData.buf.get(),
+                                                        weightTensor.desc,
+                                                        weightTensor.gpuData.buf.get(),
+                                                        outputTensor.desc,
+                                                        outputTensor.gpuData.buf.get()};
+            convDesc.ConvFwdGemm(h, tensors, workspace.gpuData.buf.get(), ws_sz);
+        }
+    }
+    else if(conv_dir == miopen::conv::Direction::BackwardData)
+    {
+        algo = "miopenConvolutionBwdAlgoGEMM";
+        if(applicable)
+        {
+            auto tensors = miopen::ConvBwdTensors{outputTensor.desc,
+                                                  outputTensor.gpuData.buf.get(),
+                                                  weightTensor.desc,
+                                                  weightTensor.gpuData.buf.get(),
+                                                  inputTensor.desc,
+                                                  inputTensor.gpuData.buf.get()};
+            convDesc.ConvBwdGemm(h, tensors, workspace.gpuData.buf.get(), ws_sz);
+        }
+    }
+    else if(conv_dir == miopen::conv::Direction::BackwardWeights)
+    {
+        algo = "miopenConvolutionWrwAlgoGEMM";
+        if(applicable)
+        {
+            auto tensors = miopen::ConvWrwTensors{outputTensor.desc,
+                                                  outputTensor.gpuData.buf.get(),
+                                                  inputTensor.desc,
+                                                  inputTensor.gpuData.buf.get(),
+                                                  weightTensor.desc,
+                                                  weightTensor.gpuData.buf.get()};
+            convDesc.BackwardWeightsGemm(h, tensors, workspace.gpuData.buf.get(), ws_sz);
+        }
+    }
+    std::string solver_name = "gemm";
+    const auto time         = h.GetKernelTime();
+    res_item["time"]        = time;
+    res_item["reason"]      = "Success";
+    res_item["solver_name"] = solver_name;
+    res_item["algorithm"]   = algo;
+    res_item["workspace"]   = ws_sz;
+    return res_item;
 }
 
 template <typename Tgpu, typename Tref>
@@ -490,7 +591,8 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
         res_item["evaluated"] = res;
         find_result.push_back(res_item);
     }
-
+    find_result.push_back(
+        MIOpenGEMM()); // add the GEMM result separately until GEMM solvers come online
     output["miopen_find_eval_result"] = find_result;
     return 1;
 }
