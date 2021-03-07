@@ -484,13 +484,6 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
                 const auto hsaco         = miopen::decompress(decoded_hsaco, size);
                 std::string comp_opts    = kernel_obj["comp_options"];
                 std::string kernel_file  = kernel_obj["kernel_file"];
-                std::cout << "loading kernel file:" << solution.construction_params[idx].kernel_file
-                          << ":" << kernel_file;
-                std::cout << " with compile args:" << solution.construction_params[idx].comp_options
-                          << ":" << comp_opts << std::endl;
-                // Deal with ProcessParams
-                if(comp_opts.at(0) != ' ')
-                    comp_opts = ' ' + comp_opts;
                 if(miopen::md5(hsaco) == md5_sum)
                 {
                     auto p = miopen::Program{kernel_file, hsaco};
@@ -502,6 +495,15 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
                     return false;
                 }
                 ++idx;
+            }
+            for(const auto& kern : solution.construction_params)
+            {
+                if(!h.HasProgram(kern.kernel_file, kern.comp_options))
+                {
+                    std::cout << "Binary object check failed, either tuning params have changed or "
+                                 "fin is unable to write binary to program cache"
+                              << std::endl;
+                }
             }
             std::cout << "Checking for workspace" << std::endl;
             if(solution.workspce_sz > workspace.desc.GetNumBytes())
