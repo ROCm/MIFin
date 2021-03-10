@@ -11,7 +11,8 @@
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
  *
- * The above copyright notice and this permission notice shall be included in all
+ * The above copyright notice and this permission notice shall be included in
+ *all
  * copies or substantial portions of the Software.
  *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
@@ -29,8 +30,8 @@
 #include <half.hpp>
 #include <miopen/bfloat16.hpp>
 
-#include <miopen/tensor.hpp>
 #include <gpu_mem.hpp>
+#include <miopen/tensor.hpp>
 
 namespace fin {
 
@@ -79,11 +80,10 @@ struct tensor
     template <typename U>
     tensor(accelerator_stream _q, std::vector<U> _plens, bool _is_input, bool _is_output)
         : desc(GetDataType<Tgpu>(), _plens),
+          gpuData(),
           q(_q),
           is_input(_is_input),
-          is_output(_is_output),
-          cpuData{size()},
-          gpuData{_ctx, size(), elem_size()} {}
+          is_output(_is_output)
     {
 #if FIN_BACKEND_OPENCL
         clGetCommandQueueInfo(q, CL_QUEUE_CONTEXT, sizeof(cl_context), &ctx, nullptr);
@@ -126,9 +126,10 @@ struct tensor
         {
             if(is_input) // is input
                 cpuData[i] = f(i);
-            // Data_scale * RAN_GEN<Tgpu>(static_cast<Tgpu>(0.0), static_cast<Tgpu>(1.0));
-            // else /// \ref move_rand
-            //    rand();
+            // Data_scale * RAN_GEN<Tgpu>(static_cast<Tgpu>(0.0),
+            // static_cast<Tgpu>(1.0));
+            else /// \ref move_rand
+                std::ignore = rand();
         }
     }
 

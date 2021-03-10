@@ -36,12 +36,6 @@
 using half_float::half;
 typedef half float16;
 
-#include <half.hpp>
-#include <miopen/bfloat16.hpp>
-
-using half_float::half;
-typedef half float16;
-
 #include <miopen/tensor.hpp>
 #include <nlohmann/json.hpp>
 #include <typeinfo>
@@ -162,8 +156,11 @@ int main(int argc, char* argv[], char* envp[])
         f->output["config_tuna_id"] = command["config_tuna_id"];
         f->output["arch"]           = command["arch"];
         f->output["direction"]      = command["direction"];
+        f->output["input"]          = command;
         final_output.push_back(f->output);
     }
     o << std::setw(4) << final_output << std::endl;
+    o.flush();
+    o.close();
     return 0;
 }

@@ -30,7 +30,6 @@
 // using float16 = half_float::half;
 #include "config.h"
 #include "tensor.hpp"
-#include "input_flags.hpp"
 
 #include <nlohmann/json.hpp>
 #include <algorithm>
