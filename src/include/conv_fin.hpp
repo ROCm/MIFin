@@ -486,7 +486,6 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
             const auto solution   = s.FindSolution(ctx, db, {}); // auto tune is not expected here
             res_item["workspace"] = solution.workspce_sz;
             // Get the binary
-            int idx = 0;
             std::cout << "loading binaries from fin input" << std::endl;
             for(const auto& kernel_obj : kinder["kernel_objects"])
             {
@@ -507,7 +506,6 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
                     throw std::runtime_error("Corrupt binary object");
                     return false;
                 }
-                ++idx;
             }
             for(const auto& kern : solution.construction_params)
             {
