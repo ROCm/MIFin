@@ -223,6 +223,8 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
         auto process_solver = [&]() -> bool {
             const auto solver_id  = miopen::solver::Id{kinder.first};
             res_item["solver_id"] = solver_id.ToString();
+            if(res_item["solver_id"] == "ConvBiasActivAsm1x1U")
+                return false;
             const auto& s         = kinder.second;
             const auto algo       = solver_id.GetAlgo(conv_dir);
             res_item["algorithm"] = algo;
@@ -255,8 +257,8 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
             {
                 json kernel;
                 auto comp_opts = k.comp_options;
-                if(comp_opts[0] != ' ')
-                    comp_opts    = ' ' + comp_opts;
+                // if(comp_opts[0] != ' ')
+                //     comp_opts    = ' ' + comp_opts;
                 auto p           = handle.LoadProgram(k.kernel_file, comp_opts, false, "");
                 const auto hsaco = p.IsCodeObjectInMemory()
                                        ? p.GetCodeObjectBlob()
@@ -296,6 +298,16 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
             find_result.push_back(res_item);
         }
     }
+    json gemm_res;
+    auto gemm_id               = miopen::solver::Id{"gemm"};
+    gemm_res["solver_id"]      = gemm_id.ToString();
+    gemm_res["algorithm"]      = gemm_id.GetAlgo(conv_dir);
+    gemm_res["reason"]         = "Success";
+    gemm_res["workspace"]      = -1;
+    gemm_res["kernel_objects"] = std::vector<int>{};
+    gemm_res["find_compiled"]  = true;
+
+    find_result.push_back(gemm_res);
 
     output["miopen_find_compile_result"] = find_result;
     return 1;
@@ -398,6 +410,7 @@ json ConvFin<Tgpu, Tref>::MIOpenGEMM()
     res_item["solver_name"] = solver_name;
     res_item["algorithm"]   = algo;
     res_item["workspace"]   = ws_sz;
+    res_item["evaluated"]   = true;
     return res_item;
 }
 
@@ -444,7 +457,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
         json res_item;
         boost::system::error_code ec;
         boost::filesystem::remove_all(miopen::GetCachePath(false), ec);
-        boost::filesystem::remove_all(miopen::GetCachePath(true), ec);
+        // boost::filesystem::remove_all(miopen::GetCachePath(true), ec);
         if(ec)
         {
             std::cout << "Error while removing MIOpen cache: " << ec.message();
@@ -849,6 +862,10 @@ int ConvFin<Tgpu, Tref>::GetSolverList()
         miopen::solver::Id id(kinder.first);
         solvers.push_back(std::make_pair(id.Value(), id.ToString()));
     }
+    // Since gemm does not have a solver, GetMapValueToAnySolver does not return
+    // it
+    miopen::solver::Id id("gemm");
+    solvers.push_back(std::make_pair(id.Value(), id.ToString()));
     output["all_solvers"] = solvers;
     return 0;
 }
