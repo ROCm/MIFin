@@ -187,8 +187,10 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
     auto ctx    = miopen::ConvolutionContext{problem};
     auto handle = miopen::Handle{};
 #if MIOPEN_MODE_NOGPU
-    handle.impl->device_name = job["arch"];
-    handle.impl->num_cu      = job["num_cu"];
+    handle.impl->device_name        = job["arch"];
+    handle.impl->num_cu             = job["num_cu"];
+    handle.impl->max_mem_alloc_size = 32UL * 1024 * 1024 * 1024; // 32 GB
+    handle.impl->global_mem_size    = 32UL * 1024 * 1024 * 1024;
     handle.impl->target_properties.Init(&handle);
 #else
     throw std::runtime_error("MIOpen needs to be compiled with the NOGPU backend "
@@ -298,17 +300,20 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
             find_result.push_back(res_item);
         }
     }
-    json gemm_res;
-    auto gemm_id               = miopen::solver::Id{"gemm"};
-    gemm_res["solver_id"]      = gemm_id.ToString();
-    gemm_res["algorithm"]      = gemm_id.GetAlgo(conv_dir);
-    gemm_res["reason"]         = "Success";
-    gemm_res["workspace"]      = -1;
-    gemm_res["kernel_objects"] = std::vector<int>{};
-    gemm_res["find_compiled"]  = true;
+    if(GetDirection() == miopen::conv::Direction::BackwardWeights)
+    {
+        // JD: All other directions for GEMM are now solvers/invokers
+        json gemm_res;
+        auto gemm_id               = miopen::solver::Id{"gemm"};
+        gemm_res["solver_id"]      = gemm_id.ToString();
+        gemm_res["algorithm"]      = gemm_id.GetAlgo(conv_dir);
+        gemm_res["reason"]         = "Success";
+        gemm_res["workspace"]      = -1;
+        gemm_res["kernel_objects"] = std::vector<int>{};
+        gemm_res["find_compiled"]  = true;
 
-    find_result.push_back(gemm_res);
-
+        find_result.push_back(gemm_res);
+    }
     output["miopen_find_compile_result"] = find_result;
     return 1;
 }
@@ -333,17 +338,11 @@ json ConvFin<Tgpu, Tref>::MIOpenGEMM()
     bool applicable = false;
     if(conv_dir == miopen::conv::Direction::Forward)
     {
-        ws_sz = convDesc.ForwardGetValidWorkSpaceSizeGemm(
-            h, weightTensor.desc, inputTensor.desc, outputTensor.desc);
-        applicable =
-            convDesc.IsGemmApplicableFwd(weightTensor.desc, inputTensor.desc, outputTensor.desc);
+        // Ignore since implemented via invokers
     }
     else if(conv_dir == miopen::conv::Direction::BackwardData)
     {
-        ws_sz = convDesc.BackwardGetValidWorkSpaceSizeGemm(
-            outputTensor.desc, weightTensor.desc, inputTensor.desc);
-        applicable =
-            convDesc.IsGemmApplicableBwd(outputTensor.desc, weightTensor.desc, inputTensor.desc);
+        // Ignore since implemented via invokers
     }
     else if(conv_dir == miopen::conv::Direction::BackwardWeights)
     {
@@ -363,31 +362,11 @@ json ConvFin<Tgpu, Tref>::MIOpenGEMM()
     std::string algo = "";
     if(conv_dir == miopen::conv::Direction::Forward)
     {
-        algo = "miopenConvolutionFwdAlgoGEMM";
-        if(applicable)
-        {
-            const auto tensors = miopen::ConvFwdTensors{inputTensor.desc,
-                                                        inputTensor.gpuData.buf.get(),
-                                                        weightTensor.desc,
-                                                        weightTensor.gpuData.buf.get(),
-                                                        outputTensor.desc,
-                                                        outputTensor.gpuData.buf.get()};
-            convDesc.ConvFwdGemm(h, tensors, workspace.gpuData.buf.get(), ws_sz);
-        }
+        // Ignore since implemented via invokers
     }
     else if(conv_dir == miopen::conv::Direction::BackwardData)
     {
-        algo = "miopenConvolutionBwdAlgoGEMM";
-        if(applicable)
-        {
-            auto tensors = miopen::ConvBwdTensors{outputTensor.desc,
-                                                  outputTensor.gpuData.buf.get(),
-                                                  weightTensor.desc,
-                                                  weightTensor.gpuData.buf.get(),
-                                                  inputTensor.desc,
-                                                  inputTensor.gpuData.buf.get()};
-            convDesc.ConvBwdGemm(h, tensors, workspace.gpuData.buf.get(), ws_sz);
-        }
+        // Ignore since implemented via invokers
     }
     else if(conv_dir == miopen::conv::Direction::BackwardWeights)
     {
