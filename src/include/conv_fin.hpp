@@ -144,6 +144,7 @@ class ConvFin : public Fin
 
     // Utility functions
     bool IsInputTensorTransform() const;
+    void InitNoGpuHandle(miopen::Handle& handle);
     json command;
     json job;
 
@@ -171,6 +172,16 @@ miopen::conv::Direction ConvFin<Tgpu, Tref>::GetDirection() const
                   : (is_bwd ? miopen::conv::Direction::BackwardData
                             : miopen::conv::Direction::BackwardWeights);
 }
+
+template <typename Tgpu, typename Tref>
+void ConvFin<Tgpu, Tref>::InitNoGpuHandle(miopen::Handle& handle)
+{
+    handle.impl->device_name        = job["arch"];
+    handle.impl->num_cu             = job["num_cu"];
+    handle.impl->max_mem_alloc_size = 32UL * 1024 * 1024 * 1024; // 32 GB
+    handle.impl->global_mem_size    = 32UL * 1024 * 1024 * 1024;
+    handle.impl->target_properties.Init(&handle);
+}
 template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
 {
@@ -187,11 +198,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
     auto ctx    = miopen::ConvolutionContext{problem};
     auto handle = miopen::Handle{};
 #if MIOPEN_MODE_NOGPU
-    handle.impl->device_name        = job["arch"];
-    handle.impl->num_cu             = job["num_cu"];
-    handle.impl->max_mem_alloc_size = 32UL * 1024 * 1024 * 1024; // 32 GB
-    handle.impl->global_mem_size    = 32UL * 1024 * 1024 * 1024;
-    handle.impl->target_properties.Init(&handle);
+    InitNoGpuHandle(handle);
 #else
     throw std::runtime_error("MIOpen needs to be compiled with the NOGPU backend "
                              "for MIOpenFindCompile");
@@ -789,9 +796,7 @@ int ConvFin<Tgpu, Tref>::TestApplicability()
     auto ctx    = miopen::ConvolutionContext{problem};
     auto handle = miopen::Handle{};
 #if MIOPEN_MODE_NOGPU
-    handle.impl->device_name = job["arch"];
-    handle.impl->num_cu      = job["num_cu"];
-    handle.impl->target_properties.Init(&handle);
+    InitNoGpuHandle(handle);
 #else
     throw std::runtime_error("MIOpen needs to be compiled with the NOGPU backend "
                              "to test applicability");
