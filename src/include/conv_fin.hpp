@@ -182,6 +182,8 @@ void ConvFin<Tgpu, Tref>::InitNoGpuHandle(miopen::Handle& handle)
     handle.impl->max_mem_alloc_size = 32UL * 1024 * 1024 * 1024; // 32 GB
     handle.impl->global_mem_size    = 32UL * 1024 * 1024 * 1024;
     handle.impl->target_properties.Init(&handle);
+#else
+    std::ignore = handle;
 #endif
 }
 template <typename Tgpu, typename Tref>
