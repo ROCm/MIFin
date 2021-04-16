@@ -176,11 +176,13 @@ miopen::conv::Direction ConvFin<Tgpu, Tref>::GetDirection() const
 template <typename Tgpu, typename Tref>
 void ConvFin<Tgpu, Tref>::InitNoGpuHandle(miopen::Handle& handle)
 {
+#if MIOPEN_MODE_NOGPU
     handle.impl->device_name        = job["arch"];
     handle.impl->num_cu             = job["num_cu"];
     handle.impl->max_mem_alloc_size = 32UL * 1024 * 1024 * 1024; // 32 GB
     handle.impl->global_mem_size    = 32UL * 1024 * 1024 * 1024;
     handle.impl->target_properties.Init(&handle);
+#endif
 }
 template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
