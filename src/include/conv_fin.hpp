@@ -265,7 +265,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
             res_item["reason"]    = "Success";
             res_item["workspace"] = solution.workspce_sz;
             // Get the binary
-            json kernel_list;
+            json kernel_list = json::array();
             for(const auto& k : solution.construction_params)
             {
                 json kernel;
@@ -673,7 +673,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
             res_item["workspace"] = solution.workspce_sz;
             // Get the binary
             miopen::solver::PrecompileKernels(h, solution.construction_params);
-            json kernel_list;
+            json kernel_list = json::array();
             for(const auto& k : solution.construction_params)
             {
                 json kernel;
