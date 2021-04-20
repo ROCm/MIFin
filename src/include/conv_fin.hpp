@@ -594,8 +594,11 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
         res_item["evaluated"] = res;
         find_result.push_back(res_item);
     }
-    find_result.push_back(
-        MIOpenGEMM()); // add the GEMM result separately until GEMM solvers come online
+    if(GetDirection() == miopen::conv::Direction::BackwardWeights)
+    {
+        find_result.push_back(
+            MIOpenGEMM()); // add the GEMM result separately until GEMM solvers come online
+    }
     output["miopen_find_eval_result"] = find_result;
     return 1;
 }
