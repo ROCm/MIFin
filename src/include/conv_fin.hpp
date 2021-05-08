@@ -109,6 +109,10 @@ class ConvFin : public Fin
         {
             assert(num_cu == 120);
         }
+        else if(arch == "gfx1030")
+        {
+            assert(num_cu == 72);
+        }
         else
             throw std::runtime_error("Invalid Arch Name");
     }
