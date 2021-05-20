@@ -229,9 +229,9 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
     json find_result;
     const auto& tgt_props  = handle.GetTargetProperties();
     const std::string arch = tgt_props.Name();
-    assert(arch == job["arch"]);
-    const size_t num_cu = handle.GetMaxComputeUnits();
-    assert(num_cu == job["num_cu"]);
+    const size_t num_cu    = handle.GetMaxComputeUnits();
+    std::cerr << "Job Arch: " << job["arch"] << ": Handle Arch: " << arch << std::endl;
+    std::cerr << "Job Num CU: " << job["num_cu"] << ": Handle Num Cu: " << num_cu << std::endl;
     // since applicability has been run, the solver list should come from Tuna
     const auto& map = miopen::solver::GetMapValueToAnySolver();
     for(const auto& kinder : map)
@@ -361,13 +361,14 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
     json find_result;
     const auto& tgt_props  = h.GetTargetProperties();
     const std::string arch = tgt_props.Name();
-    assert(arch == job["arch"]);
-    const size_t num_cu = h.GetMaxComputeUnits();
-    assert(num_cu == job["num_cu"]);
+    const size_t num_cu    = h.GetMaxComputeUnits();
+    std::cerr << "Job Arch: " << job["arch"] << ": Handle Arch: " << arch << std::endl;
+    std::cerr << "Job Num CU: " << job["num_cu"] << ": Handle Num Cu: " << num_cu << std::endl;
     for(const auto& kinder :
         job["miopen_find_compile_result"]) // The "miopen_find_compile_result" list generated
                                            // by miopen_find_compile operation
     {
+        // Somehow the direction changes mid loop !
         json res_item;
         boost::system::error_code ec;
         boost::filesystem::remove_all(miopen::GetCachePath(false), ec);
