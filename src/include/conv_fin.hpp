@@ -435,8 +435,8 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
                           << std::endl;
                 workspace = tensor<Tgpu, Tref>{
                     q,
-                    std::vector<unsigned int>{static_cast<unsigned int>(solution.workspce_sz)},
-                    true,
+                    std::vector<size_t>{static_cast<size_t>(solution.workspce_sz / sizeof(Tgpu))},
+                    false,
                     false};
                 workspace.AllocateBuffers();
             }
