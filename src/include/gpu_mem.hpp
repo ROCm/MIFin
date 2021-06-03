@@ -88,6 +88,8 @@ struct GPUMem
     {
         void* tmp = nullptr;
         hipMalloc(static_cast<void**>(&(tmp)), data_sz * sz);
+        if(tmp == nullptr && sz > 0)
+            throw std::runtime_error("Unable to allocate GPU memory");
         buf = gpu_mem_ptr{tmp};
     }
 

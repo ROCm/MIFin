@@ -95,8 +95,10 @@ class ConvFin : public Fin
     }
     void VerifyDevProps()
     {
-        const std::string arch = job["arch"];
-        const size_t num_cu    = job["num_cu"];
+        std::cerr << "Verifying device properties" << std::endl;
+        std::string arch    = job["arch"];
+        arch                = arch.substr(0, arch.find(':'));
+        const size_t num_cu = job["num_cu"];
         if(arch == "gfx900")
         {
             assert(num_cu == 56 || num_cu == 64);
@@ -192,6 +194,8 @@ void ConvFin<Tgpu, Tref>::InitNoGpuHandle(miopen::Handle& handle)
 template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
 {
+    std::cerr << "MIOpenFindCompile" << std::endl;
+    std::cerr << "Processing command: " << command << std::endl;
 #if MIOPEN_MODE_NOGPU
     GetandSetData();
 #else
@@ -226,9 +230,9 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
     json find_result;
     const auto& tgt_props  = handle.GetTargetProperties();
     const std::string arch = tgt_props.Name();
-    assert(arch == job["arch"]);
-    const size_t num_cu = handle.GetMaxComputeUnits();
-    assert(num_cu == job["num_cu"]);
+    const size_t num_cu    = handle.GetMaxComputeUnits();
+    std::cerr << "Job Arch: " << job["arch"] << ": Handle Arch: " << arch << std::endl;
+    std::cerr << "Job Num CU: " << job["num_cu"] << ": Handle Num Cu: " << num_cu << std::endl;
     // since applicability has been run, the solver list should come from Tuna
     const auto& map = miopen::solver::GetMapValueToAnySolver();
     for(const auto& kinder : map)
@@ -237,16 +241,21 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
         // remove the user db files
         boost::filesystem::remove_all(miopen::GetCachePath(false));
         auto process_solver = [&]() -> bool {
-            const auto solver_id  = miopen::solver::Id{kinder.first};
+            const auto solver_id = miopen::solver::Id{kinder.first};
+            std::cerr << "Processing Solver: " << solver_id.ToString() << std::endl;
             res_item["solver_id"] = solver_id.ToString();
             if(res_item["solver_id"] == "ConvBiasActivAsm1x1U")
+            {
+                std::cerr << "Skipping fused solvers" << std::endl;
                 return false;
+            }
             const auto& s         = kinder.second;
             const auto algo       = solver_id.GetAlgo(conv_dir);
             res_item["algorithm"] = algo;
             if(!s.IsApplicable(ctx))
             {
                 res_item["reason"] = "Not Applicable";
+                std::cerr << "Skipping inapplicable solver: " << solver_id.ToString() << std::endl;
                 return false;
             }
             miopen::solver::ConvSolution solution;
@@ -257,6 +266,8 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
             catch(const std::exception& e)
             {
                 res_item["reason"] = std::string("Solver throws exception") + e.what();
+                std::cerr << "Exception during solution construction, solver_name: "
+                          << solver_id.ToString() << e.what() << std::endl;
                 return true;
             }
             res_item["reason"]    = "Success";
@@ -274,7 +285,10 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
                                        ? p.GetCodeObjectBlob()
                                        : miopen::LoadFile(p.GetCodeObjectPathname().string());
                 if(hsaco.empty())
+                {
+                    std::cerr << "Got empty code object" << std::endl;
                     throw std::runtime_error("Got empty code object");
+                }
                 // Compress the blob
                 auto md5_sum             = miopen::md5(hsaco);
                 auto size                = hsaco.size();
@@ -296,6 +310,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
                     kernel["blob"]              = "";
                 }
                 kernel_list.push_back(kernel);
+                std::cerr << "Successfully added new kernel" << std::endl;
             }
             res_item["kernel_objects"] = kernel_list;
             return true;
@@ -315,6 +330,8 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
 template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::MIOpenFindEval()
 {
+    std::cerr << "MIOpenFindEval" << std::endl;
+    std::cerr << "Processing command: " << command << std::endl;
 // Before this step is executed, the following steps should have been evaluated
 // alloc_buf only if only timing is required
 // alloc_buf, fill_buf and copy_buf_to_device if numerical accuracy would be
@@ -345,39 +362,42 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
     json find_result;
     const auto& tgt_props  = h.GetTargetProperties();
     const std::string arch = tgt_props.Name();
-    assert(arch == job["arch"]);
-    const size_t num_cu = h.GetMaxComputeUnits();
-    assert(num_cu == job["num_cu"]);
+    const size_t num_cu    = h.GetMaxComputeUnits();
+    std::cerr << "Job Arch: " << job["arch"] << ": Handle Arch: " << arch << std::endl;
+    std::cerr << "Job Num CU: " << job["num_cu"] << ": Handle Num Cu: " << num_cu << std::endl;
     for(const auto& kinder :
         job["miopen_find_compile_result"]) // The "miopen_find_compile_result" list generated
                                            // by miopen_find_compile operation
     {
+        // Somehow the direction changes mid loop !
         json res_item;
         boost::system::error_code ec;
         boost::filesystem::remove_all(miopen::GetCachePath(false), ec);
         // boost::filesystem::remove_all(miopen::GetCachePath(true), ec);
         if(ec)
         {
-            std::cout << "Error while removing MIOpen cache: " << ec.message();
+            std::cerr << "Error while removing MIOpen cache: " << ec.message();
         }
         auto process_solver = [&]() -> bool {
             const std::string solver_name = kinder["solver_id"];
-            const auto solver_id          = miopen::solver::Id{solver_name};
-            const auto& s                 = solver_id.GetSolver();
-            res_item["solver_name"]       = solver_name;
-            const auto algo               = solver_id.GetAlgo(conv_dir);
-            res_item["algorithm"]         = algo;
+            std::cerr << "Processing solver: " << solver_name << std::endl;
+            const auto solver_id    = miopen::solver::Id{solver_name};
+            const auto& s           = solver_id.GetSolver();
+            res_item["solver_name"] = solver_name;
+            const auto algo         = solver_id.GetAlgo(conv_dir);
+            res_item["algorithm"]   = algo;
             if(!s.IsApplicable(ctx))
             {
+                std::cerr << "Solver inapplicable: " << solver_name << std::endl;
                 throw std::runtime_error(
                     "InApplicable solver was sent to fin, check Tuna for errors");
                 return false;
             }
-            std::cout << solver_name << " is applicable" << std::endl;
+            std::cerr << solver_name << " is applicable" << std::endl;
             const auto solution   = s.FindSolution(ctx, db, {}); // auto tune is not expected here
             res_item["workspace"] = solution.workspce_sz;
             // Get the binary
-            std::cout << "loading binaries from fin input" << std::endl;
+            std::cerr << "loading binaries from fin input" << std::endl;
             for(const auto& kernel_obj : kinder["kernel_objects"])
             {
                 const auto size          = kernel_obj["uncompressed_size"];
@@ -394,6 +414,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
                 }
                 else
                 {
+                    std::cerr << "Corrupt Binary Object" << std::endl;
                     throw std::runtime_error("Corrupt binary object");
                     return false;
                 }
@@ -402,38 +423,38 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
             {
                 if(!h.HasProgram(kern.kernel_file, kern.comp_options))
                 {
-                    std::cout << "Binary object check failed, either tuning params have changed or "
+                    std::cerr << "Binary object check failed, either tuning params have changed or "
                                  "fin is unable to write binary to program cache"
                               << std::endl;
                 }
             }
-            std::cout << "Checking for workspace" << std::endl;
+            std::cerr << "Checking for workspace" << std::endl;
             if(solution.workspce_sz > workspace.desc.GetNumBytes())
             {
-                std::cout << "Allocating " << solution.workspce_sz << " bytes for workspace"
+                std::cerr << "Allocating " << solution.workspce_sz << " bytes for workspace"
                           << std::endl;
                 workspace = tensor<Tgpu, Tref>{
                     q,
-                    std::vector<unsigned int>{static_cast<unsigned int>(solution.workspce_sz)},
-                    true,
+                    std::vector<size_t>{static_cast<size_t>(solution.workspce_sz / sizeof(Tgpu))},
+                    false,
                     false};
                 workspace.AllocateBuffers();
             }
             if(!solution.invoker_factory)
             {
-                std::cout << "Invoker not implemeted" << std::endl;
+                std::cerr << "Invoker not implemeted" << std::endl;
                 res_item["reason"] = "Invoker not implemented";
                 return false;
             }
             try
             {
-                std::cout << "Preparing invokers" << std::endl;
+                std::cerr << "Preparing invokers" << std::endl;
                 const auto invoker =
                     h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
                 // This is required because DataInvokeParams switches tensor order due to
                 // direction and it does not have a
                 // copy constructor or a default constructor
-                std::cout << "Finished preparing invokers" << std::endl;
+                std::cerr << "Finished preparing invokers" << std::endl;
                 if(conv_dir == miopen::conv::Direction::Forward)
                 {
                     const auto invoke_ctx =
@@ -708,7 +729,7 @@ int ConvFin<Tgpu, Tref>::TestApplicability()
     for(const auto& kinder : map)
     {
         miopen::solver::Id id(kinder.first);
-        std::cout << "Testing: " << id.ToString() << std::endl;
+        std::cerr << "Testing: " << id.ToString() << std::endl;
         auto solver = kinder.second;
         if(id.IsValid())
         {
@@ -719,7 +740,7 @@ int ConvFin<Tgpu, Tref>::TestApplicability()
             }
             catch(...)
             {
-                std::cout << id.ToString() << "(" << id.Value() << ")"
+                std::cerr << id.ToString() << "(" << id.Value() << ")"
                           << " raised an exception"
                           << "for " << std::string(network_config) << " config: " << job
                           << std::endl;

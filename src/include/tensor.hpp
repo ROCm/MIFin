@@ -41,12 +41,12 @@ typedef half float16;
 template <typename T>
 miopenDataType_t GetDataType();
 
-template <typename T>
-miopenDataType_t GetDataType()
-{
-    static_assert(true, "Invalid data type");
-    return miopenFloat; // satisfy the compiler
-}
+template <>
+miopenDataType_t GetDataType<float>();
+template <>
+miopenDataType_t GetDataType<float16>();
+template <>
+miopenDataType_t GetDataType<bfloat16>();
 #if FIN_BACKEND_OPENCL
 #define STATUS_SUCCESS CL_SUCCESS
 using status_t = cl_int;
@@ -117,7 +117,7 @@ struct tensor
         if(is_output)
             deviceData = std::vector<Tgpu>(desc.GetNumBytes(), static_cast<Tgpu>(0));
 
-        gpuData = GPUMem{ctx, desc.GetNumBytes(), sizeof(Tgpu)};
+        gpuData = GPUMem{ctx, desc.GetNumBytes() / sizeof(Tgpu), sizeof(Tgpu)};
     }
     template <typename F>
     void FillBuffer(F f)
