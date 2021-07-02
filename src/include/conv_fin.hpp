@@ -34,6 +34,7 @@
 #include "tensor.hpp"
 
 #include <miopen/algorithm.hpp>
+#include <miopen/execution_context.hpp>
 #include <miopen/any_solver.hpp>
 #include <miopen/binary_cache.hpp>
 #include <miopen/bz2.hpp>
@@ -234,14 +235,13 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
     std::cerr << "Job Arch: " << job["arch"] << ": Handle Arch: " << arch << std::endl;
     std::cerr << "Job Num CU: " << job["num_cu"] << ": Handle Num Cu: " << num_cu << std::endl;
     // since applicability has been run, the solver list should come from Tuna
-    const auto& map = miopen::solver::GetMapValueToAnySolver();
-    for(const auto& kinder : map)
+    for(const auto& solver_id :
+        miopen::solver::GetSolversByPrimitive(miopen::solver::Primitive::Convolution))
     {
         json res_item;
         // remove the user db files
         boost::filesystem::remove_all(miopen::GetCachePath(false));
         auto process_solver = [&]() -> bool {
-            const auto solver_id = miopen::solver::Id{kinder.first};
             std::cerr << "Processing Solver: " << solver_id.ToString() << std::endl;
             res_item["solver_id"] = solver_id.ToString();
             if(res_item["solver_id"] == "ConvBiasActivAsm1x1U")
@@ -249,7 +249,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
                 std::cerr << "Skipping fused solvers" << std::endl;
                 return false;
             }
-            const auto& s         = kinder.second;
+            const auto& s         = solver_id.GetSolver();
             const auto algo       = solver_id.GetAlgo(conv_dir);
             res_item["algorithm"] = algo;
             if(!s.IsApplicable(ctx))
@@ -568,14 +568,13 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
     assert(arch == job["arch"]);
     const size_t num_cu = h.GetMaxComputeUnits();
     assert(num_cu == job["num_cu"]);
-    const auto& map = miopen::solver::GetMapValueToAnySolver();
-    for(const auto& kinder : map)
+    for(const auto& solver_id :
+        miopen::solver::GetSolversByPrimitive(miopen::solver::Primitive::Convolution))
     {
         json res_item;
         auto process_solver = [&]() -> bool {
-            const auto solver_id  = miopen::solver::Id{kinder.first};
             res_item["solver_id"] = solver_id.ToString();
-            const auto& s         = kinder.second;
+            const auto& s         = solver_id.GetSolver();
             const auto algo       = solver_id.GetAlgo(conv_dir);
             res_item["algorithm"] = algo;
             if(!s.IsApplicable(ctx))
@@ -725,12 +724,11 @@ int ConvFin<Tgpu, Tref>::TestApplicability()
     ctx.SetupFloats();
     const auto network_config = ctx.BuildConfKey();
     std::vector<std::string> app_solvers;
-    const auto& map = miopen::solver::GetMapValueToAnySolver();
-    for(const auto& kinder : map)
+    for(const auto& id :
+        miopen::solver::GetSolversByPrimitive(miopen::solver::Primitive::Convolution))
     {
-        miopen::solver::Id id(kinder.first);
         std::cerr << "Testing: " << id.ToString() << std::endl;
-        auto solver = kinder.second;
+        auto solver = id.GetSolver();
         if(id.IsValid())
         {
             try
@@ -756,16 +754,9 @@ int ConvFin<Tgpu, Tref>::GetSolverList()
 {
     // pair.first = id, pair. second = string id
     std::vector<std::pair<uint64_t, std::string>> solvers;
-    const auto& map = miopen::solver::GetMapValueToAnySolver();
-    for(const auto& kinder : map)
-    {
-        miopen::solver::Id id(kinder.first);
+    for(const auto& id :
+        miopen::solver::GetSolversByPrimitive(miopen::solver::Primitive::Convolution))
         solvers.push_back(std::make_pair(id.Value(), id.ToString()));
-    }
-    // Since gemm does not have a solver, GetMapValueToAnySolver does not return
-    // it
-    miopen::solver::Id id("gemm");
-    solvers.push_back(std::make_pair(id.Value(), id.ToString()));
     output["all_solvers"] = solvers;
     return 0;
 }
