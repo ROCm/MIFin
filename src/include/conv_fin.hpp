@@ -729,7 +729,7 @@ int ConvFin<Tgpu, Tref>::TestApplicability()
     {
         std::cerr << "Testing: " << id.ToString() << std::endl;
         auto solver = id.GetSolver();
-        if(id.IsValid())
+        if(id.IsValid() && !solver.IsEmpty())
         {
             try
             {
@@ -743,6 +743,10 @@ int ConvFin<Tgpu, Tref>::TestApplicability()
                           << "for " << std::string(network_config) << " config: " << job
                           << std::endl;
             }
+        }
+        else
+        {
+            std::cerr << "Solver: " << id.ToString() << " is invalid or empty" << std::endl;
         }
     }
     output["applicable_solvers"] = app_solvers;
