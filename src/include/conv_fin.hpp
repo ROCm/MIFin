@@ -252,6 +252,12 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
             const auto& s         = solver_id.GetSolver();
             const auto algo       = solver_id.GetAlgo(conv_dir);
             res_item["algorithm"] = algo;
+            if(s.IsEmpty())
+            {
+                res_item["reason"] = "Empty Solver";
+                std::cerr << "Skipping invalid solver: " << solver_id.ToString() << std::endl;
+                return false;
+            }
             if(!s.IsApplicable(ctx))
             {
                 res_item["reason"] = "Not Applicable";
@@ -386,6 +392,11 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
             res_item["solver_name"] = solver_name;
             const auto algo         = solver_id.GetAlgo(conv_dir);
             res_item["algorithm"]   = algo;
+            if(s.IsEmpty())
+            {
+                std::cerr << "Skipping invalid solver: " << solver_id.ToString() << std::endl;
+                return false;
+            }
             if(!s.IsApplicable(ctx))
             {
                 std::cerr << "Solver inapplicable: " << solver_name << std::endl;
@@ -577,6 +588,12 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
             const auto& s         = solver_id.GetSolver();
             const auto algo       = solver_id.GetAlgo(conv_dir);
             res_item["algorithm"] = algo;
+            if(s.IsEmpty())
+            {
+                res_item["reason"] = "Empty Solver";
+                std::cerr << "Skipping invalid solver: " << solver_id.ToString() << std::endl;
+                return false;
+            }
             if(!s.IsApplicable(ctx))
             {
                 res_item["reason"] = "Not Applicable";
@@ -729,7 +746,7 @@ int ConvFin<Tgpu, Tref>::TestApplicability()
     {
         std::cerr << "Testing: " << id.ToString() << std::endl;
         auto solver = id.GetSolver();
-        if(id.IsValid())
+        if(id.IsValid() && !solver.IsEmpty())
         {
             try
             {
@@ -743,6 +760,10 @@ int ConvFin<Tgpu, Tref>::TestApplicability()
                           << "for " << std::string(network_config) << " config: " << job
                           << std::endl;
             }
+        }
+        else
+        {
+            std::cerr << "Solver: " << id.ToString() << " is invalid or empty" << std::endl;
         }
     }
     output["applicable_solvers"] = app_solvers;
