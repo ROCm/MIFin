@@ -808,7 +808,7 @@ int ConvFin<Tgpu, Tref>::TestTunability()
         {
             try
             {
-                //this methond only defined for tunable solvers
+                // this method only defined for tunable solvers
                 solver.GetPerformanceConfig(ctx);
                 tune_solvers.push_back(id.ToString());
             }
