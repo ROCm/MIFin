@@ -803,7 +803,6 @@ int ConvFin<Tgpu, Tref>::TestTunability()
         std::cerr << "Testing: " << id.ToString() << std::endl;
         auto solver = id.GetSolver();
 
-
         if(id.IsValid() && !solver.IsEmpty())
         {
             try
