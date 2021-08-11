@@ -142,7 +142,6 @@ class ConvFin : public Fin
     int CopyFromDevice();
     int RunGPU();
     int TestApplicability();
-    int TestTunability();
     int GetandSetData();
     int GetSolverList();
     int MIOpenFind();
@@ -771,73 +770,35 @@ int ConvFin<Tgpu, Tref>::TestApplicability()
     return 0;
 }
 
-template <typename Tgpu, typename Tref>
-int ConvFin<Tgpu, Tref>::TestTunability()
+
+template <class Solver
+    typename Z=decltype(std::declval<Solver>().GetPerformanceConfig(std::declval<ConvolutionContext &>()))>
+auto IsTunable(const Solver s)
 {
-#if MIOPEN_MODE_NOGPU
-    GetandSetData();
-#else
-    throw std::runtime_error("MIOpen needs to be compiled with the NOGPU backend "
-                             "to test tunability");
-#endif
-    const auto conv_dir = GetDirection();
-    const miopen::ProblemDescription problem(
-        inputTensor.desc, weightTensor.desc, outputTensor.desc, convDesc, conv_dir);
-    auto ctx    = miopen::ConvolutionContext{problem};
-    auto handle = miopen::Handle{};
-#if MIOPEN_MODE_NOGPU
-    InitNoGpuHandle(handle);
-#else
-    throw std::runtime_error("MIOpen needs to be compiled with the NOGPU backend "
-                             "to test tunability");
-#endif
-
-    ctx.SetStream(&handle);
-    ctx.DetectRocm();
-    ctx.SetupFloats();
-    const auto network_config = ctx.BuildConfKey();
-    std::vector<std::string> tune_solvers;
-    for(const auto& id :
-        miopen::solver::GetSolversByPrimitive(miopen::solver::Primitive::Convolution))
-    {
-        std::cerr << "Testing: " << id.ToString() << std::endl;
-        auto solver = id.GetSolver();
-
-
-        if(id.IsValid() && !solver.IsEmpty())
-        {
-            try
-            {
-                //this methond only defined for tunable solvers
-                solver.GetPerformanceConfig(ctx);
-                tune_solvers.push_back(id.ToString());
-            }
-            catch(...)
-            {
-                std::cerr << id.ToString() << "(" << id.Value() << ")"
-                          << " raised an exception"
-                          << "for " << std::string(network_config) << " config: " << job
-                          << std::endl;
-            }
-        }
-        else
-        {
-            std::cerr << "Solver: " << id.ToString() << " is invalid or empty" << std::endl;
-        }
-    }
-    output["tunable_solvers"] = tune_solvers;
-    return 0;
+    return true;
 }
+
+template <class Solver>
+auto IsTunable(const Solver s)
+{
+    return false;
+}
+
 
 template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::GetSolverList()
 {
     // pair.first = id, pair. second = string id
     std::vector<std::pair<uint64_t, std::string>> solvers;
+    std::vector<std::string> tune_solvers;
     for(const auto& id :
         miopen::solver::GetSolversByPrimitive(miopen::solver::Primitive::Convolution))
         solvers.push_back(std::make_pair(id.Value(), id.ToString()));
+        if(IsTunable(id.GetSolver()))
+            tune_solvers.push_back(id.ToString());
+
     output["all_solvers"] = solvers;
+    output["tunable_solvers"] = tune_solvers;
     return 0;
 }
 
@@ -896,8 +857,6 @@ int ConvFin<Tgpu, Tref>::ProcessStep(const std::string& step_name)
         return CopyFromDevice();
     if(step_name == "applicability")
         return TestApplicability();
-    if(step_name == "tunability")
-        return TestTunability();
     if(step_name == "get_solvers")
         return GetSolverList();
     if(step_name == "miopen_find")
