@@ -789,16 +789,20 @@ template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::GetSolverList()
 {
     // pair.first = id, pair. second = string id
-    std::vector<std::pair<uint64_t, std::string>> solvers;
-    std::vector<std::string> tune_solvers;
+    std::vector<std::unordered_map<std::string, std::string>> solvers;
     for(const auto& id :
         miopen::solver::GetSolversByPrimitive(miopen::solver::Primitive::Convolution))
-        solvers.push_back(std::make_pair(id.Value(), id.ToString()));
+    {
+        std::unordered_map<std::string, std::string> solver;
+        solver["id"] = std::to_string(id.Value());
+        solver["name"] = id.ToString();
+        solver["tunable"] = "0";
         if(IsTunable(id.GetSolver()))
-            tune_solvers.push_back(id.ToString());
+            solver["tunable"] = "1";
+        solvers.push_back(solver);
+    }
 
     output["all_solvers"] = solvers;
-    output["tunable_solvers"] = tune_solvers;
     return 0;
 }
 
