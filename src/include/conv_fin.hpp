@@ -774,9 +774,9 @@ int ConvFin<Tgpu, Tref>::TestApplicability()
     return 0;
 }
 
-
-template <class Solver, typename Z=decltype(
-    std::declval<Solver>().GetPerformanceConfig(std::declval<ConvolutionContext &>()))>
+template <class Solver,
+          typename Z = decltype(
+              std::declval<Solver>().GetPerformanceConfig(std::declval<ConvolutionContext&>()))>
 auto IsTunable(const Solver s)
 {
     return true;
@@ -787,7 +787,6 @@ auto IsTunable(const Solver s)
 {
     return false;
 }
-
 
 template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::GetSolverList()
