@@ -777,13 +777,13 @@ int ConvFin<Tgpu, Tref>::TestApplicability()
 template <class Solver,
           typename Z =
               decltype(std::declval<Solver>().GetPerformanceConfig(miopen::ConvolutionContext()))>
-auto IsTunable(const Solver s)
+auto IsTunable(const Solver s, int z_dummy)
 {
     return true;
 }
 
 template <class Solver>
-auto IsTunable(const Solver s)
+auto IsTunable(const Solver s, ...)
 {
     return false;
 }
