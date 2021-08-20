@@ -774,20 +774,6 @@ int ConvFin<Tgpu, Tref>::TestApplicability()
     return 0;
 }
 
-template <class Solver,
-          typename Z =
-              decltype(std::declval<Solver>().GetPerformanceConfig(std::declval<const miopen::ConvolutionContext &>()))>
-auto IsTunable(const Solver s, int z_dummy)
-{
-    return true;
-}
-
-template <class Solver>
-auto IsTunable(const Solver s, ...)
-{
-    return false;
-}
-
 template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::GetSolverList()
 {
@@ -800,7 +786,7 @@ int ConvFin<Tgpu, Tref>::GetSolverList()
         solver["id"]      = std::to_string(id.Value());
         solver["name"]    = id.ToString();
         solver["tunable"] = "0";
-        if(IsTunable(id.GetSolver()))
+        if(id.IsTunable())
             solver["tunable"] = "1";
         solvers.push_back(solver);
     }
