@@ -50,6 +50,11 @@
 #include <miopen/perf_field.hpp>
 #include <miopen/solver_id.hpp>
 
+#include <miopen/db_record.hpp>
+#include <miopen/sqlite_db.hpp>
+#include <miopen/db_path.hpp>
+
+
 #if MIOPEN_MODE_NOGPU
 #include <miopen/kernel_cache.hpp>
 #include <miopen/nogpu/handle_impl.hpp>
@@ -146,6 +151,7 @@ class ConvFin : public Fin
     int CopyFromDevice();
     int RunGPU();
     int TestApplicability();
+    int TestValidPerfDb();
     int GetandSetData();
     int GetSolverList();
     int MIOpenFind();
@@ -775,6 +781,16 @@ int ConvFin<Tgpu, Tref>::TestApplicability()
 }
 
 template <typename Tgpu, typename Tref>
+int ConvFin<Tgpu, Tref>::TestValidPerfDb()
+{
+	auto perf_db = miopen::SQLitePerfDb(miopen::GetSystemDbPath(), true);
+
+    //GetValues(const std::string& id, T& values)
+
+    return false;
+}
+
+template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::GetSolverList()
 {
     // pair.first = id, pair. second = string id
@@ -853,6 +869,8 @@ int ConvFin<Tgpu, Tref>::ProcessStep(const std::string& step_name)
         return CopyFromDevice();
     if(step_name == "applicability")
         return TestApplicability();
+    if(step_name == "perf_db_test")
+        return TestValidPerfDb();
     if(step_name == "get_solvers")
         return GetSolverList();
     if(step_name == "miopen_find")
