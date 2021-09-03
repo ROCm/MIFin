@@ -780,12 +780,71 @@ int ConvFin<Tgpu, Tref>::TestApplicability()
     return 0;
 }
 
+struct ShellProblemDesc
+    : miopen::ProblemDescription
+{
+    std::tuple<std::string, std::vector<std::string>> WhereClause() const
+    {
+        std::vector<std::string> values;
+        std::string clause = "( spatial_dims = > )";
+        values.push_back("0");
+
+        return std::make_tuple(clause, values);
+    }
+};
+
+class ParamString
+{
+    std::string values;
+
+    public:
+    ParamString(std::string in_val) : values(in_val){}
+
+    void Serialize(std::ostream& stream) const
+    {
+        stream << values;
+    }
+};
+
 template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::TestValidPerfDb()
 {
-	auto perf_db = miopen::SQLitePerfDb(miopen::GetSystemDbPath(), true);
+	//auto perf_db = miopen::SQLitePerfDb(miopen::GetSystemDbPath(), true);
+
+    auto sql = miopen::SQLite{miopen::GetSystemDbPath(), true};
+
+    //pull out records for all configs from perf_db
+    std::unordered_map<std::string, miopen::DbRecord> config_records;
+    std::vector<std::string> values;
+    auto select_query = "SELECT config, solver, params FROM perf_db;";
+    auto stmt = miopen::SQLite::Statement{sql, select_query};//, values};
+    while(true)
+    {
+        auto rc = stmt.Step(sql);
+        if(rc == SQLITE_ROW)
+        {
+            const auto config_id = stmt.ColumnText(0);
+            //const auto it = config_records.find(config_id);
+            //if(it == config_records.end())
+            //    config_records[config_id] = miopen::DbRecord();
+            config_records[config_id].SetValues(stmt.ColumnText(1), ParamString(stmt.ColumnText(2)));
+        }
+        else if(rc == SQLITE_DONE)
+            break;
+        else if(rc == SQLITE_ERROR || rc == SQLITE_MISUSE)
+            MIOPEN_THROW(miopenStatusInternalError, sql.ErrorMessage());
+    }
 
     //GetValues(const std::string& id, T& values)
+    //std::string s;
+    //if(!GetValues(id, s))
+    //    return false;
+
+    //const bool ok = values.Deserialize(s);
+    //if(!ok)
+    //    MIOPEN_LOG_WE(
+    //        "Perf db record is obsolete or corrupt: " << s << ". Performance may degrade.");
+    //return ok;
 
     return false;
 }
