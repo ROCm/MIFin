@@ -53,6 +53,7 @@
 #include <miopen/db_record.hpp>
 #include <miopen/sqlite_db.hpp>
 #include <miopen/db_path.hpp>
+#include <miopen/solver.hpp>
 
 
 #if MIOPEN_MODE_NOGPU
@@ -780,31 +781,31 @@ int ConvFin<Tgpu, Tref>::TestApplicability()
     return 0;
 }
 
-struct ShellProblemDesc
-    : miopen::ProblemDescription
-{
-    std::tuple<std::string, std::vector<std::string>> WhereClause() const
-    {
-        std::vector<std::string> values;
-        std::string clause = "( spatial_dims = > )";
-        values.push_back("0");
-
-        return std::make_tuple(clause, values);
-    }
-};
-
 class ParamString
 {
     std::string values;
 
     public:
+    ParamString(){}
     ParamString(std::string in_val) : values(in_val){}
 
     void Serialize(std::ostream& stream) const
     {
         stream << values;
     }
+    bool Deserialize(const std::string& s)
+    {
+        values = s;
+        return true;
+    }
 };
+
+
+template <typename PerfCfg>
+bool testGetValue(std::string, PerfCfg p_config)
+{
+}
+
 
 template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::TestValidPerfDb()
@@ -815,7 +816,8 @@ int ConvFin<Tgpu, Tref>::TestValidPerfDb()
 
     //pull out records for all configs from perf_db
     std::unordered_map<std::string, miopen::DbRecord> config_records;
-    std::vector<std::string> values;
+    std::unordered_map<std::string, std::vector<std::string>> config_solvers;
+    //std::vector<std::string> values;
     auto select_query = "SELECT config, solver, params FROM perf_db;";
     auto stmt = miopen::SQLite::Statement{sql, select_query};//, values};
     while(true)
@@ -828,11 +830,28 @@ int ConvFin<Tgpu, Tref>::TestValidPerfDb()
             //if(it == config_records.end())
             //    config_records[config_id] = miopen::DbRecord();
             config_records[config_id].SetValues(stmt.ColumnText(1), ParamString(stmt.ColumnText(2)));
+            config_solvers[config_id].push_back(stmt.ColumnText(1));
         }
         else if(rc == SQLITE_DONE)
             break;
         else if(rc == SQLITE_ERROR || rc == SQLITE_MISUSE)
             MIOPEN_THROW(miopenStatusInternalError, sql.ErrorMessage());
+    }
+
+    //iterate through each config
+    for(auto it = config_records.begin(); it != config_records.end(); it++)
+    {
+        auto record = &it->second;
+        //iterate through each solver for config 
+        auto solvers = config_solvers.find(it->first);
+        for(auto it2 = solvers.begin(); it2 != solvers.end(); it2++)
+        {
+            auto solver = miopen::solver::Id(*it2).GetSolver();
+            //check if the params in the record deserialize
+            miopen::perf_cfg_solver perf_cfg; 
+            if(!record->GetValues(*it2, perf_cfg))
+                return false;
+        }
     }
 
     //GetValues(const std::string& id, T& values)
@@ -845,8 +864,14 @@ int ConvFin<Tgpu, Tref>::TestValidPerfDb()
     //    MIOPEN_LOG_WE(
     //        "Perf db record is obsolete or corrupt: " << s << ". Performance may degrade.");
     //return ok;
+    //
+    //bool ConvAsm1x1U::IsValidPerformanceConfig(const ConvolutionContext& problem,
+    //                                           const PerformanceConfigConvAsm1x1U& c) const
+    //{
+    //    return c.IsValidValue() && c.IsValid(problem);
+    //}
 
-    return false;
+    return true;
 }
 
 template <typename Tgpu, typename Tref>
