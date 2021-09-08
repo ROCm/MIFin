@@ -152,7 +152,7 @@ class ConvFin : public Fin
     int CopyFromDevice();
     int RunGPU();
     int TestApplicability();
-    int TestValidPerfDb();
+    int TestPerfDbValid();
     int GetandSetData();
     int GetSolverList();
     int MIOpenFind();
@@ -800,15 +800,8 @@ class ParamString
     }
 };
 
-
-template <typename PerfCfg>
-bool testGetValue(std::string, PerfCfg p_config)
-{
-}
-
-
 template <typename Tgpu, typename Tref>
-int ConvFin<Tgpu, Tref>::TestValidPerfDb()
+int ConvFin<Tgpu, Tref>::TestPerfDbValid()
 {
 	//auto perf_db = miopen::SQLitePerfDb(miopen::GetSystemDbPath(), true);
 
@@ -841,15 +834,16 @@ int ConvFin<Tgpu, Tref>::TestValidPerfDb()
     //iterate through each config
     for(auto it = config_records.begin(); it != config_records.end(); it++)
     {
-        auto record = &it->second;
+        auto record = it->second;
         //iterate through each solver for config 
-        auto solvers = config_solvers.find(it->first);
+        auto solvers = config_solvers.find(it->first)->second;
         for(auto it2 = solvers.begin(); it2 != solvers.end(); it2++)
         {
             auto solver = miopen::solver::Id(*it2).GetSolver();
             //check if the params in the record deserialize
-            miopen::perf_cfg_solver perf_cfg; 
-            if(!record->GetValues(*it2, perf_cfg))
+            bool ok = solver.TestSysDbRecord(record);
+            //if a record has failed
+            if(!ok)
                 return false;
         }
     }
@@ -954,7 +948,7 @@ int ConvFin<Tgpu, Tref>::ProcessStep(const std::string& step_name)
     if(step_name == "applicability")
         return TestApplicability();
     if(step_name == "perf_db_test")
-        return TestValidPerfDb();
+        return TestPerfDbValid();
     if(step_name == "get_solvers")
         return GetSolverList();
     if(step_name == "miopen_find")
