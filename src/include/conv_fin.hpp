@@ -815,26 +815,20 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
         std::cout << pathstr<<std::endl;
 
         auto sql = miopen::SQLite{pathstr, true};
-        printf("made it here\n");
 
         //pull out records for all configs from perf_db
-        std::unordered_map<std::string, miopen::DbRecord> config_records;
+        std::map<std::string, miopen::DbRecord> config_records;
         std::unordered_map<std::string, std::vector<std::string>> config_solvers;
         std::vector<std::string> err_slv;
         //std::vector<std::string> values;
         auto select_query = "SELECT config, solver, params FROM perf_db;";
-        printf("made it here 2\n");
         auto stmt = miopen::SQLite::Statement{sql, select_query};//, values};
-        printf("made it here 3\n");
         while(true)
         {
             auto rc = stmt.Step(sql);
             if(rc == SQLITE_ROW)
             {
                 const auto config_id = stmt.ColumnText(0);
-                //const auto it = config_records.find(config_id);
-                //if(it == config_records.end())
-                //    config_records[config_id] = miopen::DbRecord();
                 config_records[config_id].SetValues(stmt.ColumnText(1), ParamString(stmt.ColumnText(2)));
                 config_solvers[config_id].push_back(stmt.ColumnText(1));
             }
@@ -852,14 +846,26 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
             auto solvers = config_solvers.find(it->first)->second;
             for(auto it2 = solvers.begin(); it2 != solvers.end(); it2++)
             {
-                auto solver = miopen::solver::Id(*it2).GetSolver();
+                auto slv_id = miopen::solver::Id(*it2);
+                if(!slv_id.IsValid())
+                {
+                    err_slv.push_back(it->first+"_"+*it2);
+                    ret = false;
+                    continue;
+                }
+
+                auto solver = slv_id.GetSolver();
+                if(!solver.IsTunable())
+                    continue;
+
                 //check if the params in the record deserialize
+                //std::cout << "Solver name: " << *it2 << std::endl;
                 bool ok = solver.TestSysDbRecord(record);
                 //if a record has failed
                 if(!ok)
                 {
                     err_slv.push_back(it->first+"_"+*it2);
-                        ret = false;
+                    ret = false;
                 }
             }
         }
