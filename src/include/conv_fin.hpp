@@ -807,10 +807,18 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
     {
         std::string pathstr = db_file.path().native();
         std::string filestr = db_file.path().filename().native();
-        if(!command["arch"].empty() and !command["num_cu"].empty())
+
+        std::string arch    = job["arch"];
+        if(arch.size() > 0 and job["num_cu"].size() > 0) 
         {
-            std::ostringstream db_name;
-            db_name << command["arch"] << "_" << command["num_cu"] << ".db";
+            std::stringstream db_name;
+            db_name << arch;
+            int num_cu = job["num_cu"];
+            if(num_cu > 64)
+                db_name << std::hex << num_cu << ".db";
+            else
+                db_name << "_" << num_cu << ".db";
+                
             if(filestr.compare(db_name.str()) != 0)
                 continue;
         }
@@ -819,7 +827,7 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
         if(pathstr.compare(pathstr.size()-3, 3, ".db") != 0)
             continue;
 
-        std::cout << pathstr<<std::endl;
+        std::cout << pathstr << "/" << filestr <<std::endl;
 
         auto sql = miopen::SQLite{pathstr, true};
 
