@@ -808,12 +808,12 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
         std::string pathstr = db_file.path().native();
         std::string filestr = db_file.path().filename().native();
 
-        std::string arch    = job["arch"];
-        if(arch.size() > 0 and job["num_cu"].size() > 0) 
+        if(job["arch"].size() > 0 and job["num_cu"].size() > 0) 
         {
+            std::string arch = job["arch"];
+            int num_cu       = job["num_cu"];
             std::stringstream db_name;
             db_name << arch;
-            int num_cu = job["num_cu"];
             if(num_cu > 64)
                 db_name << std::hex << num_cu << ".db";
             else
