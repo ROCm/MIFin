@@ -807,6 +807,13 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
     {
         std::string pathstr = db_file.path().native();
         std::string filestr = db_file.path().filename().native();
+        if(!command["arch"].empty() and !command["num_cu"].empty())
+        {
+            std::ostringstream db_name;
+            db_name << command["arch"] << "_" << command["num_cu"] << ".db";
+            if(filestr.compare(db_name.str()) != 0)
+                continue;
+        }
 
 
         if(pathstr.compare(pathstr.size()-3, 3, ".db") != 0)
@@ -817,11 +824,11 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
         auto sql = miopen::SQLite{pathstr, true};
 
         //pull out records for all configs from perf_db
-        std::map<std::string, miopen::DbRecord> config_records;
-        std::unordered_map<std::string, std::vector<std::string>> config_solvers;
-        std::vector<std::string> err_slv;
+        std::unordered_map<std::string, std::unordered_map<std::string, miopen::DbRecord>> records;
+        std::map<std::string, std::unordered_map<std::string, std::string>> perfdb_entries;
+        std::vector<std::map<std::string, std::string>> err_list;
         //std::vector<std::string> values;
-        auto select_query = "SELECT config, solver, params FROM perf_db;";
+        auto select_query = "SELECT config, solver, params, id FROM perf_db;";
         auto stmt = miopen::SQLite::Statement{sql, select_query};//, values};
         while(true)
         {
@@ -829,8 +836,12 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
             if(rc == SQLITE_ROW)
             {
                 const auto config_id = stmt.ColumnText(0);
-                config_records[config_id].SetValues(stmt.ColumnText(1), ParamString(stmt.ColumnText(2)));
-                config_solvers[config_id].push_back(stmt.ColumnText(1));
+                const auto solver_id = stmt.ColumnText(1);
+                const auto params = stmt.ColumnText(2);
+                const auto perf_id = stmt.ColumnText(3);
+                records[config_id][solver_id].SetValues(solver_id, ParamString(params));
+                perfdb_entries[perf_id]["config"] = config_id;
+                perfdb_entries[perf_id]["solver"] = solver_id;
             }
             else if(rc == SQLITE_DONE)
                 break;
@@ -839,56 +850,44 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
         }
 
         //iterate through each config
-        for(auto it = config_records.begin(); it != config_records.end(); it++)
+        for(auto it = perfdb_entries.begin(); it != perfdb_entries.end(); it++)
         {
-            auto record = it->second;
-            //iterate through each solver for config 
-            auto solvers = config_solvers.find(it->first)->second;
-            for(auto it2 = solvers.begin(); it2 != solvers.end(); it2++)
+            auto solver_nm = it->second["solver"];
+            auto config_id = it->second["config"];
+            auto record = records.find(config_id)->second.find(solver_nm)->second;
+
+            auto slv_id = miopen::solver::Id(solver_nm);
+            if(!slv_id.IsValid())
             {
-                auto slv_id = miopen::solver::Id(*it2);
-                if(!slv_id.IsValid())
-                {
-                    err_slv.push_back(it->first+"_"+*it2);
-                    ret = false;
-                    continue;
-                }
+                std::map<std::string, std::string> err;
+                err["perfdb_id"] = it->first;
+                err["config"] = config_id;
+                err["solver"] = solver_nm;
+                err_list.push_back(err);
+                ret = false;
+                continue;
+            }
 
-                auto solver = slv_id.GetSolver();
-                if(!solver.IsTunable())
-                    continue;
+            auto solver = slv_id.GetSolver();
 
-                //check if the params in the record deserialize
-                //std::cout << "Solver name: " << *it2 << std::endl;
-                bool ok = solver.TestSysDbRecord(record);
-                //if a record has failed
-                if(!ok)
-                {
-                    err_slv.push_back(it->first+"_"+*it2);
-                    ret = false;
-                }
+            //check if the params in the record deserialize
+            //std::cout << "Solver name: " << *it2 << std::endl;
+            bool ok = solver.TestSysDbRecord(record);
+            //if a record has failed
+            if(!ok)
+            {
+                std::map<std::string, std::string> err;
+                err["perfdb_id"] = it->first;
+                err["config"] = config_id;
+                err["solver"] = solver_nm;
+                err_list.push_back(err);
+                ret = false;
             }
         }
         std::string listing = filestr+"_errors";
-        output[listing] = err_slv;
+        output[listing] = err_list;
     }
 
-    //GetValues(const std::string& id, T& values)
-    //std::string s;
-    //if(!GetValues(id, s))
-    //    return false;
-
-    //const bool ok = values.Deserialize(s);
-    //if(!ok)
-    //    MIOPEN_LOG_WE(
-    //        "Perf db record is obsolete or corrupt: " << s << ". Performance may degrade.");
-    //return ok;
-    //
-    //bool ConvAsm1x1U::IsValidPerformanceConfig(const ConvolutionContext& problem,
-    //                                           const PerformanceConfigConvAsm1x1U& c) const
-    //{
-    //    return c.IsValidValue() && c.IsValid(problem);
-    //}
     if(ret)
         output["clear"] = "true";
 
