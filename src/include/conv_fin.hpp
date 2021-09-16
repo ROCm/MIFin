@@ -798,8 +798,6 @@ class ParamString
 template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::TestPerfDbValid()
 {
-	//auto perf_db = miopen::SQLitePerfDb(miopen::GetSystemDbPath(), true);
-    //miopen::GetSystemDbPath()
     bool ret = true;
     std::cout << miopen::GetSystemDbPath()<<std::endl;
     
@@ -879,9 +877,7 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
             auto solver = slv_id.GetSolver();
 
             //check if the params in the record deserialize
-            //std::cout << "Solver name: " << *it2 << std::endl;
             bool ok = solver.TestSysDbRecord(record);
-            //if a record has failed
             if(!ok)
             {
                 std::map<std::string, std::string> err;
