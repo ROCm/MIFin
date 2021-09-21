@@ -73,6 +73,7 @@
 
 namespace fin {
 
+int INVOKE_LIMIT = 2;
 using json = nlohmann::json;
 // TODO: Create a config class to encapsulate config
 // related code, such as checking direction etc
@@ -481,7 +482,8 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
                                                         outputTensor.gpuData.buf.get()},
                                                        workspace.gpuData.buf.get(),
                                                        workspace.desc.GetNumBytes()};
-                    invoker(h, invoke_ctx);
+                    for(auto idx = 0; idx < INVOKE_LIMIT; idx++)
+                        invoker(h, invoke_ctx);
                 }
                 else if(conv_dir == miopen::conv::Direction::BackwardData)
                 {
@@ -494,7 +496,8 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
                                                         inputTensor.gpuData.buf.get()},
                                                        workspace.gpuData.buf.get(),
                                                        workspace.desc.GetNumBytes()};
-                    invoker(h, invoke_ctx);
+                    for(auto idx = 0; idx < INVOKE_LIMIT; idx++)
+                        invoker(h, invoke_ctx);
                 }
                 else if(conv_dir == miopen::conv::Direction::BackwardWeights)
                 {
@@ -507,7 +510,8 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
                                                        weightTensor.gpuData.buf.get()},
                                                       workspace.gpuData.buf.get(),
                                                       workspace.desc.GetNumBytes()};
-                    invoker(h, invoke_ctx);
+                    for(auto idx = 0; idx < INVOKE_LIMIT; idx++)
+                        invoker(h, invoke_ctx);
                 }
                 else
                 {
@@ -664,7 +668,8 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
                                                         outputTensor.gpuData.buf.get()},
                                                        workspace.gpuData.buf.get(),
                                                        workspace.desc.GetNumBytes()};
-                    invoker(h, invoke_ctx);
+                    for(auto idx = 0; idx < INVOKE_LIMIT; idx++)
+                        invoker(h, invoke_ctx);
                 }
                 else if(conv_dir == miopen::conv::Direction::BackwardData)
                 {
@@ -677,7 +682,8 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
                                                         inputTensor.gpuData.buf.get()},
                                                        workspace.gpuData.buf.get(),
                                                        workspace.desc.GetNumBytes()};
-                    invoker(h, invoke_ctx);
+                    for(auto idx = 0; idx < INVOKE_LIMIT; idx++)
+                        invoker(h, invoke_ctx);
                 }
                 else if(conv_dir == miopen::conv::Direction::BackwardWeights)
                 {
@@ -690,7 +696,8 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
                                                        weightTensor.gpuData.buf.get()},
                                                       workspace.gpuData.buf.get(),
                                                       workspace.desc.GetNumBytes()};
-                    invoker(h, invoke_ctx);
+                    for(auto idx = 0; idx < INVOKE_LIMIT; idx++)
+                        invoker(h, invoke_ctx);
                 }
                 else
                 {
@@ -1098,7 +1105,7 @@ int ConvFin<Tgpu, Tref>::SetConvDescriptor()
         exit(0);
     }
 
-    miopenPaddingMode_t p_mode = miopenPaddingSame;
+    miopenPaddingMode_t p_mode = miopenPaddingDefault;
     if((command["pad_mode"]) == "same")
         p_mode = miopenPaddingSame;
     else if((command["pad_mode"]) == "valid")
