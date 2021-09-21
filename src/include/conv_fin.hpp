@@ -74,7 +74,7 @@
 namespace fin {
 
 int INVOKE_LIMIT = 2;
-using json = nlohmann::json;
+using json       = nlohmann::json;
 // TODO: Create a config class to encapsulate config
 // related code, such as checking direction etc
 template <typename Tgpu, typename Tcpu>
@@ -249,8 +249,8 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
         auto process_solver = [&]() -> bool {
             std::cerr << "Processing Solver: " << solver_id.ToString() << std::endl;
             res_item["solver_id"] = solver_id.ToString();
-            if(res_item["solver_id"] == "ConvBiasActivAsm1x1U"
-                || res_item["solver_id"].find("Fused") != std::string::npos)
+            if(res_item["solver_id"] == "ConvBiasActivAsm1x1U" ||
+               res_item["solver_id"].find("Fused") != std::string::npos)
             {
                 std::cerr << "Skipping fused solvers" << std::endl;
                 return false;
