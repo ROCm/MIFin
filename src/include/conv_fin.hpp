@@ -74,7 +74,7 @@
 namespace fin {
 
 const int INVOKE_LIMIT = 2;
-using json       = nlohmann::json;
+using json             = nlohmann::json;
 // TODO: Create a config class to encapsulate config
 // related code, such as checking direction etc
 template <typename Tgpu, typename Tcpu>
