@@ -878,7 +878,7 @@ int ConvFin<Tgpu, Tref>::ProcessStep(const std::string& step_name)
 template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::GetandSetData()
 {
-    int spatial_dim = command["spatial_dim"];
+    int spatial_dim       = command["spatial_dim"];
     const auto get_layout = [&](const std::string type) -> std::string {
         if(command.contains(type))
         {
@@ -895,33 +895,35 @@ int ConvFin<Tgpu, Tref>::GetandSetData()
         }
     };
 
-    auto in_len  = GetInputTensorLengths();
+    auto in_len          = GetInputTensorLengths();
     const auto in_layout = get_layout("in_layout");
     if(in_len.size() != in_layout.size())
         throw std::runtime_error("Input layout length and tensor dimensions dont agree");
     std::vector<size_t> in_strides;
-    miopen::tensor_layout_to_strides(in_len, miopen::tensor_layout_get_default(in_layout.size()), in_layout, in_strides);
+    miopen::tensor_layout_to_strides(
+        in_len, miopen::tensor_layout_get_default(in_layout.size()), in_layout, in_strides);
     inputTensor = {GetHandle().GetStream(), in_len, in_strides, (is_fwd || is_wrw), is_bwd};
 
-    auto wei_len = GetWeightTensorLengths();
-    const auto wei_layout  = get_layout("wei_layout");
+    auto wei_len          = GetWeightTensorLengths();
+    const auto wei_layout = get_layout("wei_layout");
     if(wei_len.size() != wei_layout.size())
         throw std::runtime_error("Weight layout length and tensor dimensions dont agree");
     std::vector<size_t> wei_strides;
-    miopen::tensor_layout_to_strides(wei_len, miopen::tensor_layout_get_default(wei_layout.size()), wei_layout, wei_strides);
+    miopen::tensor_layout_to_strides(
+        wei_len, miopen::tensor_layout_get_default(wei_layout.size()), wei_layout, wei_strides);
     weightTensor = {GetHandle().GetStream(), wei_len, wei_strides, (is_fwd || is_bwd), is_wrw};
 
     // auto y_type = GetOutputType();
 
-
     // conv, input and weight tensor descriptors need to be set before we can know the
     // output lengths
-    auto out_len = GetOutputTensorLengths();
+    auto out_len          = GetOutputTensorLengths();
     const auto out_layout = get_layout("out_layout");
     if(out_len.size() != out_layout.size())
         throw std::runtime_error("Output layout length and tensor dimensions dont agree");
     std::vector<size_t> out_strides;
-    miopen::tensor_layout_to_strides(out_len, miopen::tensor_layout_get_default(out_layout.size()), out_layout, out_strides);
+    miopen::tensor_layout_to_strides(
+        out_len, miopen::tensor_layout_get_default(out_layout.size()), out_layout, out_strides);
     outputTensor = {GetHandle().GetStream(), out_len, out_strides, (is_bwd || is_wrw), is_fwd};
 
     if(IsInputTensorTransform())

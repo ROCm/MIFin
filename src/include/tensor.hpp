@@ -77,7 +77,11 @@ struct tensor
 
     tensor() {}
     template <typename U>
-    tensor(accelerator_stream _q, std::vector<U> _plens, std::vector<U> _strides, bool _is_input, bool _is_output)
+    tensor(accelerator_stream _q,
+           std::vector<U> _plens,
+           std::vector<U> _strides,
+           bool _is_input,
+           bool _is_output)
         : desc(GetDataType<Tgpu>(), _plens, _strides),
           gpuData(),
           q(_q),
