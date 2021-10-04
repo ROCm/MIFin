@@ -125,21 +125,25 @@ int main(int argc, char* argv[], char* envp[])
         // TODO : Move this to a factory function
         if(command.contains("config"))
         {
-            if(command["config"]["cmd"] == "conv")
+	    std::string cmd = "cmd";
+            if(command["config"].contains("conv_mode")){
+		cmd = "conv_mode";
+            }
+            if(command["config"][cmd] == "conv")
             {
                 f = new fin::ConvFin<float, float>(command);
             }
-            else if(command["config"]["cmd"] == "convfp16")
+            else if(command["config"][cmd] == "convfp16")
             {
                 f = new fin::ConvFin<float16, float>(command);
             }
-            else if(command["config"]["cmd"] == "convbfp16")
+            else if(command["config"][cmd] == "convbfp16")
             {
                 f = new fin::ConvFin<bfloat16, float>(command);
             }
             else
             {
-                FIN_THROW("Invalid operation: " + command["config"]["cmd"].get<std::string>());
+                FIN_THROW("Invalid operation: " + command["config"][cmd].get<std::string>());
                 exit(-1);
             }
         }
