@@ -126,7 +126,8 @@ int main(int argc, char* argv[], char* envp[])
         if(command.contains("config"))
         {
 	    std::string cmd = "cmd";
-            if(command["config"].contains("conv_mode")){
+            if(command["config"].contains("conv_mode"))
+            {
 		cmd = "conv_mode";
             }
             if(command["config"][cmd] == "conv")
