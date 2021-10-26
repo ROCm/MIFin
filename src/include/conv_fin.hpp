@@ -840,7 +840,7 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
         std::vector<std::map<std::string, std::string>> err_list;
         // std::vector<std::string> values;
         auto select_query = "SELECT config, solver, params, id FROM perf_db;";
-        auto stmt         = miopen::SQLite::Statement{sql, select_query}; //, values};
+        auto stmt         = miopen::SQLite::Statement{sql, select_query};
         while(true)
         {
             auto rc = stmt.Step(sql);
