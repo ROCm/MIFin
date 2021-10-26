@@ -807,7 +807,11 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
     bool ret = true;
     std::cout << miopen::GetSystemDbPath() << std::endl;
 
-    for(auto db_file : boost::filesystem::directory_iterator(miopen::GetSystemDbPath()))
+    std::vector<fs::path> contents;
+    std::copy(boost::filesystem::directory_iterator(miopen::GetSystemDbPath()),
+              boost::filesystem::directory_iterator(),
+              std::back_inserter(contents));
+    for(auto const& db_file : contents)
     {
         std::string pathstr = db_file.path().native();
         std::string filestr = db_file.path().filename().native();
@@ -838,7 +842,6 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
         std::unordered_map<std::string, std::unordered_map<std::string, miopen::DbRecord>> records;
         std::map<std::string, std::unordered_map<std::string, std::string>> perfdb_entries;
         std::vector<std::map<std::string, std::string>> err_list;
-        // std::vector<std::string> values;
         auto select_query = "SELECT config, solver, params, id FROM perf_db;";
         auto stmt         = miopen::SQLite::Statement{sql, select_query}; //, values};
         while(true)
