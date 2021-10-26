@@ -882,8 +882,7 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
             auto solver = slv_id.GetSolver();
 
             // check if the params in the record deserialize
-            bool ok = solver.TestSysDbRecord(record);
-            if(!ok)
+            if(!solver.TestSysDbRecord(record))
             {
                 std::map<std::string, std::string> err;
                 err["perfdb_id"] = it->first;
