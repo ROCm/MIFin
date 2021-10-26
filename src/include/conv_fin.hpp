@@ -804,12 +804,13 @@ class ParamString
 template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::TestPerfDbValid()
 {
-    bool ret = true;
+    bool ret     = true;
+    namespace fs = boost::filesystem;
     std::cout << miopen::GetSystemDbPath() << std::endl;
 
     std::vector<fs::path> contents;
-    std::copy(boost::filesystem::directory_iterator(miopen::GetSystemDbPath()),
-              boost::filesystem::directory_iterator(),
+    std::copy(fs::directory_iterator(miopen::GetSystemDbPath()),
+              fs::directory_iterator(),
               std::back_inserter(contents));
     for(auto const& db_file : contents)
     {
