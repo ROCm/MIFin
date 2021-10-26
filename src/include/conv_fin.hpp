@@ -814,8 +814,8 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
               std::back_inserter(contents));
     for(auto const& db_file : contents)
     {
-        std::string pathstr = db_file.path().native();
-        std::string filestr = db_file.path().filename().native();
+        std::string pathstr = db_file.native();
+        std::string filestr = db_file.filename().native();
 
         if(job["arch"].size() > 0 and job["num_cu"].size() > 0)
         {
