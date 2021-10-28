@@ -49,7 +49,6 @@
 #include <miopen/md5.hpp>
 #include <miopen/perf_field.hpp>
 #include <miopen/solver_id.hpp>
-#include <miopen/tensor_layout.hpp>
 
 #if MIOPEN_MODE_NOGPU
 #include <miopen/kernel_cache.hpp>
@@ -130,8 +129,8 @@ class ConvFin : public Fin
     }
 
     // Getters and setters
-    std::vector<size_t> GetInputTensorLengths();
-    std::vector<size_t> GetWeightTensorLengths();
+    std::vector<int> GetInputTensorLengths();
+    std::vector<int> GetWeightTensorLengths();
     std::vector<int> GetBiasTensorLengths();
     int SetConvDescriptor();
     std::vector<size_t> GetOutputTensorLengths() const;
@@ -254,8 +253,10 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
         auto process_solver = [&]() -> bool {
             std::cerr << "Processing Solver: " << solver_id.ToString() << std::endl;
             res_item["solver_id"] = solver_id.ToString();
-            if(solver_id.ToString() == "ConvBiasActivAsm1x1U" ||
-               solver_id.ToString().find("Fused") != std::string::npos)
+            std::ostringstream solver_name;
+            solver_name << res_item["solver_id"];
+            if(solver_name.str() == "ConvBiasActivAsm1x1U" ||
+               solver_name.str().find("Fused") != std::string::npos)
             {
                 std::cerr << "Skipping fused solvers" << std::endl;
                 return false;
@@ -487,7 +488,8 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
                                                         outputTensor.desc,
                                                         outputTensor.gpuData.buf.get()},
                                                        workspace.gpuData.buf.get(),
-                                                       workspace.desc.GetNumBytes()};
+                                                       workspace.desc.GetNumBytes(),
+                                                       convDesc.attribute.gfx90aFp16alt.GetFwd()};
                     for(auto idx = 0; idx < INVOKE_LIMIT; idx++)
                         invoker(h, invoke_ctx);
                 }
@@ -501,7 +503,8 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
                                                         inputTensor.desc,
                                                         inputTensor.gpuData.buf.get()},
                                                        workspace.gpuData.buf.get(),
-                                                       workspace.desc.GetNumBytes()};
+                                                       workspace.desc.GetNumBytes(),
+                                                       convDesc.attribute.gfx90aFp16alt.GetBwd()};
                     for(auto idx = 0; idx < INVOKE_LIMIT; idx++)
                         invoker(h, invoke_ctx);
                 }
@@ -515,7 +518,8 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
                                                        weightTensor.desc,
                                                        weightTensor.gpuData.buf.get()},
                                                       workspace.gpuData.buf.get(),
-                                                      workspace.desc.GetNumBytes()};
+                                                      workspace.desc.GetNumBytes(),
+                                                      convDesc.attribute.gfx90aFp16alt.GetWrW()};
                     for(auto idx = 0; idx < INVOKE_LIMIT; idx++)
                         invoker(h, invoke_ctx);
                 }
@@ -672,7 +676,8 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
                                                         outputTensor.desc,
                                                         outputTensor.gpuData.buf.get()},
                                                        workspace.gpuData.buf.get(),
-                                                       workspace.desc.GetNumBytes()};
+                                                       workspace.desc.GetNumBytes(),
+                                                       convDesc.attribute.gfx90aFp16alt.GetFwd()};
                     for(auto idx = 0; idx < INVOKE_LIMIT; idx++)
                         invoker(h, invoke_ctx);
                 }
@@ -686,7 +691,8 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
                                                         inputTensor.desc,
                                                         inputTensor.gpuData.buf.get()},
                                                        workspace.gpuData.buf.get(),
-                                                       workspace.desc.GetNumBytes()};
+                                                       workspace.desc.GetNumBytes(),
+                                                       convDesc.attribute.gfx90aFp16alt.GetBwd()};
                     for(auto idx = 0; idx < INVOKE_LIMIT; idx++)
                         invoker(h, invoke_ctx);
                 }
@@ -700,7 +706,8 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
                                                        weightTensor.desc,
                                                        weightTensor.gpuData.buf.get()},
                                                       workspace.gpuData.buf.get(),
-                                                      workspace.desc.GetNumBytes()};
+                                                      workspace.desc.GetNumBytes(),
+                                                      convDesc.attribute.gfx90aFp16alt.GetWrW()};
                     for(auto idx = 0; idx < INVOKE_LIMIT; idx++)
                         invoker(h, invoke_ctx);
                 }
@@ -1001,53 +1008,18 @@ int ConvFin<Tgpu, Tref>::ProcessStep(const std::string& step_name)
 template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::GetandSetData()
 {
-    int spatial_dim       = command["spatial_dim"];
-    const auto get_layout = [&](const std::string type) -> std::string {
-        if(command.contains(type))
-        {
-            return command[type];
-        }
-        else
-        {
-            if(spatial_dim == 2)
-                return "NCHW";
-            else if(spatial_dim == 3)
-                return "NCDHW";
-            else
-                throw std::runtime_error("Invalid number of tensor dimensions");
-        }
-    };
-
-    auto in_len          = GetInputTensorLengths();
-    const auto in_layout = get_layout("in_layout");
-    if(in_len.size() != in_layout.size())
-        throw std::runtime_error("Input layout length and tensor dimensions dont agree");
-    std::vector<size_t> in_strides;
-    miopen::tensor_layout_to_strides(
-        in_len, miopen::tensor_layout_get_default(in_layout.size()), in_layout, in_strides);
-    inputTensor = {GetHandle().GetStream(), in_len, in_strides, (is_fwd || is_wrw), is_bwd};
-
-    auto wei_len          = GetWeightTensorLengths();
-    const auto wei_layout = get_layout("wei_layout");
-    if(wei_len.size() != wei_layout.size())
-        throw std::runtime_error("Weight layout length and tensor dimensions dont agree");
-    std::vector<size_t> wei_strides;
-    miopen::tensor_layout_to_strides(
-        wei_len, miopen::tensor_layout_get_default(wei_layout.size()), wei_layout, wei_strides);
-    weightTensor = {GetHandle().GetStream(), wei_len, wei_strides, (is_fwd || is_bwd), is_wrw};
+    auto in_len  = GetInputTensorLengths();
+    auto wei_len = GetWeightTensorLengths();
 
     // auto y_type = GetOutputType();
 
+    inputTensor = {GetHandle().GetStream(), in_len, (is_fwd || is_wrw), is_bwd};
+
+    weightTensor = {GetHandle().GetStream(), wei_len, (is_fwd || is_bwd), is_wrw};
     // conv, input and weight tensor descriptors need to be set before we can know the
     // output lengths
-    auto out_len          = GetOutputTensorLengths();
-    const auto out_layout = get_layout("out_layout");
-    if(out_len.size() != out_layout.size())
-        throw std::runtime_error("Output layout length and tensor dimensions dont agree");
-    std::vector<size_t> out_strides;
-    miopen::tensor_layout_to_strides(
-        out_len, miopen::tensor_layout_get_default(out_layout.size()), out_layout, out_strides);
-    outputTensor = {GetHandle().GetStream(), out_len, out_strides, (is_bwd || is_wrw), is_fwd};
+    auto out_len = GetOutputTensorLengths();
+    outputTensor = {GetHandle().GetStream(), out_len, (is_bwd || is_wrw), is_fwd};
 
     if(IsInputTensorTransform())
     {
@@ -1074,9 +1046,9 @@ int ConvFin<Tgpu, Tref>::GetandSetData()
 }
 
 template <typename Tgpu, typename Tref>
-std::vector<size_t> ConvFin<Tgpu, Tref>::GetInputTensorLengths()
+std::vector<int> ConvFin<Tgpu, Tref>::GetInputTensorLengths()
 {
-    std::vector<size_t> in_lens;
+    std::vector<int> in_lens;
 
     int spatial_dim = command["spatial_dim"];
     in_lens.resize(2 + spatial_dim);
@@ -1106,9 +1078,9 @@ std::vector<size_t> ConvFin<Tgpu, Tref>::GetInputTensorLengths()
 }
 
 template <typename Tgpu, typename Tref>
-std::vector<size_t> ConvFin<Tgpu, Tref>::GetWeightTensorLengths()
+std::vector<int> ConvFin<Tgpu, Tref>::GetWeightTensorLengths()
 {
-    std::vector<size_t> wei_lens;
+    std::vector<int> wei_lens;
 
     int spatial_dim = command["spatial_dim"];
     wei_lens.resize(2 + spatial_dim);

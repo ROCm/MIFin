@@ -52,7 +52,7 @@ miopenDataType_t GetDataType<bfloat16>();
 using status_t = cl_int;
 #else // FIN_BACKEND_HIP
 #define STATUS_SUCCESS 0
-using status_t               = int;
+using status_t = int;
 #endif
 
 template <typename Tgpu, typename Tcpu>
@@ -76,22 +76,6 @@ struct tensor
     bool is_output;
 
     tensor() {}
-    template <typename U>
-    tensor(accelerator_stream _q,
-           std::vector<U> _plens,
-           std::vector<U> _strides,
-           bool _is_input,
-           bool _is_output)
-        : desc(GetDataType<Tgpu>(), _plens, _strides),
-          gpuData(),
-          q(_q),
-          is_input(_is_input),
-          is_output(_is_output)
-    {
-#if FIN_BACKEND_OPENCL
-        clGetCommandQueueInfo(q, CL_QUEUE_CONTEXT, sizeof(cl_context), &ctx, nullptr);
-#endif
-    }
     // cppcheck-suppress uninitMemberVar
     template <typename U>
     tensor(accelerator_stream _q, std::vector<U> _plens, bool _is_input, bool _is_output)
