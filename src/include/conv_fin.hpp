@@ -49,7 +49,6 @@
 #include <miopen/md5.hpp>
 #include <miopen/perf_field.hpp>
 #include <miopen/solver_id.hpp>
-#include <miopen/tensor_layout.hpp>
 
 #if MIOPEN_MODE_NOGPU
 #include <miopen/kernel_cache.hpp>
@@ -83,25 +82,15 @@ class ConvFin : public Fin
 {
     public:
     ConvFin() : Fin() {}
-    ConvFin(json _job) : Fin(), job(_job)
-    {
-        VerifyDevProps();
-        command         = _job["config"];
-        command["bias"] = 0;
-        // timing is always enabled
-        is_fwd = (_job["direction"].get<int>() == 0 || _job["direction"].get<int>() & 1);
-        is_bwd = (_job["direction"].get<int>() == 0 || _job["direction"].get<int>() & 2);
-        is_wrw = (_job["direction"].get<int>() == 0 || _job["direction"].get<int>() & 4);
-        SetConvDescriptor();
-        // workspace_dev = nullptr; // TODO: replaced with a tensor class
-        // the variable name is implementation dependent, checking size instead
-    }
+    ConvFin(json _job) : Fin(), job(_job) {}
+
     void VerifyDevProps()
     {
         std::cerr << "Verifying device properties" << std::endl;
         std::string arch    = job["arch"];
         arch                = arch.substr(0, arch.find(':'));
         const size_t num_cu = job["num_cu"];
+        std::ignore         = num_cu;
         if(arch == "gfx900")
         {
             assert(num_cu == 56 || num_cu == 64);
@@ -126,10 +115,25 @@ class ConvFin : public Fin
             throw std::runtime_error("Invalid Arch Name");
     }
 
+    void PrepConvolution()
+    {
+        VerifyDevProps();
+        command         = job["config"];
+        command["bias"] = 0;
+        // timing is always enabled
+        is_fwd = (job["direction"].get<int>() == 0 || job["direction"].get<int>() & 1);
+        is_bwd = (job["direction"].get<int>() == 0 || job["direction"].get<int>() & 2);
+        is_wrw = (job["direction"].get<int>() == 0 || job["direction"].get<int>() & 4);
+        SetConvDescriptor();
+        // workspace_dev = nullptr; // TODO: replaced with a tensor class
+        // the variable name is implementation dependent, checking size instead
+    }
+
     // Getters and setters
-    std::vector<size_t> GetInputTensorLengths();
-    std::vector<size_t> GetWeightTensorLengths();
+    std::vector<int> GetInputTensorLengths();
+    std::vector<int> GetWeightTensorLengths();
     std::vector<int> GetBiasTensorLengths();
+    void PrepConvolution();
     int SetConvDescriptor();
     std::vector<size_t> GetOutputTensorLengths() const;
     miopenDataType_t GetOutputType() const
@@ -148,6 +152,7 @@ class ConvFin : public Fin
     int CopyFromDevice();
     int RunGPU();
     int TestApplicability();
+    int TestPerfDbValid();
     int GetandSetData();
     int GetSolverList();
     int MIOpenFind();
@@ -483,7 +488,8 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
                                                         outputTensor.desc,
                                                         outputTensor.gpuData.buf.get()},
                                                        workspace.gpuData.buf.get(),
-                                                       workspace.desc.GetNumBytes()};
+                                                       workspace.desc.GetNumBytes(),
+                                                       convDesc.attribute.gfx90aFp16alt.GetFwd()};
                     for(auto idx = 0; idx < INVOKE_LIMIT; idx++)
                         invoker(h, invoke_ctx);
                 }
@@ -497,7 +503,8 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
                                                         inputTensor.desc,
                                                         inputTensor.gpuData.buf.get()},
                                                        workspace.gpuData.buf.get(),
-                                                       workspace.desc.GetNumBytes()};
+                                                       workspace.desc.GetNumBytes(),
+                                                       convDesc.attribute.gfx90aFp16alt.GetBwd()};
                     for(auto idx = 0; idx < INVOKE_LIMIT; idx++)
                         invoker(h, invoke_ctx);
                 }
@@ -511,7 +518,8 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
                                                        weightTensor.desc,
                                                        weightTensor.gpuData.buf.get()},
                                                       workspace.gpuData.buf.get(),
-                                                      workspace.desc.GetNumBytes()};
+                                                      workspace.desc.GetNumBytes(),
+                                                      convDesc.attribute.gfx90aFp16alt.GetWrW()};
                     for(auto idx = 0; idx < INVOKE_LIMIT; idx++)
                         invoker(h, invoke_ctx);
                 }
@@ -530,7 +538,6 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
             res_item["reason"] = "Success";
 
             return true;
-
         };
 
         auto res              = process_solver();
@@ -669,7 +676,8 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
                                                         outputTensor.desc,
                                                         outputTensor.gpuData.buf.get()},
                                                        workspace.gpuData.buf.get(),
-                                                       workspace.desc.GetNumBytes()};
+                                                       workspace.desc.GetNumBytes(),
+                                                       convDesc.attribute.gfx90aFp16alt.GetFwd()};
                     for(auto idx = 0; idx < INVOKE_LIMIT; idx++)
                         invoker(h, invoke_ctx);
                 }
@@ -683,7 +691,8 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
                                                         inputTensor.desc,
                                                         inputTensor.gpuData.buf.get()},
                                                        workspace.gpuData.buf.get(),
-                                                       workspace.desc.GetNumBytes()};
+                                                       workspace.desc.GetNumBytes(),
+                                                       convDesc.attribute.gfx90aFp16alt.GetBwd()};
                     for(auto idx = 0; idx < INVOKE_LIMIT; idx++)
                         invoker(h, invoke_ctx);
                 }
@@ -697,7 +706,8 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
                                                        weightTensor.desc,
                                                        weightTensor.gpuData.buf.get()},
                                                       workspace.gpuData.buf.get(),
-                                                      workspace.desc.GetNumBytes()};
+                                                      workspace.desc.GetNumBytes(),
+                                                      convDesc.attribute.gfx90aFp16alt.GetWrW()};
                     for(auto idx = 0; idx < INVOKE_LIMIT; idx++)
                         invoker(h, invoke_ctx);
                 }
@@ -716,7 +726,6 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
             res_item["reason"] = "Success";
 
             return true;
-
         };
 
         auto res              = process_solver();
@@ -781,6 +790,127 @@ int ConvFin<Tgpu, Tref>::TestApplicability()
     }
     output["applicable_solvers"] = app_solvers;
     return 0;
+}
+
+class ParamString
+{
+    std::string values;
+
+    public:
+    ParamString() {}
+    ParamString(std::string in_val) : values(in_val) {}
+
+    void Serialize(std::ostream& stream) const { stream << values; }
+    bool Deserialize(const std::string& s)
+    {
+        values = s;
+        return true;
+    }
+};
+
+template <typename Tgpu, typename Tref>
+int ConvFin<Tgpu, Tref>::TestPerfDbValid()
+{
+    bool ret     = true;
+    namespace fs = boost::filesystem;
+    std::cout << miopen::GetSystemDbPath() << std::endl;
+
+    std::vector<fs::path> contents;
+    std::copy(fs::directory_iterator(miopen::GetSystemDbPath()),
+              fs::directory_iterator(),
+              std::back_inserter(contents));
+    for(auto const& db_file : contents)
+    {
+        std::string pathstr = db_file.native();
+        std::string filestr = db_file.filename().native();
+
+        if(job["arch"].size() > 0 and job["num_cu"].size() > 0)
+        {
+            std::string arch = job["arch"];
+            int num_cu       = job["num_cu"];
+            std::stringstream db_name;
+            db_name << arch;
+            if(num_cu > 64)
+                db_name << std::hex << num_cu << ".db";
+            else
+                db_name << "_" << num_cu << ".db";
+
+            if(filestr.compare(db_name.str()) != 0)
+                continue;
+        }
+
+        if(pathstr.compare(pathstr.size() - 3, 3, ".db") != 0)
+            continue;
+
+        std::cout << pathstr << "/" << filestr << std::endl;
+
+        auto sql = miopen::SQLite{pathstr, true};
+
+        // pull out records for all configs from perf_db
+        std::unordered_map<std::string, std::unordered_map<std::string, miopen::DbRecord>> records;
+        std::map<std::string, std::unordered_map<std::string, std::string>> perfdb_entries;
+        std::vector<std::map<std::string, std::string>> err_list;
+        auto select_query = "SELECT config, solver, params, id FROM perf_db;";
+        auto stmt         = miopen::SQLite::Statement{sql, select_query};
+        while(true)
+        {
+            auto rc = stmt.Step(sql);
+            if(rc == SQLITE_ROW)
+            {
+                const auto config_id = stmt.ColumnText(0);
+                const auto solver_id = stmt.ColumnText(1);
+                const auto params    = stmt.ColumnText(2);
+                const auto perf_id   = stmt.ColumnText(3);
+                records[config_id][solver_id].SetValues(solver_id, ParamString(params));
+                perfdb_entries[perf_id]["config"] = config_id;
+                perfdb_entries[perf_id]["solver"] = solver_id;
+            }
+            else if(rc == SQLITE_DONE)
+                break;
+            else if(rc == SQLITE_ERROR || rc == SQLITE_MISUSE)
+                MIOPEN_THROW(miopenStatusInternalError, sql.ErrorMessage());
+        }
+
+        // iterate through each config
+        for(auto it = perfdb_entries.begin(); it != perfdb_entries.end(); it++)
+        {
+            auto solver_nm = it->second["solver"];
+            auto config_id = it->second["config"];
+            auto record    = records.find(config_id)->second.find(solver_nm)->second;
+
+            auto slv_id = miopen::solver::Id(solver_nm);
+            if(!slv_id.IsValid())
+            {
+                std::map<std::string, std::string> err;
+                err["perfdb_id"] = it->first;
+                err["config"]    = config_id;
+                err["solver"]    = solver_nm;
+                err_list.push_back(err);
+                ret = false;
+                continue;
+            }
+
+            auto solver = slv_id.GetSolver();
+
+            // check if the params in the record deserialize
+            if(!solver.TestSysDbRecord(record))
+            {
+                std::map<std::string, std::string> err;
+                err["perfdb_id"] = it->first;
+                err["config"]    = config_id;
+                err["solver"]    = solver_nm;
+                err_list.push_back(err);
+                ret = false;
+            }
+        }
+        std::string listing = filestr + "_errors";
+        output[listing]     = err_list;
+    }
+
+    if(ret)
+        output["clear"] = "true";
+
+    return ret;
 }
 
 template <typename Tgpu, typename Tref>
@@ -861,68 +991,47 @@ int ConvFin<Tgpu, Tref>::ProcessStep(const std::string& step_name)
     if(step_name == "copy_buf_from_device")
         return CopyFromDevice();
     if(step_name == "applicability")
+    {
+        PrepConvolution();
         return TestApplicability();
+    }
+    if(step_name == "perf_db_test")
+        return TestPerfDbValid();
     if(step_name == "get_solvers")
         return GetSolverList();
     if(step_name == "miopen_find")
+    {
+        PrepConvolution();
         return MIOpenFind();
+    }
     if(step_name == "miopen_find_compile")
+    {
+        PrepConvolution();
         return MIOpenFindCompile();
+    }
     if(step_name == "miopen_find_eval")
+    {
+        PrepConvolution();
         return MIOpenFindEval();
+    }
     return 0;
 }
 
 template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::GetandSetData()
 {
-    int spatial_dim       = command["spatial_dim"];
-    const auto get_layout = [&](const std::string type) -> std::string {
-        if(command.contains(type))
-        {
-            return command[type];
-        }
-        else
-        {
-            if(spatial_dim == 2)
-                return "NCHW";
-            else if(spatial_dim == 3)
-                return "NCDHW";
-            else
-                throw std::runtime_error("Invalid number of tensor dimensions");
-        }
-    };
-
-    auto in_len          = GetInputTensorLengths();
-    const auto in_layout = get_layout("in_layout");
-    if(in_len.size() != in_layout.size())
-        throw std::runtime_error("Input layout length and tensor dimensions dont agree");
-    std::vector<size_t> in_strides;
-    miopen::tensor_layout_to_strides(
-        in_len, miopen::tensor_layout_get_default(in_layout.size()), in_layout, in_strides);
-    inputTensor = {GetHandle().GetStream(), in_len, in_strides, (is_fwd || is_wrw), is_bwd};
-
-    auto wei_len          = GetWeightTensorLengths();
-    const auto wei_layout = get_layout("wei_layout");
-    if(wei_len.size() != wei_layout.size())
-        throw std::runtime_error("Weight layout length and tensor dimensions dont agree");
-    std::vector<size_t> wei_strides;
-    miopen::tensor_layout_to_strides(
-        wei_len, miopen::tensor_layout_get_default(wei_layout.size()), wei_layout, wei_strides);
-    weightTensor = {GetHandle().GetStream(), wei_len, wei_strides, (is_fwd || is_bwd), is_wrw};
+    auto in_len  = GetInputTensorLengths();
+    auto wei_len = GetWeightTensorLengths();
 
     // auto y_type = GetOutputType();
 
+    inputTensor = {GetHandle().GetStream(), in_len, (is_fwd || is_wrw), is_bwd};
+
+    weightTensor = {GetHandle().GetStream(), wei_len, (is_fwd || is_bwd), is_wrw};
     // conv, input and weight tensor descriptors need to be set before we can know the
     // output lengths
-    auto out_len          = GetOutputTensorLengths();
-    const auto out_layout = get_layout("out_layout");
-    if(out_len.size() != out_layout.size())
-        throw std::runtime_error("Output layout length and tensor dimensions dont agree");
-    std::vector<size_t> out_strides;
-    miopen::tensor_layout_to_strides(
-        out_len, miopen::tensor_layout_get_default(out_layout.size()), out_layout, out_strides);
-    outputTensor = {GetHandle().GetStream(), out_len, out_strides, (is_bwd || is_wrw), is_fwd};
+    auto out_len = GetOutputTensorLengths();
+    outputTensor = {GetHandle().GetStream(), out_len, (is_bwd || is_wrw), is_fwd};
 
     if(IsInputTensorTransform())
     {
@@ -949,9 +1058,9 @@ int ConvFin<Tgpu, Tref>::GetandSetData()
 }
 
 template <typename Tgpu, typename Tref>
-std::vector<size_t> ConvFin<Tgpu, Tref>::GetInputTensorLengths()
+std::vector<int> ConvFin<Tgpu, Tref>::GetInputTensorLengths()
 {
-    std::vector<size_t> in_lens;
+    std::vector<int> in_lens;
 
     int spatial_dim = command["spatial_dim"];
     in_lens.resize(2 + spatial_dim);
@@ -981,9 +1090,9 @@ std::vector<size_t> ConvFin<Tgpu, Tref>::GetInputTensorLengths()
 }
 
 template <typename Tgpu, typename Tref>
-std::vector<size_t> ConvFin<Tgpu, Tref>::GetWeightTensorLengths()
+std::vector<int> ConvFin<Tgpu, Tref>::GetWeightTensorLengths()
 {
-    std::vector<size_t> wei_lens;
+    std::vector<int> wei_lens;
 
     int spatial_dim = command["spatial_dim"];
     wei_lens.resize(2 + spatial_dim);
