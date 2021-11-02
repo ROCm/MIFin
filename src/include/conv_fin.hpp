@@ -82,7 +82,7 @@ class ConvFin : public Fin
 {
     public:
     ConvFin() : Fin() {}
-    ConvFin(json _job) : Fin(), job(_job){}
+    ConvFin(json _job) : Fin(), job(_job) {}
 
     void VerifyDevProps()
     {
@@ -90,7 +90,7 @@ class ConvFin : public Fin
         std::string arch    = job["arch"];
         arch                = arch.substr(0, arch.find(':'));
         const size_t num_cu = job["num_cu"];
-        std:ignore = num_cu;
+        std::ignore         = num_cu;
         if(arch == "gfx900")
         {
             assert(num_cu == 56 || num_cu == 64);
@@ -991,21 +991,29 @@ int ConvFin<Tgpu, Tref>::ProcessStep(const std::string& step_name)
     if(step_name == "copy_buf_from_device")
         return CopyFromDevice();
     if(step_name == "applicability")
+    {
         PrepConvolution();
         return TestApplicability();
+    }
     if(step_name == "perf_db_test")
         return TestPerfDbValid();
     if(step_name == "get_solvers")
         return GetSolverList();
     if(step_name == "miopen_find")
+    {
         PrepConvolution();
         return MIOpenFind();
+    }
     if(step_name == "miopen_find_compile")
+    {
         PrepConvolution();
         return MIOpenFindCompile();
+    }
     if(step_name == "miopen_find_eval")
+    {
         PrepConvolution();
         return MIOpenFindEval();
+    }
     return 0;
 }
 
