@@ -82,21 +82,8 @@ class ConvFin : public Fin
 {
     public:
     ConvFin() : Fin() {}
-    ConvFin(json _job) : Fin(), job(_job)
-    {
-        if(job.contains("pdb_verif") and job["pdb_verif"] == true)
-            return;
-        VerifyDevProps();
-        command         = _job["config"];
-        command["bias"] = 0;
-        // timing is always enabled
-        is_fwd = (_job["direction"].get<int>() == 0 || _job["direction"].get<int>() & 1);
-        is_bwd = (_job["direction"].get<int>() == 0 || _job["direction"].get<int>() & 2);
-        is_wrw = (_job["direction"].get<int>() == 0 || _job["direction"].get<int>() & 4);
-        SetConvDescriptor();
-        // workspace_dev = nullptr; // TODO: replaced with a tensor class
-        // the variable name is implementation dependent, checking size instead
-    }
+    ConvFin(json _job) : Fin(), job(_job){}
+
     void VerifyDevProps()
     {
         std::cerr << "Verifying device properties" << std::endl;
@@ -128,10 +115,25 @@ class ConvFin : public Fin
             throw std::runtime_error("Invalid Arch Name");
     }
 
+    void PrepConvolution()
+    {
+        VerifyDevProps();
+        command         = job["config"];
+        command["bias"] = 0;
+        // timing is always enabled
+        is_fwd = (job["direction"].get<int>() == 0 || job["direction"].get<int>() & 1);
+        is_bwd = (job["direction"].get<int>() == 0 || job["direction"].get<int>() & 2);
+        is_wrw = (job["direction"].get<int>() == 0 || job["direction"].get<int>() & 4);
+        SetConvDescriptor();
+        // workspace_dev = nullptr; // TODO: replaced with a tensor class
+        // the variable name is implementation dependent, checking size instead
+    }
+
     // Getters and setters
     std::vector<int> GetInputTensorLengths();
     std::vector<int> GetWeightTensorLengths();
     std::vector<int> GetBiasTensorLengths();
+    void PrepConvolution();
     int SetConvDescriptor();
     std::vector<size_t> GetOutputTensorLengths() const;
     miopenDataType_t GetOutputType() const
@@ -989,16 +991,20 @@ int ConvFin<Tgpu, Tref>::ProcessStep(const std::string& step_name)
     if(step_name == "copy_buf_from_device")
         return CopyFromDevice();
     if(step_name == "applicability")
+        PrepConvolution();
         return TestApplicability();
     if(step_name == "perf_db_test")
         return TestPerfDbValid();
     if(step_name == "get_solvers")
         return GetSolverList();
     if(step_name == "miopen_find")
+        PrepConvolution();
         return MIOpenFind();
     if(step_name == "miopen_find_compile")
+        PrepConvolution();
         return MIOpenFindCompile();
     if(step_name == "miopen_find_eval")
+        PrepConvolution();
         return MIOpenFindEval();
     return 0;
 }
