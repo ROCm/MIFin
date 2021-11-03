@@ -133,7 +133,6 @@ class ConvFin : public Fin
     std::vector<int> GetInputTensorLengths();
     std::vector<int> GetWeightTensorLengths();
     std::vector<int> GetBiasTensorLengths();
-    void PrepConvolution();
     int SetConvDescriptor();
     std::vector<size_t> GetOutputTensorLengths() const;
     miopenDataType_t GetOutputType() const
