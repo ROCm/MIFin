@@ -12,7 +12,7 @@ RUN curl https://raw.githubusercontent.com/RadeonOpenCompute/ROCm-docker/master/
 
 # Install dependencies required to build hcc
 # Ubuntu csomic contains llvm-7 required to build Tensile
-RUN sh -c "echo deb http://mirrors.kernel.org/ubuntu xenial main universe | tee -a /etc/apt/sources.list"
+RUN sh -c "echo deb http://mirrors.kernel.org/ubuntu ubuntu main universe | tee -a /etc/apt/sources.list"
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --allow-unauthenticated \
     apt-utils \
     build-essential \
