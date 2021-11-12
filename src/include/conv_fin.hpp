@@ -83,8 +83,8 @@ class ConvFin : public Fin
     public:
     ConvFin() : Fin() {}
     ConvFin(json _job) : Fin(), job(_job) {
-	if(job.contains("config"))
-             PrepConvolution();
+        if(job.contains("config"))
+            PrepConvolution();
     }
 
     void VerifyDevProps()
