@@ -257,10 +257,8 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
         auto process_solver = [&]() -> bool {
             std::cerr << "Processing Solver: " << solver_id.ToString() << std::endl;
             res_item["solver_id"] = solver_id.ToString();
-            std::ostringstream solver_name;
-            solver_name << res_item["solver_id"];
-            if(solver_name.str() == "ConvBiasActivAsm1x1U" ||
-               solver_name.str().find("Fused") != std::string::npos)
+            if(solver_id.ToString() == "ConvBiasActivAsm1x1U" ||
+               solver_id.ToString().find("Fused") != std::string::npos)
             {
                 std::cerr << "Skipping fused solvers" << std::endl;
                 return false;
