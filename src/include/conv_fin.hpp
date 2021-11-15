@@ -82,7 +82,11 @@ class ConvFin : public Fin
 {
     public:
     ConvFin() : Fin() {}
-    ConvFin(json _job) : Fin(), job(_job) {}
+    ConvFin(json _job) : Fin(), job(_job)
+    {
+        if(job.contains("config"))
+            PrepConvolution();
+    }
 
     void VerifyDevProps()
     {
@@ -133,7 +137,6 @@ class ConvFin : public Fin
     std::vector<int> GetInputTensorLengths();
     std::vector<int> GetWeightTensorLengths();
     std::vector<int> GetBiasTensorLengths();
-    void PrepConvolution();
     int SetConvDescriptor();
     std::vector<size_t> GetOutputTensorLengths() const;
     miopenDataType_t GetOutputType() const
@@ -992,7 +995,6 @@ int ConvFin<Tgpu, Tref>::ProcessStep(const std::string& step_name)
         return CopyFromDevice();
     if(step_name == "applicability")
     {
-        PrepConvolution();
         return TestApplicability();
     }
     if(step_name == "perf_db_test")
@@ -1001,17 +1003,14 @@ int ConvFin<Tgpu, Tref>::ProcessStep(const std::string& step_name)
         return GetSolverList();
     if(step_name == "miopen_find")
     {
-        PrepConvolution();
         return MIOpenFind();
     }
     if(step_name == "miopen_find_compile")
     {
-        PrepConvolution();
         return MIOpenFindCompile();
     }
     if(step_name == "miopen_find_eval")
     {
-        PrepConvolution();
         return MIOpenFindEval();
     }
     return 0;
