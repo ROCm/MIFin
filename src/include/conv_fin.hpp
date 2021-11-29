@@ -158,6 +158,7 @@ class ConvFin : public Fin
     int TestPerfDbValid();
     int GetandSetData();
     int GetSolverList();
+    int MIOpenPerfCompile();
     int MIOpenFind();
     int MIOpenFindCompile();
     int MIOpenFindEval();
@@ -192,6 +193,174 @@ miopen::conv::Direction ConvFin<Tgpu, Tref>::GetDirection() const
                   : (is_bwd ? miopen::conv::Direction::BackwardData
                             : miopen::conv::Direction::BackwardWeights);
 }
+
+
+int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
+{
+    std::cerr << "MIOpenFindCompile" << std::endl;
+    std::cerr << "Processing command: " << command << std::endl;
+#if MIOPEN_MODE_NOGPU
+    GetandSetData();
+#else
+    throw std::runtime_error(
+        "Unable to perform MIOpenFindCompile MIOpen was not compiled using HIPNOGPU backend");
+#endif
+    const auto conv_dir = GetDirection();
+    const miopen::ProblemDescription problem(
+        inputTensor.desc, weightTensor.desc, outputTensor.desc, convDesc, conv_dir);
+    GetHandle().EnableProfiling(true);
+    auto ctx    = miopen::ConvolutionContext{problem};
+    auto handle = miopen::Handle{};
+#if MIOPEN_MODE_NOGPU
+    InitNoGpuHandle(handle);
+#else
+    throw std::runtime_error("MIOpen needs to be compiled with the NOGPU backend "
+                             "for MIOpenFindCompile");
+#endif
+    ctx.SetStream(&handle);
+    ctx.DetectRocm();
+    ctx.SetupFloats();
+
+    const auto network_config   = ctx.BuildConfKey();
+    const bool is_winograd_only = convDesc.IsWinograd3x3SupportedAndFast(ctx);
+    output["is_winograd_only"]  = is_winograd_only;
+    output["network_config"]    = network_config;
+    std::ostringstream ss;
+    problem.Serialize(ss);
+    output["db_key"] = ss.str();
+
+    auto db = GetDb(ctx);
+    json find_result;
+    const auto& tgt_props  = handle.GetTargetProperties();
+    const std::string arch = tgt_props.Name();
+    const size_t num_cu    = handle.GetMaxComputeUnits();
+    std::cerr << "Job Arch: " << job["arch"] << ": Handle Arch: " << arch << std::endl;
+    std::cerr << "Job Num CU: " << job["num_cu"] << ": Handle Num Cu: " << num_cu << std::endl;
+    // since applicability has been run, the solver list should come from Tuna
+    for(const auto& solver_id :
+        miopen::solver::GetSolversByPrimitive(miopen::solver::Primitive::Convolution))
+    {
+        json res_item;
+        // remove the user db files
+        boost::filesystem::remove_all(miopen::GetCachePath(false));
+        auto process_solver = [&]() -> bool {
+            std::cerr << "Processing Solver: " << solver_id.ToString() << std::endl;
+            res_item["solver_id"] = solver_id.ToString();
+            if(solver_id.ToString() == "ConvBiasActivAsm1x1U" ||
+               solver_id.ToString().find("Fused") != std::string::npos)
+            {
+                std::cerr << "Skipping fused solvers" << std::endl;
+                return false;
+            }
+            const auto& s         = solver_id.GetSolver();
+            const auto algo       = solver_id.GetAlgo(conv_dir);
+            res_item["algorithm"] = algo;
+            if(s.IsEmpty())
+            {
+                res_item["reason"] = "Empty Solver";
+                std::cerr << "Skipping invalid solver: " << solver_id.ToString() << std::endl;
+                return false;
+            }
+            if(!s.IsApplicable(ctx))
+            {
+                res_item["reason"] = "Not Applicable";
+                std::cerr << "Skipping inapplicable solver: " << solver_id.ToString() << std::endl;
+                return false;
+            }
+
+            static_assert(
+                !(is_detected<RunAndMeasure_t, Solver, ConstData_t, Data_t>{} ||
+                  is_detected<RunAndMeasure_t, Solver, Data_t, ConstData_t>{}),
+                "RunAndMeasure is obsolete. Solvers should implement auto-tune evaluation in invoker");
+
+            auto context                  = ctx;
+            context.is_for_generic_search = true;
+
+            using PerformanceConfig = decltype(s.GetPerformanceConfig(context));
+
+            const ComputedContainer<PerformanceConfig, Context> main(context);
+            const int main_size = std::distance(main.begin(), main.end());
+            const ComputedContainer<PerformanceConfig, Context> spare(context, true);
+            const int spare_size = std::distance(spare.begin(), spare.end());
+            const bool useSpare  = (main_size == 0);
+
+            const ComputedContainer<PerformanceConfig, Context> all_configs = useSpare ? spare : main;
+            const int n_runs_total = useSpare ? spare_size : main_size;
+            MIOPEN_LOG_W(SolverDbId(s) << ": Compiling all solutions among " << n_runs_total
+                                       << (useSpare ? " (spare)" : "") << "...");
+
+            //HeartBeat<PerformanceConfig> heartbeat;
+            //heartbeat.Start();
+
+            // PrecompileKernels call saves to binary_cache,
+            // this needs to be escaped if KERN_CACHE is not on.
+            std::vector<KernelInfo> kernels;
+            //std::vector<ConvSolution> solutions;
+            for(const auto& current_config : all_configs)
+            {
+                ConvSolution current_solution = s.GetSolution(context, current_config, true);
+                //solutions.push_back(current_solution);
+                for(auto&& kernel : current_solution.construction_params)
+                {
+                    if(handle.HasProgram(kernel.kernel_file, kernel.comp_options))
+                        continue;
+                    kernels.push_back(kernel);
+                }
+            }
+            std::ignore = PrecompileKernels(&handle, kernels);
+
+            json kernel_list = json::array();
+            for(const auto& k : kernels)
+            {
+                json kernel;
+                auto comp_opts = k.comp_options;
+                auto p           = handle.LoadProgram(k.kernel_file, comp_opts, false, "");
+                const auto hsaco = p.IsCodeObjectInMemory()
+                                       ? p.GetCodeObjectBlob()
+                                       : miopen::LoadFile(p.GetCodeObjectPathname().string());
+                if(hsaco.empty())
+                {
+                    std::cerr << "Got empty code object" << std::endl;
+                    throw std::runtime_error("Got empty code object");
+                }
+                // Compress the blob
+                auto md5_sum             = miopen::md5(hsaco);
+                auto size                = hsaco.size();
+                bool success             = false;
+                auto compressed_hsaco    = miopen::compress(hsaco, &success);
+                const auto encoded_hsaco = base64_encode(compressed_hsaco);
+                kernel["kernel_file"]    = k.kernel_file;
+                kernel["comp_options"]   = k.comp_options;
+                if(success)
+                {
+                    kernel["uncompressed_size"] = size;
+                    kernel["md5_sum"]           = md5_sum;
+                    kernel["blob"]              = encoded_hsaco;
+                }
+                else
+                {
+                    kernel["md5_sum"]           = "Failed to compress kernel";
+                    kernel["uncompressed_size"] = 0;
+                    kernel["blob"]              = "";
+                }
+                kernel_list.push_back(kernel);
+                std::cerr << "Successfully added new kernel" << std::endl;
+            }
+            res_item["kernel_objects"] = kernel_list;
+            return true;
+        }
+
+        auto res = process_solver();
+        if(res)
+        {
+            res_item["perf_compiled"] = res;
+            find_result.push_back(res_item);
+        }
+    }
+    output["miopen_perf_compile_result"] = find_result;
+    return 1;
+}
+
 
 template <typename Tgpu, typename Tref>
 void ConvFin<Tgpu, Tref>::InitNoGpuHandle(miopen::Handle& handle)
@@ -994,25 +1163,19 @@ int ConvFin<Tgpu, Tref>::ProcessStep(const std::string& step_name)
     if(step_name == "copy_buf_from_device")
         return CopyFromDevice();
     if(step_name == "applicability")
-    {
         return TestApplicability();
-    }
     if(step_name == "perf_db_test")
         return TestPerfDbValid();
     if(step_name == "get_solvers")
         return GetSolverList();
+    if(step_name == "miopen_perf_compile")
+        return MIOpenPerfCompile();
     if(step_name == "miopen_find")
-    {
         return MIOpenFind();
-    }
     if(step_name == "miopen_find_compile")
-    {
         return MIOpenFindCompile();
-    }
     if(step_name == "miopen_find_eval")
-    {
         return MIOpenFindEval();
-    }
     return 0;
 }
 
