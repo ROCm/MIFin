@@ -195,6 +195,7 @@ miopen::conv::Direction ConvFin<Tgpu, Tref>::GetDirection() const
 }
 
 
+template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
 {
     std::cerr << "MIOpenFindCompile" << std::endl;
@@ -268,11 +269,6 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
                 return false;
             }
 
-            static_assert(
-                !(is_detected<RunAndMeasure_t, Solver, ConstData_t, Data_t>{} ||
-                  is_detected<RunAndMeasure_t, Solver, Data_t, ConstData_t>{}),
-                "RunAndMeasure is obsolete. Solvers should implement auto-tune evaluation in invoker");
-
             auto context                  = ctx;
             context.is_for_generic_search = true;
 
@@ -294,11 +290,11 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
 
             // PrecompileKernels call saves to binary_cache,
             // this needs to be escaped if KERN_CACHE is not on.
-            std::vector<KernelInfo> kernels;
+            std::vector<miopen::solver::KernelInfo> kernels;
             //std::vector<ConvSolution> solutions;
             for(const auto& current_config : all_configs)
             {
-                ConvSolution current_solution = s.GetSolution(context, current_config, true);
+		miopen::solver::ConvSolution current_solution = s.GetSolution(context, current_config, true);
                 //solutions.push_back(current_solution);
                 for(auto&& kernel : current_solution.construction_params)
                 {
@@ -307,7 +303,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
                     kernels.push_back(kernel);
                 }
             }
-            std::ignore = PrecompileKernels(&handle, kernels);
+            std::ignore = miopen::solver::PrecompileKernels(handle, kernels);
 
             json kernel_list = json::array();
             for(const auto& k : kernels)
@@ -348,7 +344,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
             }
             res_item["kernel_objects"] = kernel_list;
             return true;
-        }
+        };
 
         auto res = process_solver();
         if(res)
