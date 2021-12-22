@@ -49,6 +49,8 @@ using json = nlohmann::json;
 
 [[gnu::noreturn]] void Usage()
 {
+
+    std::cout<< "In main.cpp"<<std::endl;
     printf("Usage: ./fin *input_json *output_json\n\n");
     printf("Supported arguments:\n");
     printf("-i *input_json\n");
@@ -61,6 +63,8 @@ int main(int argc, char* argv[], char* envp[])
 {
     std::vector<std::string> args(argv, argv + argc);
     std::map<char, std::string> MapInputs = {};
+
+    std::cout<< "In main.cpp"<<std::endl;
 
     for(auto& arg : args)
     {
@@ -82,9 +86,13 @@ int main(int argc, char* argv[], char* envp[])
         {
             if(!boost::filesystem::exists(args[i + 1]))
             {
+            auto currentPath = boost::filesystem::current_path(); 
+
+                //std::cout << " file system,path"<<args[i+1] << currentPath  << std::endl;
                 std::cerr << "File: " << args[i + 1] << " does not exist" << std::endl;
                 exit(-1);
             }
+            std::cout << " file system" << args[i+1] << std::endl;
             MapInputs[args[i].back()] = args[i + 1];
         }
         if(args[i] == "-o")
@@ -128,6 +136,9 @@ int main(int argc, char* argv[], char* envp[])
     {
         auto command                = it;
         std::unique_ptr<fin::Fin> f = nullptr;
+
+        std::cout << "command= " << command  << std::endl;
+
         // TODO : Move this to a factory function
         if(command.contains("config"))
         {
@@ -160,8 +171,11 @@ int main(int argc, char* argv[], char* envp[])
 
         for(auto& step_it : command["steps"])
         {
+            //std::cout << "in command - steps" << std::endl; 
             std::string step = step_it.get<std::string>();
             f->ProcessStep(step);
+
+            //std::cout << "in command - End  steps =" << step <<  std::endl; 
         }
         f->output["config_tuna_id"] = command["config_tuna_id"];
         f->output["arch"]           = command["arch"];

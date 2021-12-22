@@ -1,6 +1,6 @@
 [
     {
-        "arch": "gfx906",
+        "arch": "gfx908",
         "config": {
             "activMode": -1,
             "batchsize": 32,
@@ -39,10 +39,9 @@
         "config_tuna_id": null,
         "direction": 2,
         "label": "resnet_tuning",
-        "num_cu": 60,
+        "num_cu": 120,
         "steps": [
-            "alloc_buf",
-            "miopen_find_eval"
+            "test_pre_compiled_kernel_cache"
           ]
    }
 ]
