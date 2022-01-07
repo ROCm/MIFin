@@ -230,16 +230,22 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
     problem.Serialize(ss);
     output["db_key"] = ss.str();
 
-    auto db = GetDb(ctx);
+    //auto db = GetDb(ctx);
     json find_result;
     const auto& tgt_props  = handle.GetTargetProperties();
     const std::string arch = tgt_props.Name();
     const size_t num_cu    = handle.GetMaxComputeUnits();
     std::cerr << "Job Arch: " << job["arch"] << ": Handle Arch: " << arch << std::endl;
     std::cerr << "Job Num CU: " << job["num_cu"] << ": Handle Num Cu: " << num_cu << std::endl;
+    std::vector<miopen::solver::Id> solver_list;
+    if(job.contains("solvers"))
+        for(std::string solver_str : job["solvers"])
+	    solver_list.push_back(miopen::solver::Id(solver_str));
+    else
+        solver_list = miopen::solver::GetSolversByPrimitive(miopen::solver::Primitive::Convolution);
+
     // since applicability has been run, the solver list should come from Tuna
-    for(const auto& solver_id :
-        miopen::solver::GetSolversByPrimitive(miopen::solver::Primitive::Convolution))
+    for(const auto& solver_id : solver_list)
     {
         json res_item;
         // remove the user db files
@@ -268,34 +274,20 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
                 std::cerr << "Skipping inapplicable solver: " << solver_id.ToString() << std::endl;
                 return false;
             }
+            if(!s.IsTunable())
+            {
+                res_item["reason"] = "Not Tunable";
+                std::cerr << "Skipping non-tunable solver: " << solver_id.ToString() << std::endl;
+                return false;
+            }
 
-            auto context                  = ctx;
-            context.is_for_generic_search = true;
-
-            using PerformanceConfig = decltype(s.GetPerformanceConfig(context));
-
-            const ComputedContainer<PerformanceConfig, Context> main(context);
-            const int main_size = std::distance(main.begin(), main.end());
-            const ComputedContainer<PerformanceConfig, Context> spare(context, true);
-            const int spare_size = std::distance(spare.begin(), spare.end());
-            const bool useSpare  = (main_size == 0);
-
-            const ComputedContainer<PerformanceConfig, Context> all_configs = useSpare ? spare : main;
-            const int n_runs_total = useSpare ? spare_size : main_size;
-            MIOPEN_LOG_W(SolverDbId(s) << ": Compiling all solutions among " << n_runs_total
-                                       << (useSpare ? " (spare)" : "") << "...");
-
-            //HeartBeat<PerformanceConfig> heartbeat;
-            //heartbeat.Start();
+            auto all_solutions = s.GetSolutions(ctx);
 
             // PrecompileKernels call saves to binary_cache,
             // this needs to be escaped if KERN_CACHE is not on.
             std::vector<miopen::solver::KernelInfo> kernels;
-            //std::vector<ConvSolution> solutions;
-            for(const auto& current_config : all_configs)
+            for(const auto& current_solution : all_solutions)
             {
-		miopen::solver::ConvSolution current_solution = s.GetSolution(context, current_config, true);
-                //solutions.push_back(current_solution);
                 for(auto&& kernel : current_solution.construction_params)
                 {
                     if(handle.HasProgram(kernel.kernel_file, kernel.comp_options))
