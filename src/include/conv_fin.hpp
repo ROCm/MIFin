@@ -198,13 +198,13 @@ miopen::conv::Direction ConvFin<Tgpu, Tref>::GetDirection() const
 template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
 {
-    std::cerr << "MIOpenFindCompile" << std::endl;
+    std::cerr << "MIOpenPerfCompile" << std::endl;
     std::cerr << "Processing command: " << command << std::endl;
 #if MIOPEN_MODE_NOGPU
     GetandSetData();
 #else
     throw std::runtime_error(
-        "Unable to perform MIOpenFindCompile MIOpen was not compiled using HIPNOGPU backend");
+        "Unable to perform MIOpenPerfCompile MIOpen was not compiled using HIPNOGPU backend");
 #endif
     const auto conv_dir = GetDirection();
     const miopen::ProblemDescription problem(
@@ -216,7 +216,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
     InitNoGpuHandle(handle);
 #else
     throw std::runtime_error("MIOpen needs to be compiled with the NOGPU backend "
-                             "for MIOpenFindCompile");
+                             "for MIOpenPerfCompile");
 #endif
     ctx.SetStream(&handle);
     ctx.DetectRocm();
@@ -230,8 +230,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
     problem.Serialize(ss);
     output["db_key"] = ss.str();
 
-    //auto db = GetDb(ctx);
-    json find_result;
+    json perf_result;
     const auto& tgt_props  = handle.GetTargetProperties();
     const std::string arch = tgt_props.Name();
     const size_t num_cu    = handle.GetMaxComputeUnits();
@@ -342,10 +341,10 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
         if(res)
         {
             res_item["perf_compiled"] = res;
-            find_result.push_back(res_item);
+            perf_result.push_back(res_item);
         }
     }
-    output["miopen_perf_compile_result"] = find_result;
+    output["miopen_perf_compile_result"] = perf_result;
     return 1;
 }
 
