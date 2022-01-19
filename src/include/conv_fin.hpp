@@ -196,6 +196,21 @@ miopen::conv::Direction ConvFin<Tgpu, Tref>::GetDirection() const
 
 
 template <typename Tgpu, typename Tref>
+void ConvFin<Tgpu, Tref>::InitNoGpuHandle(miopen::Handle& handle)
+{
+#if MIOPEN_MODE_NOGPU
+    handle.impl->device_name        = job["arch"];
+    handle.impl->num_cu             = job["num_cu"];
+    handle.impl->max_mem_alloc_size = 32UL * 1024 * 1024 * 1024; // 32 GB
+    handle.impl->global_mem_size    = 32UL * 1024 * 1024 * 1024;
+    handle.impl->target_properties.Init(&handle);
+#else
+    std::ignore = handle;
+#endif
+}
+
+
+template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
 {
     std::cerr << "MIOpenPerfCompile" << std::endl;
@@ -350,19 +365,6 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
 
 
 template <typename Tgpu, typename Tref>
-void ConvFin<Tgpu, Tref>::InitNoGpuHandle(miopen::Handle& handle)
-{
-#if MIOPEN_MODE_NOGPU
-    handle.impl->device_name        = job["arch"];
-    handle.impl->num_cu             = job["num_cu"];
-    handle.impl->max_mem_alloc_size = 32UL * 1024 * 1024 * 1024; // 32 GB
-    handle.impl->global_mem_size    = 32UL * 1024 * 1024 * 1024;
-    handle.impl->target_properties.Init(&handle);
-#else
-    std::ignore = handle;
-#endif
-}
-template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
 {
     std::cerr << "MIOpenFindCompile" << std::endl;
@@ -503,6 +505,234 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
     output["miopen_find_compile_result"] = find_result;
     return 1;
 }
+
+
+template <typename Tgpu, typename Tref>
+int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
+{
+    std::cerr << "MIOpenPerfEval" << std::endl;
+    std::cerr << "Processing command: " << command << std::endl;
+// Before this step is executed, the following steps should have been evaluated
+// alloc_buf only if only timing is required
+// alloc_buf, fill_buf and copy_buf_to_device if numerical accuracy would be
+// checked ??
+#if MIOPEN_MODE_NOGPU
+    throw std::runtime_error("Unable to run MIOpenPerfEval, Invalid MIOpen backend: HIPNOGPU");
+#endif
+    const auto conv_dir = GetDirection();
+    // The first arg to the DataInvokeParams changes based on direction
+    const miopen::ProblemDescription problem(
+        inputTensor.desc, weightTensor.desc, outputTensor.desc, convDesc, conv_dir);
+    GetHandle().EnableProfiling(true);
+    auto ctx = miopen::ConvolutionContext{problem};
+    auto& h  = GetHandle();
+    ctx.SetStream(&(h));
+    ctx.DetectRocm();
+    ctx.SetupFloats();
+
+    const auto network_config   = ctx.BuildConfKey();
+    const bool is_winograd_only = convDesc.IsWinograd3x3SupportedAndFast(ctx);
+    output["is_winograd_only"]  = is_winograd_only;
+    output["network_config"]    = network_config;
+    std::ostringstream ss;
+    problem.Serialize(ss);
+    output["db_key"] = ss.str();
+
+    auto db = GetDb(ctx);
+    json find_result;
+    const auto& tgt_props  = h.GetTargetProperties();
+    const std::string arch = tgt_props.Name();
+    const size_t num_cu    = h.GetMaxComputeUnits();
+    std::cerr << "Job Arch: " << job["arch"] << ": Handle Arch: " << arch << std::endl;
+    std::cerr << "Job Num CU: " << job["num_cu"] << ": Handle Num Cu: " << num_cu << std::endl;
+    for(const auto& kinder :
+        job["miopen_perf_compile_result"]) // The "miopen_perf_compile_result" list generated
+                                           // by miopen_perf_compile operation
+    {
+        // Somehow the direction changes mid loop !
+        json res_item;
+        boost::system::error_code ec;
+        boost::filesystem::remove_all(miopen::GetCachePath(false), ec);
+        // boost::filesystem::remove_all(miopen::GetCachePath(true), ec);
+        if(ec)
+        {
+            std::cerr << "Error while removing MIOpen cache: " << ec.message();
+        }
+        auto process_solver = [&]() -> bool {
+            const std::string solver_name = kinder["solver_id"];
+            std::cerr << "Processing solver: " << solver_name << std::endl;
+            const auto solver_id    = miopen::solver::Id{solver_name};
+            const auto& s           = solver_id.GetSolver();
+            res_item["solver_name"] = solver_name;
+            const auto algo         = solver_id.GetAlgo(conv_dir);
+            res_item["algorithm"]   = algo;
+            float time = 0.0f;
+
+            if(s.IsEmpty())
+            {
+                std::cerr << "Skipping invalid solver: " << solver_id.ToString() << std::endl;
+                return false;
+            }
+            if(!s.IsApplicable(ctx))
+            {
+                std::cerr << "Solver inapplicable: " << solver_name << std::endl;
+                throw std::runtime_error(
+                    "InApplicable solver was sent to fin, check Tuna for errors");
+                return false;
+            }
+            if(!s.IsTunable())
+            {
+                std::cerr << "Skipping non-tunable solver: " << solver_id.ToString() << std::endl;
+                return false;
+            }
+
+            std::cerr << solver_name << " is applicable" << std::endl;
+            miopen::solver::ConvSolution solution;
+            solution   = s.FindSolution(ctx, db, {}); // auto tune is not expected here
+            res_item["workspace"] = solution.workspce_sz;
+            // Get the binary
+            std::cerr << "loading binaries from fin input" << std::endl;
+            for(const auto& kernel_obj : kinder["kernel_objects"])
+            {
+                const auto size          = kernel_obj["uncompressed_size"];
+                const auto md5_sum       = kernel_obj["md5_sum"];
+                const auto encoded_hsaco = kernel_obj["blob"];
+                const auto decoded_hsaco = base64_decode(encoded_hsaco);
+                const auto hsaco         = miopen::decompress(decoded_hsaco, size);
+                std::string comp_opts    = kernel_obj["comp_options"];
+                std::string kernel_file  = kernel_obj["kernel_file"];
+                if(miopen::md5(hsaco) == md5_sum)
+                {
+                    auto p = miopen::Program{kernel_file, hsaco};
+                    h.AddProgram(p, kernel_file, comp_opts);
+                }
+                else
+                {
+                    std::cerr << "Corrupt Binary Object" << std::endl;
+                    throw std::runtime_error("Corrupt binary object");
+                    return false;
+                }
+            }
+
+            for(const auto& kern : solution.construction_params)
+            {
+                if(!h.HasProgram(kern.kernel_file, kern.comp_options))
+                {
+                    std::cerr << "Binary object check failed, either tuning params have changed or "
+                                 "fin is unable to write binary to program cache"
+                              << std::endl;
+                }
+            }
+            std::cerr << "Checking for workspace" << std::endl;
+            if(solution.workspce_sz > workspace.desc.GetNumBytes())
+            {
+                std::cerr << "Allocating " << solution.workspce_sz << " bytes for workspace"
+                          << std::endl;
+                workspace = tensor<Tgpu, Tref>{
+                    q,
+                    std::vector<size_t>{static_cast<size_t>(solution.workspce_sz / sizeof(Tgpu))},
+                    false,
+                    false};
+                workspace.AllocateBuffers();
+            }
+            if(!solution.invoker_factory)
+            {
+                std::cerr << "Invoker not implemeted" << std::endl;
+                res_item["reason"] = "Invoker not implemented";
+                return false;
+            }
+            try
+            {
+                using PerformanceConfig = decltype(s.GetPerformanceConfig(ctx));
+                PerformanceConfig c;
+
+                // This is required because DataInvokeParams switches tensor order due to
+                // direction and it does not have a
+                // copy constructor or a default constructor
+                if(conv_dir == miopen::conv::Direction::Forward)
+                {
+                    const auto invoke_ctx =
+                        miopen::conv::DataInvokeParams{{inputTensor.desc,
+                                                        inputTensor.gpuData.buf.get(),
+                                                        weightTensor.desc,
+                                                        weightTensor.gpuData.buf.get(),
+                                                        outputTensor.desc,
+                                                        outputTensor.gpuData.buf.get()},
+                                                       workspace.gpuData.buf.get(),
+                                                       workspace.desc.GetNumBytes(),
+                                                       convDesc.attribute.gfx90aFp16alt.GetFwd()};
+                    c = s.Search(ctx, invoke_ctx);
+                }
+                else if(conv_dir == miopen::conv::Direction::BackwardData)
+                {
+                    const auto invoke_ctx =
+                        miopen::conv::DataInvokeParams{{outputTensor.desc,
+                                                        outputTensor.gpuData.buf.get(),
+                                                        weightTensor.desc,
+                                                        weightTensor.gpuData.buf.get(),
+                                                        inputTensor.desc,
+                                                        inputTensor.gpuData.buf.get()},
+                                                       workspace.gpuData.buf.get(),
+                                                       workspace.desc.GetNumBytes(),
+                                                       convDesc.attribute.gfx90aFp16alt.GetBwd()};
+                    c = s.Search(ctx, invoke_ctx);
+                }
+                else if(conv_dir == miopen::conv::Direction::BackwardWeights)
+                {
+                    const auto invoke_ctx =
+                        miopen::conv::WrWInvokeParams{{outputTensor.desc,
+                                                       outputTensor.gpuData.buf.get(),
+                                                       inputTensor.desc,
+                                                       inputTensor.gpuData.buf.get(),
+                                                       weightTensor.desc,
+                                                       weightTensor.gpuData.buf.get()},
+                                                      workspace.gpuData.buf.get(),
+                                                      workspace.desc.GetNumBytes(),
+                                                      convDesc.attribute.gfx90aFp16alt.GetWrW()};
+                    c = s.Search(ctx, invoke_ctx);
+                }
+                else
+                {
+                    throw std::runtime_error("Invalid Direction");
+                }
+
+                //db.Update(ctx, SolverDbId(s), c);
+                solution = s.GetSolution(ctx, c, true);
+                //const std::string& params = miopen::Serialize(c); 
+                c.Serialize(ss);
+                res_item["params"] = ss.str();
+                res_item["layout"]
+                res_item["data_type"]
+                res_item["direction"] = conv_dir
+                res_item["bias"]
+
+                std::cerr << "Preparing invoker" << std::endl;
+                const auto invoker =
+                    h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
+                std::cerr << "Finished preparing invoker" << std::endl;
+
+                invoker(h, invoke_ctx);
+                time = h.GetKernelTime();
+            }
+            catch(const std::exception& e)
+            {
+                res_item["reason"] = std::string("Invoker exeception: ") + e.what();
+                return false;
+            }
+            res_item["time"]   = time;
+            res_item["reason"] = "Success";
+
+            return true;
+        };
+
+        auto res              = process_solver();
+        res_item["evaluated"] = res;
+        find_result.push_back(res_item);
+    }
+    output["miopen_perf_eval_result"] = find_result;
+    return 1;
+}
+
 
 template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::MIOpenFindEval()
@@ -706,6 +936,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
     output["miopen_find_eval_result"] = find_result;
     return 1;
 }
+
 
 template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::MIOpenFind()
