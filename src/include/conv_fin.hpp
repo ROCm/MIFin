@@ -248,9 +248,9 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
     const size_t num_cu    = handle.GetMaxComputeUnits();
     std::cerr << "Job Arch: " << job["arch"] << ": Handle Arch: " << arch << std::endl;
     std::cerr << "Job Num CU: " << job["num_cu"] << ": Handle Num Cu: " << num_cu << std::endl;
-    bool only_dynamic = false;
-    if(job.contains("only_dynamic"))
-        only_dynamic = job["only_dynamic"];
+    bool dynamic_only = false;
+    if(job.contains("dynamic_only"))
+        dynamic_only = job["dynamic_only"];
     // since applicability has been run, the solver list should come from Tuna
     for(const auto& solver_id :
         miopen::solver::GetSolversByPrimitive(miopen::solver::Primitive::Convolution))
@@ -282,7 +282,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
                 std::cerr << "Skipping inapplicable solver: " << solver_id.ToString() << std::endl;
                 return false;
             }
-            if(only_dynamic && !s.IsDynamic())
+            if(dynamic_only && !s.IsDynamic())
             {
                 res_item["reason"] = "Not Dynamic";
                 std::cerr << "Skipping static solver: " << solver_id.ToString() << std::endl;
@@ -395,9 +395,9 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
     const size_t num_cu    = h.GetMaxComputeUnits();
     std::cerr << "Job Arch: " << job["arch"] << ": Handle Arch: " << arch << std::endl;
     std::cerr << "Job Num CU: " << job["num_cu"] << ": Handle Num Cu: " << num_cu << std::endl;
-    bool only_dynamic = false;
-    if(job.contains("only_dynamic"))
-        only_dynamic = job["only_dynamic"];
+    bool dynamic_only = false;
+    if(job.contains("dynamic_only"))
+        dynamic_only = job["dynamic_only"];
     for(const auto& kinder :
         job["miopen_find_compile_result"]) // The "miopen_find_compile_result" list generated
                                            // by miopen_find_compile operation
@@ -431,7 +431,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
                     "InApplicable solver was sent to fin, check Tuna for errors");
                 return false;
             }
-            if(only_dynamic && !s.IsDynamic())
+            if(dynamic_only && !s.IsDynamic())
             {
                 res_item["reason"] = "Not Dynamic";
                 std::cerr << "Skipping static solver: " << solver_id.ToString() << std::endl;
