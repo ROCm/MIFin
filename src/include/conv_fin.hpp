@@ -161,6 +161,7 @@ class ConvFin : public Fin
     int MIOpenPerfCompile();
     int MIOpenFind();
     int MIOpenFindCompile();
+    int MIOpenPerfEval();
     int MIOpenFindEval();
 
     // Utility functions
@@ -701,10 +702,10 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                 //const std::string& params = miopen::Serialize(c); 
                 c.Serialize(ss);
                 res_item["params"] = ss.str();
-                res_item["layout"]
-                res_item["data_type"]
-                res_item["direction"] = conv_dir
-                res_item["bias"]
+                res_item["layout"] = ctx.in_layout;
+                res_item["data_type"] = ctx.in_data_type;
+                res_item["direction"] = conv_dir;
+                res_item["bias"] = ctx.bias;
 
                 std::cerr << "Preparing invoker" << std::endl;
                 const auto invoker =
@@ -1392,6 +1393,8 @@ int ConvFin<Tgpu, Tref>::ProcessStep(const std::string& step_name)
         return MIOpenFind();
     if(step_name == "miopen_find_compile")
         return MIOpenFindCompile();
+    if(step_name == "miopen_perf_eval")
+        return MIOpenPerfEval();
     if(step_name == "miopen_find_eval")
         return MIOpenFindEval();
     return 0;
