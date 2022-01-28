@@ -1,6 +1,6 @@
 [
     {
-        "arch": "gfx908",
+        "arch":"gfx908:sram-ecc+:xnack-" ,
         "config": {
             "activMode": -1,
             "batchsize": 32,
@@ -41,7 +41,7 @@
         "label": "resnet_tuning",
         "num_cu": 120,
         "steps": [
-            "test_pre_compiled_kernel_cache"
+            "chk_pre_compiled_kernels"
           ]
    }
 ]

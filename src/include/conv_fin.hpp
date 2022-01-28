@@ -50,9 +50,14 @@
 #include <miopen/perf_field.hpp>
 #include <miopen/solver_id.hpp>
 
+#include <miopen/mlo_internal.hpp>
+#include <miopen/target_properties.hpp>
+#include <miopen/sqlite_db.hpp>
+
 #if MIOPEN_MODE_NOGPU
 #include <miopen/kernel_cache.hpp>
 #include <miopen/nogpu/handle_impl.hpp>
+#include <miopen/solver.hpp>
 #endif
 
 #include <boost/range/adaptor/sliced.hpp>
@@ -70,6 +75,7 @@
 #include <sstream>
 #include <type_traits>
 #include <vector>
+
 
 namespace fin {
 
@@ -164,14 +170,12 @@ class ConvFin : public Fin
     int MIOpenFind();
     int MIOpenFindCompile();
     int MIOpenFindEval();
-    int TestPreCompiledKernelCache();
+    //function used to Search the Precompiled Kernels
+    int SearchPreCompiledKernels();
 
     // Utility functions
     bool IsInputTensorTransform() const;
     void InitNoGpuHandle(miopen::Handle& handle);
-    //This function, constructs a solution for a solver & 
-    // checks current kernel config in precompiled kernel list
-    bool CheckKernelCacheDB();
     json command;
     json job;
 
@@ -923,275 +927,173 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
     return ret;
 }
 
-
 template <typename Tgpu, typename Tref>
-bool ConvFin<Tgpu, Tref>:: CheckKernelCacheDB()
+int ConvFin<Tgpu, Tref>::SearchPreCompiledKernels()
 {
-
-    std::cerr << "CheckKernelCacheDB" << std::endl;
-    std::cerr << "Processing command: " << command << std::endl;
-// Before this step is executed, the following steps should have been evaluated
-// alloc_buf only if only timing is required
-// alloc_buf, fill_buf and copy_buf_to_device if numerical accuracy would be
-// checked ??
-//#if MIOPEN_MODE_NOGPU
-  //  throw std::runtime_error("Unable to run MIOpenFindEval, Invalid MIOpen backend: HIPNOGPU");
-//#endif
-
-    const auto conv_dir = GetDirection();
-    // The first arg to the DataInvokeParams changes based on direction
-    const miopen::ProblemDescription problem(
-        inputTensor.desc, weightTensor.desc, outputTensor.desc, convDesc, conv_dir);
-    GetHandle().EnableProfiling(true);
-    auto ctx = miopen::ConvolutionContext{problem};
-    auto& h  = GetHandle();
-    ctx.SetStream(&(h));
-    ctx.DetectRocm();
-    ctx.SetupFloats();
-
-    const auto network_config   = ctx.BuildConfKey();
-    const bool is_winograd_only = convDesc.IsWinograd3x3SupportedAndFast(ctx);
-    output["is_winograd_only"]  = is_winograd_only;
-    output["network_config"]    = network_config;
-    std::ostringstream ss;
-    problem.Serialize(ss);
-    output["db_key"] = ss.str();
-
-    auto db = GetDb(ctx);
     json find_result;
-    const auto& tgt_props  = h.GetTargetProperties();
-    const std::string arch = tgt_props.Name();
-    const size_t num_cu    = h.GetMaxComputeUnits();
-    std::cerr << "Job Arch: " << job["arch"] << ": Handle Arch: " << arch << std::endl;
-    std::cerr << "Job Num CU: " << job["num_cu"] << ": Handle Num Cu: " << num_cu << std::endl;
-    for(const auto& kinder :
-        job["miopen_find_compile_result"]) // The "miopen_find_compile_result" list generated
-                                           // by miopen_find_compile operation
-    {
-        // Somehow the direction changes mid loop !
-        json res_item;
-        boost::system::error_code ec;
-        boost::filesystem::remove_all(miopen::GetCachePath(false), ec);
-        // boost::filesystem::remove_all(miopen::GetCachePath(true), ec);
-        if(ec)
-        {
-            std::cerr << "Error while removing MIOpen cache: " << ec.message();
-        }
-        auto process_solver = [&]() -> bool {
-            const std::string solver_name = kinder["solver_id"];
-            std::cerr << "Processing solver: " << solver_name << std::endl;
-            const auto solver_id    = miopen::solver::Id{solver_name};
-            const auto& s           = solver_id.GetSolver();
-            res_item["solver_name"] = solver_name;
-            const auto algo         = solver_id.GetAlgo(conv_dir);
-            res_item["algorithm"]   = algo;
-            if(s.IsEmpty())
-            {
-                std::cerr << "Skipping invalid solver: " << solver_id.ToString() << std::endl;
-                return false;
-            }
-            if(!s.IsApplicable(ctx))
-            {
-                std::cerr << "Solver inapplicable: " << solver_name << std::endl;
-                throw std::runtime_error(
-                   "InApplicable solver was sent to fin, check Tuna for errors");
-                return false;
-            } 
-            std::cerr << solver_name << " is applicable" << std::endl;
-            const auto solution   = s.FindSolution(ctx, db, {}); // auto tune is not expected here
-            res_item["workspace"] = solution.workspce_sz;
-        
-            // Get the binary
-            std::cerr << "loading binaries from fin input" << std::endl;
-            for(const auto& kernel_obj : kinder["kernel_objects"])
-            {
-                const auto size          = kernel_obj["uncompressed_size"];
-                const auto md5_sum       = kernel_obj["md5_sum"];
-                const auto encoded_hsaco = kernel_obj["blob"];
-                const auto decoded_hsaco = base64_decode(encoded_hsaco);
-                const auto hsaco         = miopen::decompress(decoded_hsaco, size);
-                std::string comp_opts    = kernel_obj["comp_options"];
-                std::string kernel_file  = kernel_obj["kernel_file"];
-                if(miopen::md5(hsaco) == md5_sum)
-                {
-                    auto p = miopen::Program{kernel_file, hsaco};
-                    h.AddProgram(p, kernel_file, comp_opts);
-                }
-                else
-                {
-                    std::cerr << "Corrupt Binary Object" << std::endl;
-                    throw std::runtime_error("Corrupt binary object");
-                    return false;
-                }
-            }
-            for(const auto& kern : solution.construction_params)
-            {
-                if(!h.HasProgram(kern.kernel_file, kern.comp_options))
-                {
-                    std::cerr << "Binary object check failed, either tuning params have changed or "
-                             "fin is unable to write binary to program cache"
-                              << std::endl;
-                    //return false;
-                }
-                else
-                {
-                    //return true;
-                }
-           }
-           return true;
-        };
+    auto handle = miopen::Handle{};
+    InitNoGpuHandle(handle);
 
-        auto res = process_solver();
-        res_item["Kernel id"]= res;
-        find_result.push_back(res_item);
-    }
-    output["kernel presence check"]=find_result;
-    return 1;
-}
+    // extract numcu and arch details from handle
+    const auto& tgt_props  = handle.GetTargetProperties();
+    const size_t num_cu    = handle.GetMaxComputeUnits();
 
+ 
+    //Below code is to generate kernel DB. Database 
+    //generated is not compatible with findsolution 
+    //parameter list. Need to change API paramenters type
+    //to support kernel DB.
+#if MIOPEN_ENABLE_SQLITE_KERN_CACHE
+   // std::cout << "before GetDb" << std::endl;
+  // auto  db = miopen::GetDb(tgt_props,num_cu);
+    //std::cout << "after  GetDb" << std::endl;
+    //std::cout << "In TestPCKCache......4." << std::endl;
+#endif
 
-template <typename Tgpu, typename Tref>
-int ConvFin<Tgpu, Tref>::TestPreCompiledKernelCache()
-{
-
-    std::cout << "In TestPCKCache......." << std::endl; 
-
-    bool ret     = true;
-    bool isKernelPresent = true;
 
     namespace fs = boost::filesystem;
-    std::cout << miopen::GetSystemDbPath() << std::endl;
 
-    std::vector<fs::path> contents;
-    std::copy(fs::directory_iterator(miopen::GetSystemDbPath()),
-              fs::directory_iterator(),
-              std::back_inserter(contents));
-    for(auto const& db_file : contents)
+    //to fetch the kdb folder location
+    //ex:  /opt/rocm/miopen/share/miopen/db
+    auto  pathstr = miopen::GetCachePath(true);
+
+    //append the json input arch and numcu values to file
+    std::cout <<"System KernDB path = "<< pathstr/(miopen::Handle::GetDbBasename(tgt_props, num_cu)+".kdb") << std::endl;
+    boost::filesystem::path  sys_path  =  pathstr /(miopen::Handle::GetDbBasename(tgt_props, num_cu) + ".kdb");
+
+    //checks the file present in shared folder
+    if(boost::filesystem::exists(sys_path))
     {
-        
-        std::string pathstr =  db_file.native();
-        std::string filestr = db_file.filename().native();
+       std::cout <<"KernDB file exist in System Folder =  " <<  sys_path << std::endl;
+       std::cout <<"KernDB & Json arch =  " <<  job["arch"] << std::endl;
+       std::cout <<"KernDB & Json num_cu =  " <<  job["num_cu"] << std::endl;
 
-        std::cout << "filestr -" << filestr << std::endl;
-        std::cout << "path str-" <<  pathstr <<  std::endl;
+       json res;
+       res["File-"] =  sys_path.string().c_str();
+       res["Status-"] =  "KDB Found";
+       find_result.push_back(res);
 
-        if(job["arch"].size() > 0 and job["num_cu"].size() > 0)
-        {
-            std::string arch = job["arch"];
-            int num_cu       = job["num_cu"];
-            std::stringstream db_name;
-            db_name << arch;
+       //sets the values specific to Tensor from the json i/p file.
+       #if MIOPEN_MODE_NOGPU
+          GetandSetData();
+       #endif
 
-            if(num_cu > 64)
-            {
-                db_name << std::hex << num_cu << ".kdb";
-            }
-            else
-            {
-                db_name << "_" << num_cu << ".kdb";
-            }
+        //following methods are used to set the
+        //problem description, directionm context etc. 
+        const auto conv_dir = GetDirection();
+        const miopen::ProblemDescription problem(
+              inputTensor.desc, weightTensor.desc, outputTensor.desc, convDesc, conv_dir);
+        GetHandle().EnableProfiling(true);
+        auto ctx = miopen::ConvolutionContext{problem};
 
-            if(filestr.compare(db_name.str()) != 0)
-            {
-                continue;
-            }
+        ctx.SetStream(&handle);
+        ctx.DetectRocm();
+        ctx.SetupFloats();
 
-        }
+        const auto network_config   = ctx.BuildConfKey();
+        std::ostringstream ss;
+        problem.Serialize(ss);
 
-        if(pathstr.compare(pathstr.size() - 4, 4, ".kdb") != 0)
-            continue;
+       //create handle, which holds information about kernel/solver/solution etc
+       auto db1 = GetDb(ctx);
 
+       // get the solver ids, this is populated for default ids.
+       for(const auto& solver_id :
+       miopen::solver::GetSolversByPrimitive(miopen::solver::Primitive::Convolution))
+       {
+         
+            json res_item;
 
-        std::cout << pathstr << "/" << filestr << std::endl;
+            //to extract solver id ,context,solution
+            auto process_solver = [&]() -> bool {
 
-        auto sql = miopen::SQLite{pathstr, true};
+              res_item["solver_id"] = solver_id.ToString();
+              const auto s     = solver_id.GetSolver();
+              res_item["solver_id"] = solver_id.ToString();
+              const auto algo       = solver_id.GetAlgo(conv_dir);
+              res_item["solver_id"] = solver_id.ToString();
+              res_item["algorithm"] = algo;
+              if(s.IsEmpty())
+              {
+                res_item["reason"] = "Empty Solver";
+                std::cerr << "Skipping invalid solver: " << solver_id.ToString() << std::endl;
+                return false;
+              } 
+              if(!s.IsApplicable(ctx))
+              {
+                res_item["reason"] = "Not Applicable";
+                return false;
+              }
 
-        std::cout << " after SQLite command = "  << pathstr << std::endl; 
+              // setting, the perf db search off. perf db acess on 
+              // we need to do this to avoid perf db search/update.
+              //as scenario is get the solver id specific solution.
+              ctx.do_search             = false;
+              ctx.disable_perfdb_access = false;
 
-        // pull out records for all configs from ker_db
-        std::unordered_map<std::string, std::unordered_map<std::string, miopen::DbRecord>> records;
-        std::map<std::string, std::unordered_map<std::string, std::string>> kdb_entries;
-        std::vector<std::map<std::string, std::string>> err_list;
-        //auto select_query = "SELECT config, solver, params, id FROM kern_db;";
-        auto select_query = "SELECT id , kernel_blob, kernel_hash , uncompressed_size  FROM kern_db;";
-        auto stmt         = miopen::SQLite::Statement{sql, select_query};
-        while(true)
-        {
-            auto rc = stmt.Step(sql);
-            if(rc == SQLITE_ROW)
-            {
-                //const auto config_id = stmt.ColumnText(0);
-                //const auto solver_id = stmt.ColumnText(1);
-                //const auto params    = stmt.ColumnText(2);
-                //const auto perf_id   = stmt.ColumnText(3);
-                //records[config_id][solver_id].SetValues(solver_id, ParamString(params));
-                //kdb_entries[perf_id]["config"] = config_id;
-                //kdb_entries[perf_id]["solver"] = solver_id;
+              // find solution for solver id.
+              const auto default_solution = s.FindSolution(ctx, db1, {});
 
-                 const auto id = stmt.ColumnText(0);
-                 auto compressed_blob           = stmt.ColumnBlob(1);
-                 auto md5_hash                  = stmt.ColumnText(2);
-                 auto uncompressed_size         = stmt.ColumnInt64(3);
+              // check the presence of precompiled kernel code object present
+              // in memory ? 
+              for(const auto& k : default_solution.construction_params)
+              {
+                auto comp_opts = k.comp_options;
+                auto p           = handle.LoadProgram(k.kernel_file, comp_opts, false, "");
+                if( p.IsCodeObjectInMemory())
+                {
+                    std::cout << "code object in memory present" << std::endl;
+                    res_item["IsCodeObject-Status"] = "Success";
+                    return true;
+                }
+                else
+                {
+                    std::cout << " Code Objet not present in memory" << std::endl;
+                    res_item["IsCodeObject-Status"] = "False";
+                    return false;
+                }
+              }
 
+              // tried to use HasProgram to fetch the code object from memory
+              // it is not giving the expected result. ??
+#if 0
+              for(const auto& kern : default_solution.construction_params)
+              {
+                if(handle.HasProgram(kern.kernel_file, kern.comp_options))
+                {
+                    std::cerr << "Binary object found"
+                              << std::endl;
+                              
+                    res_item["HasProgram-Status"] = "Success";
+                    return true;
+                }
+                else
+                {
+                    std::cout << " Binary Obeject not found.."<< std::endl;
+                    res_item["HasProgram-status"] = "Failed";
+                    return false;
 
-                 kdb_entries[id]["id"] = id;
-                 std::string& decompressed_blob = compressed_blob;
-                 if(uncompressed_size != 0)
-                 {
-                     decompressed_blob = miopen::decompress_fn(compressed_blob, uncompressed_size);
-                 }
-                 auto new_md5 = miopen::md5(decompressed_blob);
-            }
-            else if(rc == SQLITE_DONE)
-                break;
-            else if(rc == SQLITE_ERROR || rc == SQLITE_MISUSE)
-                MIOPEN_THROW(miopenStatusInternalError, sql.ErrorMessage());
-        }
+                }
+              }
+#endif
+           };
 
-        // iterate through each config
-        for(auto it = kdb_entries.begin(); it != kdb_entries.end(); it++)
-        {
-            auto solver_nm = it->second["solver"];
-            auto config_id = it->second["config"];
-            auto record    = records.find(config_id)->second.find(solver_nm)->second;
-
-            auto slv_id = miopen::solver::Id(solver_nm);
-            if(!slv_id.IsValid())
-            {
-                std::map<std::string, std::string> err;
-                err["kerndb_id"] = it->first;
-                err["config"]    = config_id;
-                err["solver"]    = solver_nm;
-                err_list.push_back(err);
-                ret = false;
-                continue;
-            }
-
-            auto solver = slv_id.GetSolver();
-           
-            isKernelPresent = CheckKernelCacheDB();
-            if (isKernelPresent)
-            {
-                ret = true;
-            }
-            else
-            {
-                std::map<std::string, std::string> err;
-                err["kerndb_id"] = 1;
-                err["config"]    = "id";
-                err["solver"]    = "solver_nm";
-                err_list.push_back(err);
-                ret = false;
-            }
-        }
-        std::string listing = filestr + "_errors";
-        output[listing]     = err_list;
-    }
-
-    if(ret)
-        output["clear"] = "true";
-
-    return ret;
+          auto res = process_solver();
+          res_item["find_kernel_Result"] = res;
+          find_result.push_back(res_item); 
+       }
+   }// if( file exisits?)
+   else
+   {
+       std::cout <<"KDB =  " <<  sys_path <<"doesnot exit in the system path" << std::endl;
+       json err_result;
+       err_result["File"] =  sys_path.string().c_str();
+       err_result["KDB File-"] =  " Not Found";
+       find_result.push_back(err_result); 
+   }
+   
+   output["chk_pre_compiled_kernels"] = find_result;
+   return true;
 }
 
 template <typename Tgpu, typename Tref>
@@ -1263,8 +1165,6 @@ template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::ProcessStep(const std::string& step_name)
 {
 
-    std::cout << "ProcessStep()" << std::endl;
-
     steps_processed.push_back(step_name);
     if(step_name == "alloc_buf")
         return AllocateBuffers();
@@ -1294,12 +1194,9 @@ int ConvFin<Tgpu, Tref>::ProcessStep(const std::string& step_name)
     {
         return MIOpenFindEval();
     }
-    if(step_name == "test_pre_compiled_kernel_cache") 
+    if(step_name == "chk_pre_compiled_kernels") 
     {
-        std::cout << "start= check cmp kernel ...........  " << std::endl;
-        return TestPreCompiledKernelCache();
-
-        std::cout << "End= check cmp kernel ...........  " << std::endl;
+        return SearchPreCompiledKernels();
     }    
     return 0;
 }
