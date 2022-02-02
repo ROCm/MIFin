@@ -937,19 +937,7 @@ int ConvFin<Tgpu, Tref>::SearchPreCompiledKernels()
     // extract numcu and arch details from handle
     const auto& tgt_props  = handle.GetTargetProperties();
     const size_t num_cu    = handle.GetMaxComputeUnits();
-
- 
-    //Below code is to generate kernel DB. Database 
-    //generated is not compatible with findsolution 
-    //parameter list. Need to change API paramenters type
-    //to support kernel DB.
-#if MIOPEN_ENABLE_SQLITE_KERN_CACHE
-   // std::cout << "before GetDb" << std::endl;
-  // auto  db = miopen::GetDb(tgt_props,num_cu);
-    //std::cout << "after  GetDb" << std::endl;
-    //std::cout << "In TestPCKCache......4." << std::endl;
-#endif
-
+    const std::string arch = tgt_props.Name();
 
     namespace fs = boost::filesystem;
 
@@ -964,14 +952,14 @@ int ConvFin<Tgpu, Tref>::SearchPreCompiledKernels()
     //checks the file present in shared folder
     if(boost::filesystem::exists(sys_path))
     {
-       std::cout <<"KernDB file exist in System Folder =  " <<  sys_path << std::endl;
-       std::cout <<"KernDB & Json arch =  " <<  job["arch"] << std::endl;
-       std::cout <<"KernDB & Json num_cu =  " <<  job["num_cu"] << std::endl;
+       std::cout <<"KernDB file Present  =  " <<  sys_path << std::endl;
+       std::cout <<"arch =  " <<  job["arch"] << std::endl;
+       std::cout <<"num_cu =  " <<  job["num_cu"] << std::endl;
 
-       json res;
-       res["File-"] =  sys_path.string().c_str();
-       res["Status-"] =  "KDB Found";
-       find_result.push_back(res);
+       json file_chk;
+       file_chk["File-"] =  sys_path.string().c_str();
+       file_chk["Status-"] =  "KDB Found";
+       find_result.push_back(file_chk);
 
        //sets the values specific to Tensor from the json i/p file.
        #if MIOPEN_MODE_NOGPU
@@ -995,7 +983,7 @@ int ConvFin<Tgpu, Tref>::SearchPreCompiledKernels()
         problem.Serialize(ss);
 
        //create handle, which holds information about kernel/solver/solution etc
-       auto db1 = GetDb(ctx);
+       auto db_obj = GetDb(ctx);
 
        // get the solver ids, this is populated for default ids.
        for(const auto& solver_id :
@@ -1003,97 +991,97 @@ int ConvFin<Tgpu, Tref>::SearchPreCompiledKernels()
        {
          
             json res_item;
-
+            bool retvalue;
             //to extract solver id ,context,solution
-            auto process_solver = [&]() -> bool {
+           auto process_solver = [&]() -> bool {
 
               res_item["solver_id"] = solver_id.ToString();
               const auto s     = solver_id.GetSolver();
-              res_item["solver_id"] = solver_id.ToString();
-              const auto algo       = solver_id.GetAlgo(conv_dir);
-              res_item["solver_id"] = solver_id.ToString();
-              res_item["algorithm"] = algo;
               if(s.IsEmpty())
               {
-                res_item["reason"] = "Empty Solver";
-                std::cerr << "Skipping invalid solver: " << solver_id.ToString() << std::endl;
-                return false;
-              } 
+                  res_item["reason"] = "Empty Solver";
+                  std::cerr << "Skipping invalid solver: " << solver_id.ToString() << std::endl;
+                  return false;
+              }
               if(!s.IsApplicable(ctx))
               {
-                res_item["reason"] = "Not Applicable";
-                return false;
+                  res_item["reason"] = "Not Applicable";
+                  return false;
               }
 
-              // setting, the perf db search off. perf db acess on 
               // we need to do this to avoid perf db search/update.
               //as scenario is get the solver id specific solution.
               ctx.do_search             = false;
               ctx.disable_perfdb_access = false;
 
               // find solution for solver id.
-              const auto default_solution = s.FindSolution(ctx, db1, {});
+              const auto default_solution = s.FindSolution(ctx, db_obj, {});
 
+              if(default_solution.Succeeded() && default_solution.construction_params.empty())
+              {
+                 std::cout << "Internal error in solver: " << solver_id.ToString() << std::endl;
+                 res_item["reason"] = "Solver Id Error";
+                 return false;
+              }
+              json cdobj_list = json::array();
               // check the presence of precompiled kernel code object present
               // in memory ? 
               for(const auto& k : default_solution.construction_params)
               {
-                auto comp_opts = k.comp_options;
-                auto p           = handle.LoadProgram(k.kernel_file, comp_opts, false, "");
-                if( p.IsCodeObjectInMemory())
-                {
-                    std::cout << "code object in memory present" << std::endl;
-                    res_item["IsCodeObject-Status"] = "Success";
-                    return true;
-                }
-                else
-                {
-                    std::cout << " Code Objet not present in memory" << std::endl;
-                    res_item["IsCodeObject-Status"] = "False";
-                    return false;
-                }
-              }
+                 json cdobj_result;
+                 auto comp_opts = k.comp_options;
+                 const auto hsaco  = miopen::LoadBinary(tgt_props,num_cu,k.kernel_file, 
+                                                       comp_opts + " -mcpu=" + arch,
+                                                       false);
+                 if( hsaco.empty()) 
+                 {
+                    std::cout << "!!!FAILURE !!! - Kernel Db is not present"<< std::endl;
+                    cdobj_result["kernel_db_access_check"] = "Kernel db is not accessible";
+                    retvalue = false;
+                 }
+                 else
+                 {
+                    std::cout << "!!!Sucess!!! - Kernel Db is present"<< std::endl;
+                    cdobj_result["kernel_db_access_check"] = "Kernel Db is accessible";
 
-              // tried to use HasProgram to fetch the code object from memory
-              // it is not giving the expected result. ??
-#if 0
-              for(const auto& kern : default_solution.construction_params)
-              {
-                if(handle.HasProgram(kern.kernel_file, kern.comp_options))
-                {
-                    std::cerr << "Binary object found"
-                              << std::endl;
-                              
-                    res_item["HasProgram-Status"] = "Success";
-                    return true;
-                }
-                else
-                {
-                    std::cout << " Binary Obeject not found.."<< std::endl;
-                    res_item["HasProgram-status"] = "Failed";
-                    return false;
+                    // create the Program object
+                    auto proObj = miopen::HIPOCProgram{comp_opts + " -mcpu=" + arch,hsaco};
 
-                }
-              }
-#endif
+                    //check the code objectpresence?
+                    const auto c_hsaco = proObj.IsCodeObjectInMemory();
+                    if (c_hsaco)
+                    {
+                       std::cout << "!!!Success!!!Kernel Code Objet present in memory" << std::endl;
+                       cdobj_result["iscode_object_inmemory_check"] = "Kernel Object is present in memory";
+                       retvalue = true;
+                    }
+                    else
+                    {
+                       std::cout << "!!! FAILURE!!!Code Objet is not in memory" << std::endl;
+                       cdobj_result["iscode_object_inmemory_check"] = "Kernel Object is unavailable in memory";
+                       retvalue = false;
+                    }
+                 }//else
+                 cdobj_list.push_back(cdobj_result);
+              }//for
+              res_item["kerenel_objects_list"] = cdobj_list;
+              return retvalue;
            };
-
-          auto res = process_solver();
-          res_item["find_kernel_Result"] = res;
-          find_result.push_back(res_item); 
-       }
-   }// if( file exisits?)
-   else
-   {
-       std::cout <<"KDB =  " <<  sys_path <<"doesnot exit in the system path" << std::endl;
-       json err_result;
-       err_result["File"] =  sys_path.string().c_str();
-       err_result["KDB File-"] =  " Not Found";
-       find_result.push_back(err_result); 
-   }
-   
-   output["chk_pre_compiled_kernels"] = find_result;
-   return true;
+           auto result  = process_solver();
+           res_item["code_obj_chk_result"] = result;
+           find_result.push_back(res_item);
+        }//for-sloverlist
+    }// if( file exisits?)
+    else
+    {
+        std::cout <<"Kernel Database= " <<  sys_path <<" Does not exist in the system path" << std::endl;
+        json err_result;
+        err_result["File"] =  sys_path.string().c_str();
+        err_result["Kdb File-"] =  " Not Found";
+        find_result.push_back(err_result); 
+    }
+    output["chk_pre_compiled_kernels"] = find_result;
+    return true;
 }
 
 template <typename Tgpu, typename Tref>
