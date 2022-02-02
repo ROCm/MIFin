@@ -86,6 +86,7 @@ int main(int argc, char* argv[], char* envp[])
                 std::cerr << "File: " << args[i + 1] << " does not exist" << std::endl;
                 exit(-1);
             }
+            std::cout << " file system" << args[i + 1] << std::endl;
             MapInputs[args[i].back()] = args[i + 1];
         }
         if(args[i] == "-o")
