@@ -937,8 +937,9 @@ int ConvFin<Tgpu, Tref>::SearchPreCompiledKernels()
     // extract numcu and arch details from handle
     const auto& tgt_props  = handle.GetTargetProperties();
     const size_t num_cu    = handle.GetMaxComputeUnits();
+    const std::string arch = tgt_props.Name();
 
- 
+    std::cout << "arch=" << arch << std::endl; 
     //Below code is to generate kernel DB. Database 
     //generated is not compatible with findsolution 
     //parameter list. Need to change API paramenters type
@@ -1038,44 +1039,80 @@ int ConvFin<Tgpu, Tref>::SearchPreCompiledKernels()
               // in memory ? 
               for(const auto& k : default_solution.construction_params)
               {
+
                 auto comp_opts = k.comp_options;
-                auto p           = handle.LoadProgram(k.kernel_file, comp_opts, false, "");
-                if( p.IsCodeObjectInMemory())
+                const auto hsaco  = miopen::LoadBinary(tgt_props,num_cu,k.kernel_file, 
+                                                       comp_opts + " -mcpu=" + arch,
+                                                       false);
+                if( hsaco.empty()) 
                 {
-                    std::cout << "code object in memory present" << std::endl;
-                    res_item["IsCodeObject-Status"] = "Success";
-                    return true;
+                    std::cout << "!!!FAILURE !!! - LoadBinary"<< std::endl;
+                    res_item["LoadBinary"] = "FAIL";
+                    return false;
                 }
                 else
                 {
-                    std::cout << " Code Objet not present in memory" << std::endl;
-                    res_item["IsCodeObject-Status"] = "False";
-                    return false;
+                    std::cout << " LoadBinary - SUCCESS" << std::endl;
+                    auto p = handle.LoadProgram(k.kernel_file, comp_opts, false, "");
+
+                    const auto c_hsaco = p.IsCodeObjectInMemory();
+                    if (c_hsaco)
+                    {
+                        std::cout << "!!! SUCCESS !!! - Code Objet present in memory" << std::endl;
+                        res_item["IsCodeObject-Status"] = "Success";
+                        return true;
+                    }
+                    else
+                    {
+
+                        std::cout << "!!! FAILURE!!!Code Objet NOT present in memory" << std::endl;
+                        res_item["IsCodeObject-Status"] = "FAIL";
+                        return false;
+
+                    }
                 }
               }
-
+#if 0
               // tried to use HasProgram to fetch the code object from memory
               // it is not giving the expected result. ??
-#if 0
-              for(const auto& kern : default_solution.construction_params)
+            
+            std::cout << " ........Before Execution of HAS program....................."<<std::endl;
+
+              for(const auto& k : default_solution.construction_params)
               {
-                if(handle.HasProgram(kern.kernel_file, kern.comp_options))
+
+                auto comp_opts = k.comp_options;
+                const auto hsaco  = miopen::LoadBinary(tgt_props,num_cu,k.kernel_file, 
+                                                       comp_opts + " -mcpu=" + arch,
+                                                       false);
+                if ( hsaco.empty())
                 {
-                    std::cerr << "Binary object found"
-                              << std::endl;
-                              
-                    res_item["HasProgram-Status"] = "Success";
-                    return true;
-                }
-                else
-                {
-                    std::cout << " Binary Obeject not found.."<< std::endl;
-                    res_item["HasProgram-status"] = "Failed";
+                    std::cout << "!!!FAILURE !!! - LoadBinary"<< std::endl;
+                    res_item["LoadBinary"] = "FAIL";
                     return false;
 
                 }
-              }
-#endif
+                else
+                {
+                   std::cout << " LoadBinary - SUCCESS" << std::endl; 
+                    if(handle.HasProgram(k.kernel_file, comp_opts))
+                    {
+                        std::cout << "Binary object found"
+                              << std::endl;
+                              
+                        res_item["HasProgram-Status"] = "Success";
+                        return true;
+                    }
+                    else
+                    {
+                        std::cout << " Binary Obeject not found.."<< std::endl;
+                        res_item["HasProgram-status"] = "Fail";
+                        return false;
+                    }
+                }
+            }
+ #endif
+
            };
 
           auto res = process_solver();
