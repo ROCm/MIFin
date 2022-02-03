@@ -49,6 +49,7 @@
 #include <miopen/md5.hpp>
 #include <miopen/perf_field.hpp>
 #include <miopen/solver_id.hpp>
+#include <miopen/generic_search.hpp>
 
 #if MIOPEN_MODE_NOGPU
 #include <miopen/kernel_cache.hpp>
@@ -296,7 +297,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
                 return false;
             }
 
-            auto all_solutions = s.GetSolutions(ctx);
+            auto all_solutions = s.GetAllSolutions(ctx);
 
             // PrecompileKernels call saves to binary_cache,
             // this needs to be escaped if KERN_CACHE is not on.
@@ -305,8 +306,8 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
             {
                 for(auto&& kernel : current_solution.construction_params)
                 {
-                    if(handle.HasProgram(kernel.kernel_file, kernel.comp_options))
-                        continue;
+                    //if(handle.HasProgram(kernel.kernel_file, kernel.comp_options))
+                    //    continue;
                     kernels.push_back(kernel);
                 }
             }
@@ -540,7 +541,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
     output["db_key"] = ss.str();
 
     auto db = GetDb(ctx);
-    json find_result;
+    json perf_result;
     const auto& tgt_props  = h.GetTargetProperties();
     const std::string arch = tgt_props.Name();
     const size_t num_cu    = h.GetMaxComputeUnits();
@@ -568,6 +569,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
             const auto algo         = solver_id.GetAlgo(conv_dir);
             res_item["algorithm"]   = algo;
             float time = 0.0f;
+            std::string params = "";
 
             if(s.IsEmpty())
             {
@@ -642,10 +644,10 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                 res_item["reason"] = "Invoker not implemented";
                 return false;
             }
+
             try
             {
-                using PerformanceConfig = decltype(s.GetPerformanceConfig(ctx));
-                PerformanceConfig c;
+                setenv("MIOPEN_FIND_ENFORCE", "4", 1);
 
                 // This is required because DataInvokeParams switches tensor order due to
                 // direction and it does not have a
@@ -662,7 +664,14 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                                                        workspace.gpuData.buf.get(),
                                                        workspace.desc.GetNumBytes(),
                                                        convDesc.attribute.gfx90aFp16alt.GetFwd()};
-                    c = s.Search(ctx, invoke_ctx);
+
+                    solution = s.FindSolution(ctx, db, invoke_ctx); // forcing search here 
+                    params = s.GetPerfCfgParams(ctx, db);
+
+                    const auto invoker =
+                        h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
+                    invoker(h, invoke_ctx);
+                    time = h.GetKernelTime();
                 }
                 else if(conv_dir == miopen::conv::Direction::BackwardData)
                 {
@@ -676,7 +685,14 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                                                        workspace.gpuData.buf.get(),
                                                        workspace.desc.GetNumBytes(),
                                                        convDesc.attribute.gfx90aFp16alt.GetBwd()};
-                    c = s.Search(ctx, invoke_ctx);
+
+                    solution = s.FindSolution(ctx, db, invoke_ctx); // forcing search here 
+                    params = s.GetPerfCfgParams(ctx, db);
+
+                    const auto invoker =
+                        h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
+                    invoker(h, invoke_ctx);
+                    time = h.GetKernelTime();
                 }
                 else if(conv_dir == miopen::conv::Direction::BackwardWeights)
                 {
@@ -690,47 +706,46 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                                                       workspace.gpuData.buf.get(),
                                                       workspace.desc.GetNumBytes(),
                                                       convDesc.attribute.gfx90aFp16alt.GetWrW()};
-                    c = s.Search(ctx, invoke_ctx);
+
+                    solution = s.FindSolution(ctx, db, invoke_ctx); // forcing search here 
+                    params = s.GetPerfCfgParams(ctx, db);
+
+                    const auto invoker =
+                        h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
+                    invoker(h, invoke_ctx);
+                    time = h.GetKernelTime();
                 }
                 else
                 {
+                    unsetenv("MIOPEN_FIND_ENFORCE");
                     throw std::runtime_error("Invalid Direction");
                 }
+                unsetenv("MIOPEN_FIND_ENFORCE");
 
-                //db.Update(ctx, SolverDbId(s), c);
-                solution = s.GetSolution(ctx, c, true);
-                //const std::string& params = miopen::Serialize(c); 
-                c.Serialize(ss);
-                res_item["params"] = ss.str();
-                res_item["layout"] = ctx.in_layout;
+                res_item["params"]    = params;
+                res_item["time"]      = time;
+                res_item["layout"]    = ctx.in_layout;
                 res_item["data_type"] = ctx.in_data_type;
                 res_item["direction"] = conv_dir;
-                res_item["bias"] = ctx.bias;
+                res_item["bias"]      = ctx.bias;
+                res_item["reason"]    = "Success";
 
-                std::cerr << "Preparing invoker" << std::endl;
-                const auto invoker =
-                    h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
-                std::cerr << "Finished preparing invoker" << std::endl;
-
-                invoker(h, invoke_ctx);
-                time = h.GetKernelTime();
             }
             catch(const std::exception& e)
             {
+                unsetenv("MIOPEN_FIND_ENFORCE");
                 res_item["reason"] = std::string("Invoker exeception: ") + e.what();
                 return false;
             }
-            res_item["time"]   = time;
-            res_item["reason"] = "Success";
 
             return true;
         };
 
         auto res              = process_solver();
         res_item["evaluated"] = res;
-        find_result.push_back(res_item);
+        perf_result.push_back(res_item);
     }
-    output["miopen_perf_eval_result"] = find_result;
+    output["miopen_perf_eval_result"] = perf_result;
     return 1;
 }
 
