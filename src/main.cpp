@@ -27,6 +27,7 @@
 #include <miopen/miopen.h>
 
 #include "conv_fin.hpp"
+#include "bn_fin.hpp"
 #include "error.hpp"
 #include "fin.hpp"
 
@@ -142,6 +143,14 @@ int main(int argc, char* argv[], char* envp[])
             else if(command["config"]["cmd"] == "convbfp16")
             {
                 f = std::make_unique<fin::ConvFin<bfloat16, float>>(command);
+            }
+            if(command["config"]["cmd"] == "bnorm")
+            {
+                f = std::make_unique<fin::BNFin<float, float>>(command);
+            }
+            else if(command["config"]["cmd"] == "bnormfp16")
+            {
+                f = std::make_unique<fin::BNFin<float16, float>>(command);
             }
             else
             {
