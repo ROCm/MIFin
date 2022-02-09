@@ -42,13 +42,19 @@
 #include <miopen/conv/data_invoke_params.hpp>
 #include <miopen/conv/wrw_invoke_params.hpp>
 #include <miopen/conv_solution.hpp>
-#include <miopen/convolution.hpp>
 #include <miopen/find_db.hpp>
 #include <miopen/invoker.hpp>
 #include <miopen/load_file.hpp>
 #include <miopen/md5.hpp>
 #include <miopen/perf_field.hpp>
 #include <miopen/solver_id.hpp>
+#include <miopen/find_solution.hpp> 
+
+#include <miopen/batchnorm/problem_description.hpp>
+#include <miopen/batch_norm.hpp>
+#include <miopen/batchnorm/invoke_params.hpp>
+#include <miopen/batchnorm/problem_description.hpp>
+#include <miopen/batchnorm/solvers.hpp>
 
 #if MIOPEN_MODE_NOGPU
 #include <miopen/kernel_cache.hpp>
@@ -161,22 +167,34 @@ class BNFin : public Fin
     json command;
     json job;
 
-    tensor<Tgpu, Tcpu> inputTensor;
-    tensor<Tgpu, Tcpu> inputTensor_vect4;
-    tensor<Tgpu, Tcpu> outputTensor;
-    //tensor<Tgpu, Tcpu> biasTensor;
-    //tensor<Tgpu, Tcpu> workspace;
-    miopen::ConvolutionDescriptor convDesc;
+    //bool wrw_allowed = 0, bwd_allowed = 0, forward_allowed = 1;
+    miopenBatchNormMode_t bn_mode;
+    std::vector<std::string> steps_processed;
+    bool saveMeanVar;
+    bool bsaveMeanVar;
+    bool keepRunningMeanVar;
+    bool estimatedMeanVar;
+    double epsilon;
+    double expAvgFactor = 1.0; 
 
-    bool wrw_allowed = 0, bwd_allowed = 0, forward_allowed = 1;
+    int forw = 0;
+    int back = 1;
     bool is_fwd            = true;
     bool is_bwd            = false;
     bool is_wrw            = false; // TODO: check redundancy with above
-    int immediate_solution = 0;
-    miopenBatchNormMode_t bn_mode;
-    bool saveMeanVar;
-    bool keepRunningMeanVar;
-    std::vector<std::string> steps_processed;
+
+    const miopen::TensorDescriptor inputTensor;
+    const miopen::TensorDescriptor biasScaleTensor;
+    const miopen::TensorDescriptor outputTensor;
+    //miopenTensorDescriptor_t biasScaleTensor;
+    //miopenTensorDescriptor_t outputTensor;
+    //tensor<Tgpu, Tcpu> inputTensor;
+    //tensor<Tgpu, Tcpu> outputTensor;
+    //tensor<Tgpu, Tcpu> biasScaleTensor;
+
+    // Backwards
+    miopenTensorDescriptor_t dyInputTensor;
+    miopenTensorDescriptor_t dxOutputTensor;
 };
 
 template <typename Tgpu, typename Tref>
@@ -188,17 +206,18 @@ int BNFin<Tgpu, Tref>::TestApplicability()
     throw std::runtime_error("MIOpen needs to be compiled with the NOGPU backend "
                              "to test applicability");
 #endif
-    const auto problem = miopen::ProblemDescription{bn_mode,
-                                                       xDesc,
-                                                       yDesc,
-                                                       bnScaleBiasMeanVarDesc,
+    const auto problem = miopen::batchnorm::ProblemDescription{bn_mode,
+                                                       inputTensor,
+                                                       outputTensor,
+                                                       biasScaleTensor,
                                                        expAvgFactor,
                                                        epsilon,
-                                                       resultsave,
-                                                       resultrunning};
+                                                       saveMeanVar,
+                                                       keepRunningMeanVar};
 
-    auto ctx    = miopen::ConvolutionContext{problem};
+    //auto ctx    = miopen::ConvolutionContext{problem};
     auto handle = miopen::Handle{};
+    auto ctx = miopen::ExecutionContext(&handle);
 #if MIOPEN_MODE_NOGPU
     InitNoGpuHandle(handle);
 #else
@@ -206,11 +225,35 @@ int BNFin<Tgpu, Tref>::TestApplicability()
                              "to test applicability");
 #endif
 
-    ctx.SetStream(&handle);
-    ctx.DetectRocm();
-    ctx.SetupFloats();
-    const auto network_config = ctx.BuildConfKey();
-    std::vector<std::string> app_solvers;
+    //ctx.SetStream(&handle);
+    //ctx.DetectRocm();
+    //ctx.SetupFloats();
+    //const auto network_config = ctx.BuildConfKey();
+    const auto solvers = miopen::solver::SolverContainer<miopen::solver::batchnorm::BnFwdTrainingSpatialSingle,
+                                                 miopen::solver::batchnorm::BnFwdTrainingSpatialMultiple,
+                                                 miopen::solver::batchnorm::BnFwdTrainingPerActivation>{};
+
+
+    const auto slns = solvers.SearchForSolutions(ctx, problem, 1);
+    if(slns.empty())
+        MIOPEN_THROW(miopenStatusNotImplemented, "No solver found.");
+
+    const auto& sln = slns.front();
+    std::cout << sln.solver_id << std::endl;
+    if(!sln.invoker_factory)
+        MIOPEN_THROW(miopenStatusInternalError, "Invoker missing in solver " + sln.solver_id);
+
+    /*
+    for(const auto& sol : solutions){
+      auto solver = sol.GetSolver();
+                if(solver.IsApplicable(&ctx, &problem))
+      std::cout<< sol.ToString()<<std::endl;
+    }
+    */
+    /*
+    //TODO: use this call
+    //bool IsApplicable(const ExecutionContext& context,
+    //                  const miopen::batchnorm::ProblemDescription& problem) const;
     for(const auto& id :
         miopen::solver::GetSolversByPrimitive(miopen::solver::Primitive::Convolution))
     {
@@ -235,8 +278,8 @@ int BNFin<Tgpu, Tref>::TestApplicability()
         {
             std::cerr << "Solver: " << id.ToString() << " is invalid or empty" << std::endl;
         }
-    }
-    output["applicable_solvers"] = app_solvers;
+    }*/
+    //output["applicable_solvers"] = app_solvers;
     return 0;
 }
 
@@ -244,28 +287,69 @@ template <typename Tgpu, typename Tref>
 int BNFin<Tgpu, Tref>::GetandSetData()
 {
 
-    SetBNDescriptor()
+    SetBNDescriptor();
     auto in_len  = GetInputTensorLengths();
 
-    // auto y_type = GetOutputType();
-
-    inputTensor = {GetHandle().GetStream(), in_len, is_bwd};
-
-    // conv, input and weight tensor descriptors need to be set before we can know the
-    // output lengths
-    auto out_len = GetOutputTensorLengths();
-    outputTensor = {GetHandle().GetStream(), out_len, (is_bwd || is_wrw), is_fwd};
-
-    if(IsInputTensorTransform())
+    std::vector<int> sb_len;
+    if(bn_mode == miopenBNPerActivation)
     {
-        std::vector<int> in_len_v4(in_len.begin(), in_len.end());
-        in_len_v4[1] = ((in_len[1] + 3) / 4) * 4;
+        // 1xCxHxW | in_len.size = 4
+        sb_len.push_back(1);
+        sb_len.push_back(in_len[1]);
+        sb_len.push_back(in_len[2]);
+        sb_len.push_back(in_len[3]);
 
-        inputTensor_vect4  = {GetHandle().GetStream(), in_len_v4, (is_fwd || is_wrw), is_bwd};
+        // 1xCxDxHxW | in_len.size = 5
+        if(in_len.size() == 5)
+        {
+            sb_len.push_back(in_len[4]);
+        }
     }
+    else if(bn_mode == miopenBNSpatial)
+    { // 1xCx1x1
+        sb_len.push_back(1);
+        sb_len.push_back(in_len[1]);
+        sb_len.push_back(1);
+        sb_len.push_back(1);
+
+        // 1xCx1x1x1
+        if(in_len.size() == 5)
+        {
+            sb_len.push_back(1);
+        }
+    }
+
+    //SetTensorNd(inputTensor, in_len, data_type);
+    //SetTensorNd(biasScaleTensor, sb_len, ((sizeof(Tgpu) == 4) ? miopenFloat : miopenHalf));
+    //SetTensorNd(outputTensor, in_len, data_type);
+
+    // backwards
+    //SetTensorNd(dyInputTensor, in_len, data_type);
+    //SetTensorNd(dxOutputTensor, in_len, data_type);
 
 
     return (0);
+}
+
+template <typename Tgpu, typename Tref>
+int BNFin<Tgpu, Tref>::ProcessStep(const std::string& step_name)
+{
+    steps_processed.push_back(step_name);
+    //if(step_name == "alloc_buf")
+    //    return AllocateBuffers();
+    //if(step_name == "fill_buf")
+    //    return FillBuffers();
+    //if(step_name == "copy_buf_to_device")
+    //    return CopyToDevice();
+    //if(step_name == "copy_buf_from_device")
+    //    return CopyFromDevice();
+    if(step_name == "applicability")
+    {
+        return TestApplicability();
+    }
+    //if(step_name == "get_solvers")
+    //    return GetSolverList();
+    return 0;
 }
 
 template <typename Tgpu, typename Tref>
@@ -306,6 +390,8 @@ int BNFin<Tgpu, Tref>::SetBNDescriptor()
 
     forw = command["forw"];
     back = command["back"];
+
+    epsilon = command["epsilon"];
 
     return miopenStatusSuccess;
 }
