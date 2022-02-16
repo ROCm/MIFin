@@ -306,8 +306,6 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
             {
                 for(auto&& kernel : current_solution.construction_params)
                 {
-                    //if(handle.HasProgram(kernel.kernel_file, kernel.comp_options))
-                    //    continue;
                     kernels.push_back(kernel);
                 }
             }
@@ -647,7 +645,8 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
 
             try
             {
-                setenv("MIOPEN_FIND_ENFORCE", "4", 1);
+                ctx.do_search=true;
+                ctx.db_update=true;
 
                 // This is required because DataInvokeParams switches tensor order due to
                 // direction and it does not have a
@@ -717,10 +716,8 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                 }
                 else
                 {
-                    unsetenv("MIOPEN_FIND_ENFORCE");
                     throw std::runtime_error("Invalid Direction");
                 }
-                unsetenv("MIOPEN_FIND_ENFORCE");
 
                 res_item["params"]    = params;
                 res_item["time"]      = time;
@@ -733,7 +730,6 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
             }
             catch(const std::exception& e)
             {
-                unsetenv("MIOPEN_FIND_ENFORCE");
                 res_item["reason"] = std::string("Invoker exeception: ") + e.what();
                 return false;
             }
