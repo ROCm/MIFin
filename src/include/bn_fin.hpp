@@ -87,7 +87,11 @@ class BNFin : public Fin
 {
     public:
     BNFin() : Fin() {}
-    BNFin(json _job) : Fin(), job(_job){}
+    BNFin(json _job) : Fin(), job(_job)
+    {
+        if(job.contains("config"))
+            PrepBatchNorm();
+    }
 
     void VerifyDevProps()
     {
@@ -123,12 +127,12 @@ class BNFin : public Fin
     void PrepBatchNorm()
     {
         VerifyDevProps();
+        std::cout << job["config"] << std::endl;
         command         = job["config"];
         command["bias"] = 0;
         // timing is always enabled
         is_fwd = (job["direction"].get<int>() == 0 || job["direction"].get<int>() & 1);
         is_bwd = (job["direction"].get<int>() == 0 || job["direction"].get<int>() & 2);
-        is_wrw = (job["direction"].get<int>() == 0 || job["direction"].get<int>() & 4);
         SetBNDescriptor();
         // workspace_dev = nullptr; // TODO: replaced with a tensor class
         // the variable name is implementation dependent, checking size instead
@@ -139,11 +143,6 @@ class BNFin : public Fin
     std::vector<int> GetInputTensorLengths();
     std::vector<int> GetBiasTensorLengths();
     int SetBNDescriptor();
-    std::vector<size_t> GetOutputTensorLengths() const;
-    miopenDataType_t GetOutputType() const
-    {
-        return (data_type == miopenInt8 || data_type == miopenInt8x4) ? miopenFloat : data_type;
-    }
     miopen::conv::Direction GetDirection() const;
 
     int ProcessStep(const std::string& step_name) override;
@@ -176,21 +175,21 @@ class BNFin : public Fin
     bool estimatedMeanVar;
     double epsilon;
     double expAvgFactor = 1.0; 
+    bool isDepthSpecified = false;
 
     int forw = 0;
     int back = 1;
     bool is_fwd            = true;
     bool is_bwd            = false;
-    bool is_wrw            = false; // TODO: check redundancy with above
 
-    const miopen::TensorDescriptor inputTensor;
-    const miopen::TensorDescriptor biasScaleTensor;
-    const miopen::TensorDescriptor outputTensor;
+    //const miopen::TensorDescriptor inputTensor;
+    //const miopen::TensorDescriptor biasScaleTensor;
+    //const miopen::TensorDescriptor outputTensor;
     //miopenTensorDescriptor_t biasScaleTensor;
     //miopenTensorDescriptor_t outputTensor;
-    //tensor<Tgpu, Tcpu> inputTensor;
-    //tensor<Tgpu, Tcpu> outputTensor;
-    //tensor<Tgpu, Tcpu> biasScaleTensor;
+    tensor<Tgpu, Tcpu> inputTensor;
+    tensor<Tgpu, Tcpu> outputTensor;
+    tensor<Tgpu, Tcpu> biasScaleTensor;
 
     // Backwards
     miopenTensorDescriptor_t dyInputTensor;
@@ -290,46 +289,52 @@ int BNFin<Tgpu, Tref>::GetandSetData()
     SetBNDescriptor();
     auto in_len  = GetInputTensorLengths();
 
-    std::vector<int> sb_len;
-    if(bn_mode == miopenBNPerActivation)
+    inputTensor = {GetHandle().GetStream(), in_len, is_fwd, is_bwd};
+
+    outputTensor = {GetHandle().GetStream(), in_len, is_fwd, is_bwd};
+
+    if(command["bias"].get<int>() != 0)
     {
-        // 1xCxHxW | in_len.size = 4
-        sb_len.push_back(1);
-        sb_len.push_back(in_len[1]);
-        sb_len.push_back(in_len[2]);
-        sb_len.push_back(in_len[3]);
-
-        // 1xCxDxHxW | in_len.size = 5
-        if(in_len.size() == 5)
-        {
-            sb_len.push_back(in_len[4]);
-        }
+        auto bias_len = GetBiasTensorLengths();
+        biasScaleTensor    = {GetHandle().GetStream(), bias_len, true, true};
     }
-    else if(bn_mode == miopenBNSpatial)
-    { // 1xCx1x1
-        sb_len.push_back(1);
-        sb_len.push_back(in_len[1]);
-        sb_len.push_back(1);
-        sb_len.push_back(1);
-
-        // 1xCx1x1x1
-        if(in_len.size() == 5)
-        {
-            sb_len.push_back(1);
-        }
-    }
-
-    //SetTensorNd(inputTensor, in_len, data_type);
-    //SetTensorNd(biasScaleTensor, sb_len, ((sizeof(Tgpu) == 4) ? miopenFloat : miopenHalf));
-    //SetTensorNd(outputTensor, in_len, data_type);
-
-    // backwards
-    //SetTensorNd(dyInputTensor, in_len, data_type);
-    //SetTensorNd(dxOutputTensor, in_len, data_type);
-
 
     return (0);
 }
+
+template <typename Tgpu, typename Tref>
+std::vector<int> BNFin<Tgpu, Tref>::GetInputTensorLengths()
+{
+    int in_n = command["batchsize"];
+    int in_c = command["in_channels"];
+    int in_h = command["in_h"];
+    int in_w = command["in_w"];
+    int in_d = command["in_d"];
+    int spatial_dim = command["spatial_dim"];
+
+    if(spatial_dim == 3)
+    {
+        // NxCxDxHxW -> NxCx(D*H)xW
+        return std::vector<int>({in_n, in_c, in_d, in_h, in_w});
+    }
+    else
+    {
+        return std::vector<int>({in_n, in_c, in_h, in_w});
+    }
+}
+
+template <typename Tgpu, typename Tref>
+std::vector<int> BNFin<Tgpu, Tref>::GetBiasTensorLengths()
+{
+    int spatial_dim = command["spatial_dim"];
+
+    std::vector<int> bias_lens(2 + spatial_dim, 1);
+
+    bias_lens[1] = command["out_channels"];
+
+    return bias_lens;
+}
+
 
 template <typename Tgpu, typename Tref>
 int BNFin<Tgpu, Tref>::ProcessStep(const std::string& step_name)
@@ -359,41 +364,69 @@ int BNFin<Tgpu, Tref>::SetBNDescriptor()
     //    	double bnBeta = inflags.GetValueDouble("beta");
 
     // batch norm mode type
+    std::cout << "TEST1" << std::endl;
     if(command["mode"] == 0)
     {
+       std::cout << "TEST1.5" << std::endl;
         bn_mode = miopenBNPerActivation;
     }
     else if(command["mode"] == 1)
     {
+        std::cout << "TEST2" << std::endl;
         bn_mode = miopenBNSpatial;
     }
 
+    std::cout << "TEST4.6" << std::endl;
     // save off mean and variance?
     if(command["save"] == 0)
     {
+    std::cout << "TEST3" << std::endl;
         saveMeanVar = false;
     }
     else if(command["save"] == 1)
     {
+    std::cout << "TEST4" << std::endl;
         saveMeanVar = true;
     }
 
+    std::cout << "TEST6.6" << std::endl;
+    std::cout << command << std::endl;
     // keep running mean and variance
     if(command["run"] == 0)
     {
+    std::cout << "TEST5" << std::endl;
         keepRunningMeanVar = false;
     }
     else if(command["run"] == 1)
     {
+    std::cout << "TEST6" << std::endl;
         keepRunningMeanVar = true;
     }
 
+    std::cout << "TEST6" << std::endl;
     forw = command["forw"];
+    std::cout << "TEST7" << std::endl;
     back = command["back"];
+    std::cout << "TEST8" << std::endl;
 
-    epsilon = command["epsilon"];
+    epsilon = 1;
+    std::cout << "TEST8" << std::endl;
 
     return miopenStatusSuccess;
+}
+
+template <typename Tgpu, typename Tref>
+void BNFin<Tgpu, Tref>::InitNoGpuHandle(miopen::Handle& handle)
+{
+#if MIOPEN_MODE_NOGPU
+    handle.impl->device_name        = job["arch"];
+    handle.impl->num_cu             = job["num_cu"];
+    handle.impl->max_mem_alloc_size = 32UL * 1024 * 1024 * 1024; // 32 GB
+    handle.impl->global_mem_size    = 32UL * 1024 * 1024 * 1024;
+    handle.impl->target_properties.Init(&handle);
+#else
+    std::ignore = handle;
+#endif
 }
 } // namespace fin
 #endif // GUARD_MIOPEN_BN_FIN_HPP
