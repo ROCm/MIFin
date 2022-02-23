@@ -114,7 +114,7 @@ class ConvFin : public Fin
         }
         else if(arch == "gfx90a")
         {
-            assert(num_cu == 110);
+            assert(num_cu == 110 || num_cu == 104);
         }
         else
             throw std::runtime_error("Invalid Arch Name");
@@ -406,6 +406,9 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
     const size_t num_cu    = handle.GetMaxComputeUnits();
     std::cerr << "Job Arch: " << job["arch"] << ": Handle Arch: " << arch << std::endl;
     std::cerr << "Job Num CU: " << job["num_cu"] << ": Handle Num Cu: " << num_cu << std::endl;
+    bool dynamic_only = false;
+    if(job.contains("dynamic_only"))
+        dynamic_only = job["dynamic_only"];
     // since applicability has been run, the solver list should come from Tuna
     for(const auto& solver_id :
         miopen::solver::GetSolversByPrimitive(miopen::solver::Primitive::Convolution))
@@ -435,6 +438,12 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
             {
                 res_item["reason"] = "Not Applicable";
                 std::cerr << "Skipping inapplicable solver: " << solver_id.ToString() << std::endl;
+                return false;
+            }
+            if(dynamic_only && !s.IsDynamic())
+            {
+                res_item["reason"] = "Not Dynamic";
+                std::cerr << "Skipping static solver: " << solver_id.ToString() << std::endl;
                 return false;
             }
             miopen::solver::ConvSolution solution;
@@ -784,6 +793,9 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
     const size_t num_cu    = h.GetMaxComputeUnits();
     std::cerr << "Job Arch: " << job["arch"] << ": Handle Arch: " << arch << std::endl;
     std::cerr << "Job Num CU: " << job["num_cu"] << ": Handle Num Cu: " << num_cu << std::endl;
+    bool dynamic_only = false;
+    if(job.contains("dynamic_only"))
+        dynamic_only = job["dynamic_only"];
     for(const auto& kinder :
         job["miopen_find_compile_result"]) // The "miopen_find_compile_result" list generated
                                            // by miopen_find_compile operation
@@ -815,6 +827,12 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
                 std::cerr << "Solver inapplicable: " << solver_name << std::endl;
                 throw std::runtime_error(
                     "InApplicable solver was sent to fin, check Tuna for errors");
+                return false;
+            }
+            if(dynamic_only && !s.IsDynamic())
+            {
+                res_item["reason"] = "Not Dynamic";
+                std::cerr << "Skipping static solver: " << solver_id.ToString() << std::endl;
                 return false;
             }
             std::cerr << solver_name << " is applicable" << std::endl;
