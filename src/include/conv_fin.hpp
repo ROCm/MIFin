@@ -260,7 +260,6 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
     else
         solver_list = miopen::solver::GetSolversByPrimitive(miopen::solver::Primitive::Convolution);
 
-    // since applicability has been run, the solver list should come from Tuna
     for(const auto& solver_id : solver_list)
     {
         json res_item;
