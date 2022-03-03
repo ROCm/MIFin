@@ -599,7 +599,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
             std::cerr << solver_name << " is applicable" << std::endl;
             miopen::solver::ConvSolution solution;
             solution   = s.FindSolution(ctx, db, {}); // auto tune is not expected here
-            res_item["workspace"] = solution.workspce_sz;
+            res_item["workspace"] = solution.workspace_sz;
             // Get the binary
             std::cerr << "loading binaries from fin input" << std::endl;
             for(const auto& kernel_obj : kinder["kernel_objects"])
@@ -634,13 +634,13 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                 }
             }
             std::cerr << "Checking for workspace" << std::endl;
-            if(solution.workspce_sz > workspace.desc.GetNumBytes())
+            if(solution.workspace_sz > workspace.desc.GetNumBytes())
             {
-                std::cerr << "Allocating " << solution.workspce_sz << " bytes for workspace"
+                std::cerr << "Allocating " << solution.workspace_sz << " bytes for workspace"
                           << std::endl;
                 workspace = tensor<Tgpu, Tref>{
                     q,
-                    std::vector<size_t>{static_cast<size_t>(solution.workspce_sz / sizeof(Tgpu))},
+                    std::vector<size_t>{static_cast<size_t>(solution.workspace_sz / sizeof(Tgpu))},
                     false,
                     false};
                 workspace.AllocateBuffers();
