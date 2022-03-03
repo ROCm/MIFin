@@ -256,7 +256,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
     std::vector<miopen::solver::Id> solver_list;
     if(job.contains("solvers"))
         for(std::string solver_str : job["solvers"])
-	    solver_list.push_back(miopen::solver::Id(solver_str));
+            solver_list.push_back(miopen::solver::Id(solver_str));
     else
         solver_list = miopen::solver::GetSolversByPrimitive(miopen::solver::Primitive::Convolution);
 
@@ -725,7 +725,9 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                 }
                 else
                 {
-                    throw std::runtime_error("Invalid Direction");
+                    ss.str("");
+                    ss << "Invalid Direction: solver " << solver_name << ", dir " << static_cast<int>(conv_dir);
+                    throw std::runtime_error(ss.str());
                 }
 
                 res_item["params"]    = params;
