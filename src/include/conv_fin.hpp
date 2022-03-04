@@ -196,7 +196,6 @@ miopen::conv::Direction ConvFin<Tgpu, Tref>::GetDirection() const
                             : miopen::conv::Direction::BackwardWeights);
 }
 
-
 template <typename Tgpu, typename Tref>
 void ConvFin<Tgpu, Tref>::InitNoGpuHandle(miopen::Handle& handle)
 {
@@ -210,7 +209,6 @@ void ConvFin<Tgpu, Tref>::InitNoGpuHandle(miopen::Handle& handle)
     std::ignore = handle;
 #endif
 }
-
 
 template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
@@ -314,7 +312,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
             for(const auto& k : kernels)
             {
                 json kernel;
-                auto comp_opts = k.comp_options;
+                auto comp_opts   = k.comp_options;
                 auto p           = handle.LoadProgram(k.kernel_file, comp_opts, false, "");
                 const auto hsaco = p.IsCodeObjectInMemory()
                                        ? p.GetCodeObjectBlob()
@@ -361,7 +359,6 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
     output["miopen_perf_compile_result"] = perf_result;
     return 1;
 }
-
 
 template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
@@ -514,7 +511,6 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
     return 1;
 }
 
-
 template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
 {
@@ -574,8 +570,8 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
             res_item["solver_name"] = solver_name;
             const auto algo         = solver_id.GetAlgo(conv_dir);
             res_item["algorithm"]   = algo;
-            float time = 0.0f;
-            std::string params = "";
+            float time              = 0.0f;
+            std::string params      = "";
 
             if(s.IsEmpty())
             {
@@ -597,7 +593,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
 
             std::cerr << solver_name << " is applicable" << std::endl;
             miopen::solver::ConvSolution solution;
-            solution   = s.FindSolution(ctx, db, {}); // auto tune is not expected here
+            solution              = s.FindSolution(ctx, db, {}); // auto tune is not expected here
             res_item["workspace"] = solution.workspace_sz;
             // Get the binary
             std::cerr << "loading binaries from fin input" << std::endl;
@@ -653,8 +649,8 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
 
             try
             {
-                ctx.do_search=true;
-                ctx.db_update=true;
+                ctx.do_search = true;
+                ctx.db_update = true;
 
                 // This is required because DataInvokeParams switches tensor order due to
                 // direction and it does not have a
@@ -672,8 +668,8 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                                                        workspace.desc.GetNumBytes(),
                                                        convDesc.attribute.gfx90aFp16alt.GetFwd()};
 
-                    solution = s.FindSolution(ctx, db, invoke_ctx); // forcing search here 
-                    params = s.GetPerfCfgParams(ctx, db);
+                    solution = s.FindSolution(ctx, db, invoke_ctx); // forcing search here
+                    params   = s.GetPerfCfgParams(ctx, db);
 
                     const auto invoker =
                         h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
@@ -693,8 +689,8 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                                                        workspace.desc.GetNumBytes(),
                                                        convDesc.attribute.gfx90aFp16alt.GetBwd()};
 
-                    solution = s.FindSolution(ctx, db, invoke_ctx); // forcing search here 
-                    params = s.GetPerfCfgParams(ctx, db);
+                    solution = s.FindSolution(ctx, db, invoke_ctx); // forcing search here
+                    params   = s.GetPerfCfgParams(ctx, db);
 
                     const auto invoker =
                         h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
@@ -714,8 +710,8 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                                                       workspace.desc.GetNumBytes(),
                                                       convDesc.attribute.gfx90aFp16alt.GetWrW()};
 
-                    solution = s.FindSolution(ctx, db, invoke_ctx); // forcing search here 
-                    params = s.GetPerfCfgParams(ctx, db);
+                    solution = s.FindSolution(ctx, db, invoke_ctx); // forcing search here
+                    params   = s.GetPerfCfgParams(ctx, db);
 
                     const auto invoker =
                         h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
@@ -725,7 +721,8 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                 else
                 {
                     ss.str("");
-                    ss << "Invalid Direction: solver " << solver_name << ", dir " << static_cast<int>(conv_dir);
+                    ss << "Invalid Direction: solver " << solver_name << ", dir "
+                       << static_cast<int>(conv_dir);
                     throw std::runtime_error(ss.str());
                 }
 
@@ -736,7 +733,6 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                 res_item["direction"] = conv_dir;
                 res_item["bias"]      = ctx.bias;
                 res_item["reason"]    = "Success";
-
             }
             catch(const std::exception& e)
             {
@@ -754,7 +750,6 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
     output["miopen_perf_eval_result"] = perf_result;
     return 1;
 }
-
 
 template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::MIOpenFindEval()
@@ -967,7 +962,6 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
     output["miopen_find_eval_result"] = find_result;
     return 1;
 }
-
 
 template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::MIOpenFind()
