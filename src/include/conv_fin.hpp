@@ -570,7 +570,6 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
             res_item["solver_name"] = solver_name;
             const auto algo         = solver_id.GetAlgo(conv_dir);
             res_item["algorithm"]   = algo;
-            float time              = 0.0f;
             std::string params      = "";
 
             if(s.IsEmpty())
@@ -649,6 +648,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
 
             try
             {
+                float time    = 0.0f;
                 ctx.do_search = true;
                 ctx.db_update = true;
 
