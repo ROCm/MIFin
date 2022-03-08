@@ -49,7 +49,6 @@
 #include <miopen/md5.hpp>
 #include <miopen/perf_field.hpp>
 #include <miopen/solver_id.hpp>
-#include <miopen/generic_search.hpp>
 
 #if MIOPEN_MODE_NOGPU
 #include <miopen/kernel_cache.hpp>
