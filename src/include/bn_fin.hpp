@@ -55,6 +55,7 @@
 #include <miopen/batchnorm/invoke_params.hpp>
 #include <miopen/batchnorm/problem_description.hpp>
 #include <miopen/batchnorm/solvers.hpp>
+#include <miopen/solver.hpp>
 
 #if MIOPEN_MODE_NOGPU
 #include <miopen/kernel_cache.hpp>
@@ -130,12 +131,10 @@ class BNFin : public Fin
         std::cout << job["config"] << std::endl;
         command         = job["config"];
         command["bias"] = 0;
-        // timing is always enabled
-        is_fwd = (job["direction"].get<int>() == 0 || job["direction"].get<int>() & 1);
-        is_bwd = (job["direction"].get<int>() == 0 || job["direction"].get<int>() & 2);
         SetBNDescriptor();
-        // workspace_dev = nullptr; // TODO: replaced with a tensor class
-        // the variable name is implementation dependent, checking size instead
+        is_fwd_train = (job["direction"].get<int>() == 0 || job["direction"].get<int>() & 1);
+        is_fwd_infer = (job["direction"].get<int>() == 0 || job["direction"].get<int>() & 2);
+        is_bwd = (job["direction"].get<int>() == 0 || job["direction"].get<int>() & 4);
     }
 
 
@@ -148,21 +147,13 @@ class BNFin : public Fin
     int ProcessStep(const std::string& step_name) override;
 
     // Steps
-    int AllocateBuffers();
-    int CalcWorkspace();
-    int FillBuffers();
-    int CopyToDevice();
-    int CopyFromDevice();
-    int RunGPU();
     int TestApplicability();
-    int TestPerfDbValid();
     int GetandSetData();
     int GetSolverList();
-    int MIOpenFind();
 
     // Utility functions
-    bool IsInputTensorTransform() const;
     void InitNoGpuHandle(miopen::Handle& handle);
+
     json command;
     json job;
 
@@ -175,12 +166,12 @@ class BNFin : public Fin
     bool estimatedMeanVar;
     double epsilon;
     double expAvgFactor = 1.0; 
-    bool isDepthSpecified = false;
 
     int forw = 0;
     int back = 1;
-    bool is_fwd            = true;
-    bool is_bwd            = false;
+    bool is_fwd_train = true;
+    bool is_fwd_infer = false;
+    bool is_bwd = false;
 
     //const miopen::TensorDescriptor inputTensor;
     //const miopen::TensorDescriptor biasScaleTensor;
@@ -191,10 +182,8 @@ class BNFin : public Fin
     tensor<Tgpu, Tcpu> outputTensor;
     tensor<Tgpu, Tcpu> biasScaleTensor;
 
-    // Backwards
-    miopenTensorDescriptor_t dyInputTensor;
-    miopenTensorDescriptor_t dxOutputTensor;
 };
+
 
 template <typename Tgpu, typename Tref>
 int BNFin<Tgpu, Tref>::TestApplicability()
@@ -206,16 +195,16 @@ int BNFin<Tgpu, Tref>::TestApplicability()
                              "to test applicability");
 #endif
     const auto problem = miopen::batchnorm::ProblemDescription{bn_mode,
-                                                       inputTensor,
-                                                       outputTensor,
-                                                       biasScaleTensor,
+                                                       inputTensor.desc,
+                                                       outputTensor.desc,
+                                                       biasScaleTensor.desc,
                                                        expAvgFactor,
                                                        epsilon,
                                                        saveMeanVar,
                                                        keepRunningMeanVar};
 
-    //auto ctx    = miopen::ConvolutionContext{problem};
     auto handle = miopen::Handle{};
+    
     auto ctx = miopen::ExecutionContext(&handle);
 #if MIOPEN_MODE_NOGPU
     InitNoGpuHandle(handle);
@@ -223,62 +212,58 @@ int BNFin<Tgpu, Tref>::TestApplicability()
     throw std::runtime_error("MIOpen needs to be compiled with the NOGPU backend "
                              "to test applicability");
 #endif
-
-    //ctx.SetStream(&handle);
-    //ctx.DetectRocm();
-    //ctx.SetupFloats();
+    ctx.SetStream(&handle);
+    ctx.DetectRocm();
     //const auto network_config = ctx.BuildConfKey();
-    const auto solvers = miopen::solver::SolverContainer<miopen::solver::batchnorm::BnFwdTrainingSpatialSingle,
+    //const auto app_s = GetSolutions<FwdTrain>(problem);
+
+    std::vector<std::string> app_solvers;
+    if(is_fwd_train){
+      const auto solvers = miopen::solver::SolverContainer<miopen::solver::batchnorm::BnFwdTrainingSpatialSingle,
                                                  miopen::solver::batchnorm::BnFwdTrainingSpatialMultiple,
                                                  miopen::solver::batchnorm::BnFwdTrainingPerActivation>{};
-
-
-    const auto slns = solvers.SearchForSolutions(ctx, problem, 1);
-    if(slns.empty())
+      const auto slns = solvers.SearchForSolutions(ctx, problem, 1);
+      if(slns.empty())
         MIOPEN_THROW(miopenStatusNotImplemented, "No solver found.");
-
-    const auto& sln = slns.front();
-    std::cout << sln.solver_id << std::endl;
-    if(!sln.invoker_factory)
-        MIOPEN_THROW(miopenStatusInternalError, "Invoker missing in solver " + sln.solver_id);
-
-    /*
-    for(const auto& sol : solutions){
-      auto solver = sol.GetSolver();
-                if(solver.IsApplicable(&ctx, &problem))
-      std::cout<< sol.ToString()<<std::endl;
+      for(auto it = slns.begin(); it!= slns.end(); ++it){
+        if(!it->invoker_factory)
+          MIOPEN_THROW(miopenStatusInternalError, "Invoker missing in solver " + it->solver_id);
+        std::cout << "solver:" << it->solver_id << std::endl;
+        app_solvers.push_back(it->solver_id);
+      }
     }
-    */
-    /*
-    //TODO: use this call
-    //bool IsApplicable(const ExecutionContext& context,
-    //                  const miopen::batchnorm::ProblemDescription& problem) const;
-    for(const auto& id :
-        miopen::solver::GetSolversByPrimitive(miopen::solver::Primitive::Convolution))
+    else if (is_fwd_infer)
     {
-        std::cerr << "Testing: " << id.ToString() << std::endl;
-        auto solver = id.GetSolver();
-        if(id.IsValid() && !solver.IsEmpty())
-        {
-            try
-            {
-                if(solver.IsApplicable(ctx))
-                    app_solvers.push_back(id.ToString());
-            }
-            catch(...)
-            {
-                std::cerr << id.ToString() << "(" << id.Value() << ")"
-                          << " raised an exception"
-                          << "for " << std::string(network_config) << " config: " << job
-                          << std::endl;
-            }
-        }
-        else
-        {
-            std::cerr << "Solver: " << id.ToString() << " is invalid or empty" << std::endl;
-        }
-    }*/
-    //output["applicable_solvers"] = app_solvers;
+      const auto solvers = miopen::solver::SolverContainer<miopen::solver::batchnorm::BnFwdInference>{};
+      const auto slns = solvers.SearchForSolutions(ctx, problem, 1);
+      if(slns.empty())
+          MIOPEN_THROW(miopenStatusNotImplemented, "No solver found.");
+      for(auto it = slns.begin(); it!= slns.end(); ++it){
+        if(!it->invoker_factory)
+          MIOPEN_THROW(miopenStatusInternalError, "Invoker missing in solver " + it->solver_id);
+        std::cout << "solver:" << it->solver_id << std::endl;
+        app_solvers.push_back(it->solver_id);
+      }
+    }
+    else if (is_bwd){
+      const auto solvers = miopen::solver::SolverContainer<miopen::solver::batchnorm::BnBwdTrainingSpatialSingle,
+                                                 miopen::solver::batchnorm::BnBwdTrainingSpatialMultiple,
+                                                 miopen::solver::batchnorm::BnBwdTrainingPerActivation>{};
+      const auto slns = solvers.SearchForSolutions(ctx, problem, 1);
+      if(slns.empty())
+          MIOPEN_THROW(miopenStatusNotImplemented, "No solver found.");
+      for(auto it = slns.begin(); it!= slns.end(); ++it){
+        if(!it->invoker_factory)
+          MIOPEN_THROW(miopenStatusInternalError, "Invoker missing in solver " + it->solver_id);
+        std::cout << "solver:" << it->solver_id << std::endl;
+        app_solvers.push_back(it->solver_id);
+      }
+    }
+    for(auto &elem : app_solvers){
+      std::cout<<elem<<std::endl;
+    }
+
+    output["applicable_solvers"] = app_solvers;
     return 0;
 }
 
@@ -289,9 +274,10 @@ int BNFin<Tgpu, Tref>::GetandSetData()
     SetBNDescriptor();
     auto in_len  = GetInputTensorLengths();
 
-    inputTensor = {GetHandle().GetStream(), in_len, is_fwd, is_bwd};
+    inputTensor = {GetHandle().GetStream(), in_len, is_fwd_infer || is_fwd_train, is_bwd};
+    //const miopen::TensorDescriptor inputTensor;
 
-    outputTensor = {GetHandle().GetStream(), in_len, is_fwd, is_bwd};
+    outputTensor = {GetHandle().GetStream(), in_len, is_fwd_infer || is_fwd_train, is_bwd};
 
     if(command["bias"].get<int>() != 0)
     {
@@ -309,13 +295,10 @@ std::vector<int> BNFin<Tgpu, Tref>::GetInputTensorLengths()
     int in_c = command["in_channels"];
     int in_h = command["in_h"];
     int in_w = command["in_w"];
-    int in_d = command["in_d"];
-    int spatial_dim = command["spatial_dim"];
-
-    if(spatial_dim == 3)
-    {
-        // NxCxDxHxW -> NxCx(D*H)xW
-        return std::vector<int>({in_n, in_c, in_d, in_h, in_w});
+    if(command.find("in_d") != command.end()){
+      int in_d = command["in_d"];
+      // NxCxDxHxW -> NxCx(D*H)xW
+      return std::vector<int>({in_n, in_c, in_d, in_h, in_w});
     }
     else
     {
@@ -326,7 +309,11 @@ std::vector<int> BNFin<Tgpu, Tref>::GetInputTensorLengths()
 template <typename Tgpu, typename Tref>
 std::vector<int> BNFin<Tgpu, Tref>::GetBiasTensorLengths()
 {
-    int spatial_dim = command["spatial_dim"];
+    int spatial_dim = 2;
+    if(command.find("in_d") != command.end())
+    {
+      spatial_dim = 3; 
+    }
 
     std::vector<int> bias_lens(2 + spatial_dim, 1);
 
@@ -335,19 +322,34 @@ std::vector<int> BNFin<Tgpu, Tref>::GetBiasTensorLengths()
     return bias_lens;
 }
 
+template <typename Tgpu, typename Tref>
+int BNFin<Tgpu, Tref>::GetSolverList()
+{
+    std::vector<std::unordered_map<std::string, std::string>> solvers;
+    for(const auto& id :
+        miopen::solver::GetSolversByPrimitive(miopen::solver::Primitive::Batchnorm))
+    {
+        std::unordered_map<std::string, std::string> solver;
+        solver["id"]      = std::to_string(id.Value());
+        solver["name"]    = id.ToString();
+        solver["tunable"] = "0";
+        solver["dynamic"] = "0";
+        if(id.GetSolver().IsTunable())
+            solver["tunable"] = "1";
+        if(id.GetSolver().IsDynamic())
+            solver["dynamic"] = "1";
+        solvers.push_back(solver);
+    }
+
+    output["all_solvers"] = solvers;
+    return 0;
+}
+
 
 template <typename Tgpu, typename Tref>
 int BNFin<Tgpu, Tref>::ProcessStep(const std::string& step_name)
 {
     steps_processed.push_back(step_name);
-    //if(step_name == "alloc_buf")
-    //    return AllocateBuffers();
-    //if(step_name == "fill_buf")
-    //    return FillBuffers();
-    //if(step_name == "copy_buf_to_device")
-    //    return CopyToDevice();
-    //if(step_name == "copy_buf_from_device")
-    //    return CopyFromDevice();
     if(step_name == "applicability")
     {
         return TestApplicability();
@@ -364,53 +366,40 @@ int BNFin<Tgpu, Tref>::SetBNDescriptor()
     //    	double bnBeta = inflags.GetValueDouble("beta");
 
     // batch norm mode type
-    std::cout << "TEST1" << std::endl;
     if(command["mode"] == 0)
     {
-       std::cout << "TEST1.5" << std::endl;
         bn_mode = miopenBNPerActivation;
     }
     else if(command["mode"] == 1)
     {
-        std::cout << "TEST2" << std::endl;
         bn_mode = miopenBNSpatial;
     }
 
-    std::cout << "TEST4.6" << std::endl;
     // save off mean and variance?
     if(command["save"] == 0)
     {
-    std::cout << "TEST3" << std::endl;
         saveMeanVar = false;
     }
     else if(command["save"] == 1)
     {
-    std::cout << "TEST4" << std::endl;
         saveMeanVar = true;
     }
 
-    std::cout << "TEST6.6" << std::endl;
     std::cout << command << std::endl;
     // keep running mean and variance
     if(command["run"] == 0)
     {
-    std::cout << "TEST5" << std::endl;
         keepRunningMeanVar = false;
     }
     else if(command["run"] == 1)
     {
-    std::cout << "TEST6" << std::endl;
         keepRunningMeanVar = true;
     }
 
-    std::cout << "TEST6" << std::endl;
     forw = command["forw"];
-    std::cout << "TEST7" << std::endl;
     back = command["back"];
-    std::cout << "TEST8" << std::endl;
 
     epsilon = 1;
-    std::cout << "TEST8" << std::endl;
 
     return miopenStatusSuccess;
 }
