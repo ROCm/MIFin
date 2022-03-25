@@ -128,7 +128,6 @@ class BNFin : public Fin
     void PrepBatchNorm()
     {
         VerifyDevProps();
-        std::cout << job["config"] << std::endl;
         command         = job["config"];
         command["bias"] = 0;
         SetBNDescriptor();
@@ -194,14 +193,6 @@ int BNFin<Tgpu, Tref>::TestApplicability()
     throw std::runtime_error("MIOpen needs to be compiled with the NOGPU backend "
                              "to test applicability");
 #endif
-    const auto problem = miopen::batchnorm::ProblemDescription{bn_mode,
-                                                       inputTensor.desc,
-                                                       outputTensor.desc,
-                                                       biasScaleTensor.desc,
-                                                       expAvgFactor,
-                                                       epsilon,
-                                                       saveMeanVar,
-                                                       keepRunningMeanVar};
 
     auto handle = miopen::Handle{};
     
@@ -214,11 +205,21 @@ int BNFin<Tgpu, Tref>::TestApplicability()
 #endif
     ctx.SetStream(&handle);
     ctx.DetectRocm();
+    //ctx.SetupFloats();
     //const auto network_config = ctx.BuildConfKey();
     //const auto app_s = GetSolutions<FwdTrain>(problem);
 
     std::vector<std::string> app_solvers;
+
     if(is_fwd_train){
+      const auto problem = miopen::batchnorm::ProblemDescription{bn_mode,
+                                                       inputTensor.desc,
+                                                       outputTensor.desc,
+                                                       biasScaleTensor.desc,
+                                                       expAvgFactor,
+                                                       epsilon,
+                                                       saveMeanVar,
+                                                       keepRunningMeanVar};
       const auto solvers = miopen::solver::SolverContainer<miopen::solver::batchnorm::BnFwdTrainingSpatialSingle,
                                                  miopen::solver::batchnorm::BnFwdTrainingSpatialMultiple,
                                                  miopen::solver::batchnorm::BnFwdTrainingPerActivation>{};
@@ -228,12 +229,16 @@ int BNFin<Tgpu, Tref>::TestApplicability()
       for(auto it = slns.begin(); it!= slns.end(); ++it){
         if(!it->invoker_factory)
           MIOPEN_THROW(miopenStatusInternalError, "Invoker missing in solver " + it->solver_id);
-        std::cout << "solver:" << it->solver_id << std::endl;
         app_solvers.push_back(it->solver_id);
       }
     }
     else if (is_fwd_infer)
     {
+      const auto problem = miopen::batchnorm::ProblemDescription(bn_mode,
+                                                       inputTensor.desc,
+                                                       outputTensor.desc,
+                                                       biasScaleTensor.desc,
+                                                       epsilon);
       const auto solvers = miopen::solver::SolverContainer<miopen::solver::batchnorm::BnFwdInference>{};
       const auto slns = solvers.SearchForSolutions(ctx, problem, 1);
       if(slns.empty())
@@ -241,11 +246,17 @@ int BNFin<Tgpu, Tref>::TestApplicability()
       for(auto it = slns.begin(); it!= slns.end(); ++it){
         if(!it->invoker_factory)
           MIOPEN_THROW(miopenStatusInternalError, "Invoker missing in solver " + it->solver_id);
-        std::cout << "solver:" << it->solver_id << std::endl;
         app_solvers.push_back(it->solver_id);
       }
     }
     else if (is_bwd){
+      const auto problem = miopen::batchnorm::ProblemDescription(bn_mode,
+                                                       inputTensor.desc,
+                                                       outputTensor.desc,
+                                                       inputTensor.desc,
+                                                       biasScaleTensor.desc,
+                                                       epsilon,
+                                                       saveMeanVar);
       const auto solvers = miopen::solver::SolverContainer<miopen::solver::batchnorm::BnBwdTrainingSpatialSingle,
                                                  miopen::solver::batchnorm::BnBwdTrainingSpatialMultiple,
                                                  miopen::solver::batchnorm::BnBwdTrainingPerActivation>{};
@@ -255,7 +266,6 @@ int BNFin<Tgpu, Tref>::TestApplicability()
       for(auto it = slns.begin(); it!= slns.end(); ++it){
         if(!it->invoker_factory)
           MIOPEN_THROW(miopenStatusInternalError, "Invoker missing in solver " + it->solver_id);
-        std::cout << "solver:" << it->solver_id << std::endl;
         app_solvers.push_back(it->solver_id);
       }
     }
@@ -385,7 +395,6 @@ int BNFin<Tgpu, Tref>::SetBNDescriptor()
         saveMeanVar = true;
     }
 
-    std::cout << command << std::endl;
     // keep running mean and variance
     if(command["run"] == 0)
     {
