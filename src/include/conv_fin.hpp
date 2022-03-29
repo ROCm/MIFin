@@ -158,11 +158,13 @@ class ConvFin : public Fin
     int TestPerfDbValid();
     int GetandSetData();
     int GetSolverList();
-    int MIOpenPerfCompile();
     int MIOpenFind();
     int MIOpenFindCompile();
-    int MIOpenPerfEval();
     int MIOpenFindEval();
+#ifdef MIOPEN_GETALLSOLVER
+    int MIOpenPerfCompile();
+    int MIOpenPerfEval();
+#endif
 
     // Utility functions
     bool IsInputTensorTransform() const;
@@ -209,6 +211,7 @@ void ConvFin<Tgpu, Tref>::InitNoGpuHandle(miopen::Handle& handle)
 #endif
 }
 
+#ifdef MIOPEN_GETALLSOLVER
 template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
 {
@@ -327,8 +330,8 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
                 bool success             = false;
                 auto compressed_hsaco    = miopen::compress(hsaco, &success);
                 const auto encoded_hsaco = base64_encode(compressed_hsaco);
-                kernel["kernel_file"]    = k.kernel_file;
-                kernel["comp_options"]   = k.comp_options;
+                kernel["kernel_file"]    = k.kernel_file + ".o";
+                kernel["comp_options"]   = k.comp_options + " -mcpu=" + arch;
                 if(success)
                 {
                     kernel["uncompressed_size"] = size;
@@ -358,6 +361,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
     output["miopen_perf_compile_result"] = perf_result;
     return 1;
 }
+#endif
 
 template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
@@ -478,8 +482,8 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
                 bool success             = false;
                 auto compressed_hsaco    = miopen::compress(hsaco, &success);
                 const auto encoded_hsaco = base64_encode(compressed_hsaco);
-                kernel["kernel_file"]    = k.kernel_file;
-                kernel["comp_options"]   = k.comp_options;
+                kernel["kernel_file"]    = k.kernel_file + ".o";
+                kernel["comp_options"]   = k.comp_options + " -mcpu=" + arch;
                 if(success)
                 {
                     kernel["uncompressed_size"] = size;
@@ -510,6 +514,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
     return 1;
 }
 
+#ifdef MIOPEN_GETALLSOLVER
 template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
 {
@@ -749,6 +754,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
     output["miopen_perf_eval_result"] = perf_result;
     return 1;
 }
+#endif
 
 template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::MIOpenFindEval()
@@ -1410,16 +1416,18 @@ int ConvFin<Tgpu, Tref>::ProcessStep(const std::string& step_name)
         return TestPerfDbValid();
     if(step_name == "get_solvers")
         return GetSolverList();
-    if(step_name == "miopen_perf_compile")
-        return MIOpenPerfCompile();
     if(step_name == "miopen_find")
         return MIOpenFind();
     if(step_name == "miopen_find_compile")
         return MIOpenFindCompile();
-    if(step_name == "miopen_perf_eval")
-        return MIOpenPerfEval();
     if(step_name == "miopen_find_eval")
         return MIOpenFindEval();
+#ifdef MIOPEN_GETALLSOLVER
+    if(step_name == "miopen_perf_compile")
+        return MIOpenPerfCompile();
+    if(step_name == "miopen_perf_eval")
+        return MIOpenPerfEval();
+#endif
     return 0;
 }
 
