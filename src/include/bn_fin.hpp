@@ -49,6 +49,7 @@
 #include <miopen/perf_field.hpp>
 #include <miopen/solver_id.hpp>
 #include <miopen/find_solution.hpp> 
+#include <miopen/miopen.h>
 
 #include <miopen/batchnorm/problem_description.hpp>
 #include <miopen/batch_norm.hpp>
@@ -160,9 +161,7 @@ class BNFin : public Fin
     miopenBatchNormMode_t bn_mode;
     std::vector<std::string> steps_processed;
     bool saveMeanVar;
-    bool bsaveMeanVar;
     bool keepRunningMeanVar;
-    bool estimatedMeanVar;
     double epsilon;
     double expAvgFactor = 1.0; 
 
@@ -172,14 +171,14 @@ class BNFin : public Fin
     bool is_fwd_infer = false;
     bool is_bwd = false;
 
-    //const miopen::TensorDescriptor inputTensor;
-    //const miopen::TensorDescriptor biasScaleTensor;
-    //const miopen::TensorDescriptor outputTensor;
-    //miopenTensorDescriptor_t biasScaleTensor;
-    //miopenTensorDescriptor_t outputTensor;
     tensor<Tgpu, Tcpu> inputTensor;
     tensor<Tgpu, Tcpu> outputTensor;
+    tensor<Tgpu, Tcpu> dxOutputTensor;
     tensor<Tgpu, Tcpu> biasScaleTensor;
+
+    //for backward
+    tensor<Tgpu, Tcpu> dyInputTensor;
+    tensor<Tgpu, Tcpu> dxOutputTensor;
 
 };
 
@@ -205,9 +204,6 @@ int BNFin<Tgpu, Tref>::TestApplicability()
 #endif
     ctx.SetStream(&handle);
     ctx.DetectRocm();
-    //ctx.SetupFloats();
-    //const auto network_config = ctx.BuildConfKey();
-    //const auto app_s = GetSolutions<FwdTrain>(problem);
 
     std::vector<std::string> app_solvers;
 
@@ -225,10 +221,14 @@ int BNFin<Tgpu, Tref>::TestApplicability()
                                                  miopen::solver::batchnorm::BnFwdTrainingPerActivation>{};
       const auto slns = solvers.SearchForSolutions(ctx, problem, 1);
       if(slns.empty())
+      {
         MIOPEN_THROW(miopenStatusNotImplemented, "No solver found.");
+      }
       for(auto it = slns.begin(); it!= slns.end(); ++it){
         if(!it->invoker_factory)
+        {
           MIOPEN_THROW(miopenStatusInternalError, "Invoker missing in solver " + it->solver_id);
+        }
         app_solvers.push_back(it->solver_id);
       }
     }
@@ -252,8 +252,8 @@ int BNFin<Tgpu, Tref>::TestApplicability()
     else if (is_bwd){
       const auto problem = miopen::batchnorm::ProblemDescription(bn_mode,
                                                        inputTensor.desc,
-                                                       outputTensor.desc,
-                                                       inputTensor.desc,
+                                                       dyInputTensor.desc,
+                                                       dxOutputTensor.desc,
                                                        biasScaleTensor.desc,
                                                        epsilon,
                                                        saveMeanVar);
@@ -265,7 +265,7 @@ int BNFin<Tgpu, Tref>::TestApplicability()
           MIOPEN_THROW(miopenStatusNotImplemented, "No solver found.");
       for(auto it = slns.begin(); it!= slns.end(); ++it){
         if(!it->invoker_factory)
-          MIOPEN_THROW(miopenStatusInternalError, "Invoker missing in solver " + it->solver_id);
+         MIOPEN_THROW(miopenStatusInternalError, "Invoker missing in solver " + it->solver_id);
         app_solvers.push_back(it->solver_id);
       }
     }
@@ -282,6 +282,7 @@ int BNFin<Tgpu, Tref>::GetandSetData()
 {
 
     SetBNDescriptor();
+
     auto in_len  = GetInputTensorLengths();
 
     inputTensor = {GetHandle().GetStream(), in_len, is_fwd_infer || is_fwd_train, is_bwd};
@@ -294,6 +295,49 @@ int BNFin<Tgpu, Tref>::GetandSetData()
         auto bias_len = GetBiasTensorLengths();
         biasScaleTensor    = {GetHandle().GetStream(), bias_len, true, true};
     }
+
+    std::vector<int> sb_len;
+    if(bn_mode == miopenBNPerActivation)
+    {
+        // 1xCxHxW | in_len.size = 4
+        sb_len.push_back(1);
+        sb_len.push_back(in_len[1]);
+        sb_len.push_back(in_len[2]);
+        sb_len.push_back(in_len[3]);
+
+        // 1xCxDxHxW | in_len.size = 5
+        if(in_len.size() == 5)
+        {
+            sb_len.push_back(in_len[4]);
+        }
+    }
+    else if(bn_mode == miopenBNSpatial)
+    { // 1xCx1x1
+        sb_len.push_back(1);
+        sb_len.push_back(in_len[1]);
+        sb_len.push_back(1);
+        sb_len.push_back(1);
+
+        // 1xCx1x1x1
+        if(in_len.size() == 5)
+        {
+            sb_len.push_back(1);
+        }
+    }
+
+    //SetTensorNd(inputTensor, in_len, data_type);
+    miopenSetTensorDescriptor(&inputTensor.desc, data_type, in_len.size(), in_len.data(), nullptr);
+    //SetTensorNd(biasScaleTensor, sb_len, ((sizeof(Tmix) == 4) ? miopenFloat : miopenHalf));
+    miopenSetTensorDescriptor(&biasScaleTensor.desc, data_type, sb_len.size(), sb_len.data(), nullptr);
+    //SetTensorNd(outputTensor, in_len, data_type);
+    miopenSetTensorDescriptor(&outputTensor.desc, data_type, in_len.size(), in_len.data(), nullptr);
+
+    // backwards
+    //SetTensorNd(dyInputTensor, in_len, data_type);
+    miopenSetTensorDescriptor(&dyInputTensor.desc, data_type, in_len.size(), in_len.data(), nullptr);
+    //SetTensorNd(dxOutputTensor, in_len, data_type);
+    miopenSetTensorDescriptor(&dxOutputTensor.desc, data_type, in_len.size(), in_len.data(), nullptr);
+
 
     return (0);
 }
