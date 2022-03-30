@@ -27,57 +27,19 @@
 #ifndef GUARD_BN_FIN_HPP
 #define GUARD_BN_FIN_HPP
 
-#include "base64.hpp"
 #include "error.hpp"
 #include "fin.hpp"
-#include "random.hpp"
 #include "tensor.hpp"
 
-#include <miopen/algorithm.hpp>
 #include <miopen/execution_context.hpp>
-#include <miopen/any_solver.hpp>
-#include <miopen/binary_cache.hpp>
-#include <miopen/bz2.hpp>
-#include <miopen/conv/context.hpp>
-#include <miopen/conv/data_invoke_params.hpp>
-#include <miopen/conv/wrw_invoke_params.hpp>
-#include <miopen/conv_solution.hpp>
-#include <miopen/find_db.hpp>
-#include <miopen/invoker.hpp>
-#include <miopen/load_file.hpp>
-#include <miopen/md5.hpp>
-#include <miopen/perf_field.hpp>
-#include <miopen/solver_id.hpp>
-#include <miopen/find_solution.hpp> 
 #include <miopen/miopen.h>
 
 #include <miopen/batchnorm/problem_description.hpp>
 #include <miopen/batch_norm.hpp>
 #include <miopen/batchnorm/invoke_params.hpp>
-#include <miopen/batchnorm/problem_description.hpp>
 #include <miopen/batchnorm/solvers.hpp>
-#include <miopen/solver.hpp>
 
-#if MIOPEN_MODE_NOGPU
-#include <miopen/kernel_cache.hpp>
-#include <miopen/nogpu/handle_impl.hpp>
-#endif
-
-#include <boost/range/adaptor/sliced.hpp>
-#include <boost/filesystem.hpp>
-
-#include <algorithm>
-#include <cstdlib>
-#include <cstring>
-#include <float.h>
-#include <fstream>
-#include <limits>
-#include <memory>
 #include <nlohmann/json.hpp>
-#include <numeric>
-#include <sstream>
-#include <type_traits>
-#include <vector>
 
 namespace fin {
 
@@ -173,7 +135,6 @@ class BNFin : public Fin
 
     tensor<Tgpu, Tcpu> inputTensor;
     tensor<Tgpu, Tcpu> outputTensor;
-    tensor<Tgpu, Tcpu> dxOutputTensor;
     tensor<Tgpu, Tcpu> biasScaleTensor;
 
     //for backward
@@ -285,10 +246,10 @@ int BNFin<Tgpu, Tref>::GetandSetData()
 
     auto in_len  = GetInputTensorLengths();
 
-    inputTensor = {GetHandle().GetStream(), in_len, is_fwd_infer || is_fwd_train, is_bwd};
+    //inputTensor = {GetHandle().GetStream(), in_len, is_fwd_infer || is_fwd_train, is_bwd};
     //const miopen::TensorDescriptor inputTensor;
 
-    outputTensor = {GetHandle().GetStream(), in_len, is_fwd_infer || is_fwd_train, is_bwd};
+    //outputTensor = {GetHandle().GetStream(), in_len, is_fwd_infer || is_fwd_train, is_bwd};
 
     if(command["bias"].get<int>() != 0)
     {
@@ -408,8 +369,8 @@ int BNFin<Tgpu, Tref>::ProcessStep(const std::string& step_name)
     {
         return TestApplicability();
     }
-    //if(step_name == "get_solvers")
-    //    return GetSolverList();
+    if(step_name == "get_solvers")
+        return GetSolverList();
     return 0;
 }
 
