@@ -314,8 +314,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
             for(const auto& k : kernels)
             {
                 json kernel;
-                auto comp_opts   = k.comp_options;
-                auto p           = handle.LoadProgram(k.kernel_file, comp_opts, false, "");
+                auto p           = handle.LoadProgram(k.kernel_file, k.comp_options, false, "");
                 const auto hsaco = p.IsCodeObjectInMemory()
                                        ? p.GetCodeObjectBlob()
                                        : miopen::LoadFile(p.GetCodeObjectPathname().string());
@@ -331,7 +330,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
                 auto compressed_hsaco    = miopen::compress(hsaco, &success);
                 const auto encoded_hsaco = base64_encode(compressed_hsaco);
                 kernel["kernel_file"]    = k.kernel_file + ".o";
-                kernel["comp_options"]   = k.comp_options + " -mcpu=" + arch;
+                kernel["comp_options"]   = k.comp_options + " -mcpu=" + handle.GetDeviceName();
                 if(success)
                 {
                     kernel["uncompressed_size"] = size;
@@ -464,10 +463,8 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
             for(const auto& k : solution.construction_params)
             {
                 json kernel;
-                auto comp_opts = k.comp_options;
-                // if(comp_opts[0] != ' ')
-                //     comp_opts    = ' ' + comp_opts;
-                auto p           = handle.LoadProgram(k.kernel_file, comp_opts, false, "");
+
+                auto p           = handle.LoadProgram(k.kernel_file, k.comp_options, false, "");
                 const auto hsaco = p.IsCodeObjectInMemory()
                                        ? p.GetCodeObjectBlob()
                                        : miopen::LoadFile(p.GetCodeObjectPathname().string());
@@ -483,7 +480,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
                 auto compressed_hsaco    = miopen::compress(hsaco, &success);
                 const auto encoded_hsaco = base64_encode(compressed_hsaco);
                 kernel["kernel_file"]    = k.kernel_file + ".o";
-                kernel["comp_options"]   = k.comp_options + " -mcpu=" + arch;
+                kernel["comp_options"]   = k.comp_options + " -mcpu=" + handle.GetDeviceName();
                 if(success)
                 {
                     kernel["uncompressed_size"] = size;
