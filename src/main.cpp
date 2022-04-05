@@ -130,6 +130,7 @@ int main(int argc, char* argv[], char* envp[])
         auto command                = it;
         std::unique_ptr<fin::Fin> f = nullptr;
         // TODO : Move this to a factory function
+        std::cout << "command: " << command << std::endl;
         if(command.contains("config"))
         {
             if(command["config"]["cmd"] == "conv")
@@ -169,8 +170,15 @@ int main(int argc, char* argv[], char* envp[])
 
         for(auto& step_it : command["steps"])
         {
-            std::string step = step_it.get<std::string>();
-            f->ProcessStep(step);
+            if(step_it == "get_solvers")
+            {
+              f->GetSolverList();
+            }
+            else
+            {
+              std::string step = step_it.get<std::string>();
+              f->ProcessStep(step);
+            }
         }
         f->output["config_tuna_id"] = command["config_tuna_id"];
         f->output["arch"]           = command["arch"];

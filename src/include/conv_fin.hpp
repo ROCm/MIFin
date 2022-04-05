@@ -157,7 +157,6 @@ class ConvFin : public Fin
     int TestApplicability();
     int TestPerfDbValid();
     int GetandSetData();
-    int GetSolverList();
     int MIOpenFind();
     int MIOpenFindCompile();
     int MIOpenFindEval();
@@ -1336,30 +1335,6 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
 }
 
 template <typename Tgpu, typename Tref>
-int ConvFin<Tgpu, Tref>::GetSolverList()
-{
-    // pair.first = id, pair. second = string id
-    std::vector<std::unordered_map<std::string, std::string>> solvers;
-    for(const auto& id :
-        miopen::solver::GetSolversByPrimitive(miopen::solver::Primitive::Convolution))
-    {
-        std::unordered_map<std::string, std::string> solver;
-        solver["id"]      = std::to_string(id.Value());
-        solver["name"]    = id.ToString();
-        solver["tunable"] = "0";
-        solver["dynamic"] = "0";
-        if(id.GetSolver().IsTunable())
-            solver["tunable"] = "1";
-        if(id.GetSolver().IsDynamic())
-            solver["dynamic"] = "1";
-        solvers.push_back(solver);
-    }
-
-    output["all_solvers"] = solvers;
-    return 0;
-}
-
-template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::RunGPU()
 {
     assert(false);
@@ -1416,8 +1391,6 @@ int ConvFin<Tgpu, Tref>::ProcessStep(const std::string& step_name)
         return TestApplicability();
     if(step_name == "perf_db_test")
         return TestPerfDbValid();
-    if(step_name == "get_solvers")
-        return GetSolverList();
     if(step_name == "miopen_find")
         return MIOpenFind();
     if(step_name == "miopen_find_compile")

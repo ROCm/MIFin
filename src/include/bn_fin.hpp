@@ -111,7 +111,6 @@ class BNFin : public Fin
     // Steps
     int TestApplicability();
     int GetandSetData();
-    int GetSolverList();
 
     // Utility functions
     void InitNoGpuHandle(miopen::Handle& handle);
@@ -119,13 +118,13 @@ class BNFin : public Fin
     json command;
     json job;
 
-    //bool wrw_allowed = 0, bwd_allowed = 0, forward_allowed = 1;
     miopenBatchNormMode_t bn_mode;
     std::vector<std::string> steps_processed;
     bool saveMeanVar;
     bool keepRunningMeanVar;
     double epsilon;
     double expAvgFactor = 1.0; 
+    bool isDepthSpecified = false;
 
     int forw = 0;
     int back = 1;
@@ -310,14 +309,17 @@ std::vector<int> BNFin<Tgpu, Tref>::GetInputTensorLengths()
     int in_c = command["in_channels"];
     int in_h = command["in_h"];
     int in_w = command["in_w"];
-    if(command.find("in_d") != command.end()){
-      int in_d = command["in_d"];
+    int in_d = command["in_d"];
+
+    if(command["in_d"] > 1){
+      isDepthSpecified = true;
       // NxCxDxHxW -> NxCx(D*H)xW
       return std::vector<int>({in_n, in_c, in_d, in_h, in_w});
     }
     else
     {
-        return std::vector<int>({in_n, in_c, in_h, in_w});
+      isDepthSpecified = false;
+      return std::vector<int>({in_n, in_c, in_h, in_w});
     }
 }
 
@@ -325,7 +327,7 @@ template <typename Tgpu, typename Tref>
 std::vector<int> BNFin<Tgpu, Tref>::GetBiasTensorLengths()
 {
     int spatial_dim = 2;
-    if(command.find("in_d") != command.end())
+    if(command["in_d"] > 1)
     {
       spatial_dim = 3; 
     }
@@ -338,30 +340,6 @@ std::vector<int> BNFin<Tgpu, Tref>::GetBiasTensorLengths()
 }
 
 template <typename Tgpu, typename Tref>
-int BNFin<Tgpu, Tref>::GetSolverList()
-{
-    std::vector<std::unordered_map<std::string, std::string>> solvers;
-    for(const auto& id :
-        miopen::solver::GetSolversByPrimitive(miopen::solver::Primitive::Batchnorm))
-    {
-        std::unordered_map<std::string, std::string> solver;
-        solver["id"]      = std::to_string(id.Value());
-        solver["name"]    = id.ToString();
-        solver["tunable"] = "0";
-        solver["dynamic"] = "0";
-        if(id.GetSolver().IsTunable())
-            solver["tunable"] = "1";
-        if(id.GetSolver().IsDynamic())
-            solver["dynamic"] = "1";
-        solvers.push_back(solver);
-    }
-
-    output["all_solvers"] = solvers;
-    return 0;
-}
-
-
-template <typename Tgpu, typename Tref>
 int BNFin<Tgpu, Tref>::ProcessStep(const std::string& step_name)
 {
     steps_processed.push_back(step_name);
@@ -369,9 +347,6 @@ int BNFin<Tgpu, Tref>::ProcessStep(const std::string& step_name)
     {
         return TestApplicability();
     }
-    if(step_name == "get_solvers")
-        return GetSolverList();
-    return 0;
 }
 
 template <typename Tgpu, typename Tref>
