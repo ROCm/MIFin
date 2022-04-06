@@ -331,6 +331,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
                 const auto encoded_hsaco = base64_encode(compressed_hsaco);
                 kernel["kernel_file"]    = k.kernel_file + ".o";
                 kernel["comp_options"]   = k.comp_options + " -mcpu=" + handle.GetDeviceName();
+
                 if(success)
                 {
                     kernel["uncompressed_size"] = size;
@@ -481,6 +482,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
                 const auto encoded_hsaco = base64_encode(compressed_hsaco);
                 kernel["kernel_file"]    = k.kernel_file + ".o";
                 kernel["comp_options"]   = k.comp_options + " -mcpu=" + handle.GetDeviceName();
+
                 if(success)
                 {
                     kernel["uncompressed_size"] = size;
@@ -511,7 +513,25 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
     return 1;
 }
 
+
+void SolutionHasProgram(miopen::Handle &handle, miopen::solver::ConvSolution &solution)
+{
+    for(auto& kern : solution.construction_params)
+    {
+        kern.kernel_file  += ".o";
+        kern.comp_options += " -mcpu=" + handle.GetDeviceName();
+        std::cerr << "checking binary : " << kern.kernel_file << " : " << kern.comp_options << std::endl;
+        if(!handle.HasProgram(kern.kernel_file, kern.comp_options))
+        {
+            std::cerr << "Binary object check failed, either tuning params have changed or "
+                         "fin is unable to write binary to program cache"
+                      << std::endl;
+        }
+    }
+}
+
 #ifdef MIOPEN_GETALLSOLVER
+
 template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
 {
@@ -609,6 +629,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                 if(miopen::md5(hsaco) == md5_sum)
                 {
                     auto p = miopen::Program{kernel_file, hsaco};
+                    std::cerr << "Add Program: "<< kernel_file << " : " << comp_opts << std::endl;
                     h.AddProgram(p, kernel_file, comp_opts);
                 }
                 else
@@ -619,15 +640,8 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                 }
             }
 
-            for(const auto& kern : solution.construction_params)
-            {
-                if(!h.HasProgram(kern.kernel_file, kern.comp_options))
-                {
-                    std::cerr << "Binary object check failed, either tuning params have changed or "
-                                 "fin is unable to write binary to program cache"
-                              << std::endl;
-                }
-            }
+            SolutionHasProgram(h, solution);
+
             std::cerr << "Checking for workspace" << std::endl;
             if(solution.workspace_sz > workspace.desc.GetNumBytes())
             {
@@ -647,6 +661,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                 return false;
             }
 
+            std::cerr << "Preparing invokers" << std::endl;
             try
             {
                 float time    = 0.0f;
@@ -670,10 +685,12 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                                                        convDesc.attribute.gfx90aFp16alt.GetFwd()};
 
                     solution = s.FindSolution(ctx, db, invoke_ctx); // forcing search here
+                    SolutionHasProgram(h, solution);
                     params   = s.GetPerfCfgParams(ctx, db);
 
                     const auto invoker =
                         h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
+                    std::cerr << "Finished Preparing FWD" << std::endl;
                     invoker(h, invoke_ctx);
                     time = h.GetKernelTime();
                 }
@@ -691,10 +708,12 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                                                        convDesc.attribute.gfx90aFp16alt.GetBwd()};
 
                     solution = s.FindSolution(ctx, db, invoke_ctx); // forcing search here
+                    SolutionHasProgram(h, solution);
                     params   = s.GetPerfCfgParams(ctx, db);
 
                     const auto invoker =
                         h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
+                    std::cerr << "Finished Preparing BWD" << std::endl;
                     invoker(h, invoke_ctx);
                     time = h.GetKernelTime();
                 }
@@ -712,10 +731,12 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                                                       convDesc.attribute.gfx90aFp16alt.GetWrW()};
 
                     solution = s.FindSolution(ctx, db, invoke_ctx); // forcing search here
+                    SolutionHasProgram(h, solution);
                     params   = s.GetPerfCfgParams(ctx, db);
 
                     const auto invoker =
                         h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
+                    std::cerr << "Finished Preparing WRW" << std::endl;
                     invoker(h, invoke_ctx);
                     time = h.GetKernelTime();
                 }
@@ -834,7 +855,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
                 return false;
             }
             std::cerr << solver_name << " is applicable" << std::endl;
-            const auto solution   = s.FindSolution(ctx, db, {}); // auto tune is not expected here
+            auto solution   = s.FindSolution(ctx, db, {}); // auto tune is not expected here
             res_item["workspace"] = solution.workspace_sz;
             // Get the binary
             std::cerr << "loading binaries from fin input" << std::endl;
@@ -850,6 +871,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
                 if(miopen::md5(hsaco) == md5_sum)
                 {
                     auto p = miopen::Program{kernel_file, hsaco};
+                    std::cerr << "Add Program: "<< kernel_file << " : " << comp_opts << std::endl;
                     h.AddProgram(p, kernel_file, comp_opts);
                 }
                 else
@@ -859,15 +881,9 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
                     return false;
                 }
             }
-            for(const auto& kern : solution.construction_params)
-            {
-                if(!h.HasProgram(kern.kernel_file, kern.comp_options))
-                {
-                    std::cerr << "Binary object check failed, either tuning params have changed or "
-                                 "fin is unable to write binary to program cache"
-                              << std::endl;
-                }
-            }
+
+            SolutionHasProgram(h, solution);
+
             std::cerr << "Checking for workspace" << std::endl;
             if(solution.workspace_sz > workspace.desc.GetNumBytes())
             {
