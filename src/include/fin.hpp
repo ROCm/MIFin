@@ -79,39 +79,41 @@ class Fin
 
     json output;
 
-  int GetSolverList()
-  {
-    // pair.first = id, pair. second = string id
-    std::vector<std::unordered_map<std::string, std::string>> solvers;
-    for(const auto& id :
-       miopen::solver::GetSolversByPrimitive(miopen::solver::Primitive::Convolution))
+    int GetSolverList()
     {
-        std::unordered_map<std::string, std::string> solver;
-        solver["id"]      = std::to_string(id.Value());
-        solver["name"]    = id.ToString();
-        solver["tunable"] = "0";
-        solver["dynamic"] = "0";
-        if(id.GetSolver().IsTunable())
-            solver["tunable"] = "1";
-        if(id.GetSolver().IsDynamic())
-            solver["dynamic"] = "1";
-        solvers.push_back(solver);
-    }
+        // pair.first = id, pair. second = string id
+        std::vector<std::unordered_map<std::string, std::string>> solvers;
+        for(const auto& id :
+            miopen::solver::GetSolversByPrimitive(miopen::solver::Primitive::Convolution))
+        {
+            std::unordered_map<std::string, std::string> solver;
+            solver["id"]      = std::to_string(id.Value());
+            solver["name"]    = id.ToString();
+            solver["tunable"] = "0";
+            solver["dynamic"] = "0";
+            solver["type"]    = "convolution";
+            if(id.GetSolver().IsTunable())
+                solver["tunable"] = "1";
+            if(id.GetSolver().IsDynamic())
+                solver["dynamic"] = "1";
+            solvers.push_back(solver);
+        }
 
-    for(const auto& id :
-       miopen::solver::GetSolversByPrimitive(miopen::solver::Primitive::Batchnorm))
-    {
-        std::unordered_map<std::string, std::string> solver;
-        solver["id"]      = std::to_string(id.Value());
-        solver["name"]    = id.ToString();
-        solver["tunable"] = "0";
-        solver["dynamic"] = "0";
-        solvers.push_back(solver);
-    }
+        for(const auto& id :
+            miopen::solver::GetSolversByPrimitive(miopen::solver::Primitive::Batchnorm))
+        {
+            std::unordered_map<std::string, std::string> solver;
+            solver["id"]      = std::to_string(id.Value());
+            solver["name"]    = id.ToString();
+            solver["tunable"] = "0";
+            solver["dynamic"] = "0";
+            solver["type"]    = "batch_norm";
+            solvers.push_back(solver);
+        }
 
-    output["all_solvers"] = solvers;
-    return 0;
-  }
+        output["all_solvers"] = solvers;
+        return 0;
+    }
 
     protected:
     template <typename Tgpu>
@@ -123,7 +125,6 @@ class Fin
 #elif FIN_BACKEND_HIP
     hipStream_t q;
 #endif
-
 };
 
 // "std::is_same<Tgpu, float>{}" used to avoid "static_assert" compilation

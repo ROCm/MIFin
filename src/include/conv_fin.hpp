@@ -166,7 +166,6 @@ class ConvFin : public Fin
     int MIOpenPerfEval();
 #endif
 
-
     // Utility functions
     bool IsInputTensorTransform() const;
     void InitNoGpuHandle(miopen::Handle& handle);

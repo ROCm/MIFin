@@ -43,7 +43,7 @@
 
 namespace fin {
 
-using json             = nlohmann::json;
+using json = nlohmann::json;
 // TODO: Create a config class to encapsulate config
 // related code, such as checking direction etc
 template <typename Tgpu, typename Tcpu>
@@ -96,9 +96,8 @@ class BNFin : public Fin
         SetBNDescriptor();
         is_fwd_train = (job["direction"].get<int>() == 0 || job["direction"].get<int>() & 1);
         is_fwd_infer = (job["direction"].get<int>() == 0 || job["direction"].get<int>() & 2);
-        is_bwd = (job["direction"].get<int>() == 0 || job["direction"].get<int>() & 4);
+        is_bwd       = (job["direction"].get<int>() == 0 || job["direction"].get<int>() & 4);
     }
-
 
     // Getters and setters
     std::vector<int> GetInputTensorLengths();
@@ -123,25 +122,23 @@ class BNFin : public Fin
     bool saveMeanVar;
     bool keepRunningMeanVar;
     double epsilon;
-    double expAvgFactor = 1.0; 
-    bool isDepthSpecified = false;
 
-    int forw = 0;
-    int back = 1;
-    bool is_fwd_train = true;
-    bool is_fwd_infer = false;
-    bool is_bwd = false;
+    double expAvgFactor   = 1.0;
+    bool isDepthSpecified = false;
+    int forw              = 0;
+    int back              = 1;
+    bool is_fwd_train     = true;
+    bool is_fwd_infer     = false;
+    bool is_bwd           = false;
 
     tensor<Tgpu, Tcpu> inputTensor;
     tensor<Tgpu, Tcpu> outputTensor;
     tensor<Tgpu, Tcpu> biasScaleTensor;
 
-    //for backward
+    // for backward
     tensor<Tgpu, Tcpu> dyInputTensor;
     tensor<Tgpu, Tcpu> dxOutputTensor;
-
 };
-
 
 template <typename Tgpu, typename Tref>
 int BNFin<Tgpu, Tref>::TestApplicability()
@@ -154,8 +151,7 @@ int BNFin<Tgpu, Tref>::TestApplicability()
 #endif
 
     auto handle = miopen::Handle{};
-    
-    auto ctx = miopen::ExecutionContext(&handle);
+    auto ctx    = miopen::ExecutionContext(&handle);
 #if MIOPEN_MODE_NOGPU
     InitNoGpuHandle(handle);
 #else
@@ -167,70 +163,79 @@ int BNFin<Tgpu, Tref>::TestApplicability()
 
     std::vector<std::string> app_solvers;
 
-    if(is_fwd_train){
-      const auto problem = miopen::batchnorm::ProblemDescription{bn_mode,
-                                                       inputTensor.desc,
-                                                       outputTensor.desc,
-                                                       biasScaleTensor.desc,
-                                                       expAvgFactor,
-                                                       epsilon,
-                                                       saveMeanVar,
-                                                       keepRunningMeanVar};
-      const auto solvers = miopen::solver::SolverContainer<miopen::solver::batchnorm::BnFwdTrainingSpatialSingle,
-                                                 miopen::solver::batchnorm::BnFwdTrainingSpatialMultiple,
-                                                 miopen::solver::batchnorm::BnFwdTrainingPerActivation>{};
-      const auto slns = solvers.SearchForSolutions(ctx, problem, 1);
-      if(slns.empty())
-      {
-        MIOPEN_THROW(miopenStatusNotImplemented, "No solver found.");
-      }
-      for(auto it = slns.begin(); it!= slns.end(); ++it){
-        if(!it->invoker_factory)
-        {
-          MIOPEN_THROW(miopenStatusInternalError, "Invoker missing in solver " + it->solver_id);
-        }
-        app_solvers.push_back(it->solver_id);
-      }
-    }
-    else if (is_fwd_infer)
+    if(is_fwd_train)
     {
-      const auto problem = miopen::batchnorm::ProblemDescription(bn_mode,
-                                                       inputTensor.desc,
-                                                       outputTensor.desc,
-                                                       biasScaleTensor.desc,
-                                                       epsilon);
-      const auto solvers = miopen::solver::SolverContainer<miopen::solver::batchnorm::BnFwdInference>{};
-      const auto slns = solvers.SearchForSolutions(ctx, problem, 1);
-      if(slns.empty())
-          MIOPEN_THROW(miopenStatusNotImplemented, "No solver found.");
-      for(auto it = slns.begin(); it!= slns.end(); ++it){
-        if(!it->invoker_factory)
-          MIOPEN_THROW(miopenStatusInternalError, "Invoker missing in solver " + it->solver_id);
-        app_solvers.push_back(it->solver_id);
-      }
+        const auto problem = miopen::batchnorm::ProblemDescription{bn_mode,
+                                                                   inputTensor.desc,
+                                                                   outputTensor.desc,
+                                                                   biasScaleTensor.desc,
+                                                                   expAvgFactor,
+                                                                   epsilon,
+                                                                   saveMeanVar,
+                                                                   keepRunningMeanVar};
+        const auto solvers = miopen::solver::SolverContainer<
+            miopen::solver::batchnorm::BnFwdTrainingSpatialSingle,
+            miopen::solver::batchnorm::BnFwdTrainingSpatialMultiple,
+            miopen::solver::batchnorm::BnFwdTrainingPerActivation>{};
+        const auto slns = solvers.SearchForSolutions(ctx, problem, 1);
+        if(slns.empty())
+        {
+            MIOPEN_THROW(miopenStatusNotImplemented, "No solver found.");
+        }
+        for(auto it = slns.begin(); it != slns.end(); ++it)
+        {
+            if(!it->invoker_factory)
+            {
+                MIOPEN_THROW(miopenStatusInternalError,
+                             "Invoker missing in solver " + it->solver_id);
+            }
+            app_solvers.push_back(it->solver_id);
+        }
     }
-    else if (is_bwd){
-      const auto problem = miopen::batchnorm::ProblemDescription(bn_mode,
-                                                       inputTensor.desc,
-                                                       dyInputTensor.desc,
-                                                       dxOutputTensor.desc,
-                                                       biasScaleTensor.desc,
-                                                       epsilon,
-                                                       saveMeanVar);
-      const auto solvers = miopen::solver::SolverContainer<miopen::solver::batchnorm::BnBwdTrainingSpatialSingle,
-                                                 miopen::solver::batchnorm::BnBwdTrainingSpatialMultiple,
-                                                 miopen::solver::batchnorm::BnBwdTrainingPerActivation>{};
-      const auto slns = solvers.SearchForSolutions(ctx, problem, 1);
-      if(slns.empty())
-          MIOPEN_THROW(miopenStatusNotImplemented, "No solver found.");
-      for(auto it = slns.begin(); it!= slns.end(); ++it){
-        if(!it->invoker_factory)
-         MIOPEN_THROW(miopenStatusInternalError, "Invoker missing in solver " + it->solver_id);
-        app_solvers.push_back(it->solver_id);
-      }
+    else if(is_fwd_infer)
+    {
+        const auto problem = miopen::batchnorm::ProblemDescription(
+            bn_mode, inputTensor.desc, outputTensor.desc, biasScaleTensor.desc, epsilon);
+        const auto solvers =
+            miopen::solver::SolverContainer<miopen::solver::batchnorm::BnFwdInference>{};
+        const auto slns = solvers.SearchForSolutions(ctx, problem, 1);
+        if(slns.empty())
+            MIOPEN_THROW(miopenStatusNotImplemented, "No solver found.");
+        for(auto it = slns.begin(); it != slns.end(); ++it)
+        {
+            if(!it->invoker_factory)
+                MIOPEN_THROW(miopenStatusInternalError,
+                             "Invoker missing in solver " + it->solver_id);
+            app_solvers.push_back(it->solver_id);
+        }
     }
-    for(auto &elem : app_solvers){
-      std::cout<<elem<<std::endl;
+    else if(is_bwd)
+    {
+        const auto problem = miopen::batchnorm::ProblemDescription(bn_mode,
+                                                                   inputTensor.desc,
+                                                                   dyInputTensor.desc,
+                                                                   dxOutputTensor.desc,
+                                                                   biasScaleTensor.desc,
+                                                                   epsilon,
+                                                                   saveMeanVar);
+        const auto solvers = miopen::solver::SolverContainer<
+            miopen::solver::batchnorm::BnBwdTrainingSpatialSingle,
+            miopen::solver::batchnorm::BnBwdTrainingSpatialMultiple,
+            miopen::solver::batchnorm::BnBwdTrainingPerActivation>{};
+        const auto slns = solvers.SearchForSolutions(ctx, problem, 1);
+        if(slns.empty())
+            MIOPEN_THROW(miopenStatusNotImplemented, "No solver found.");
+        for(auto it = slns.begin(); it != slns.end(); ++it)
+        {
+            if(!it->invoker_factory)
+                MIOPEN_THROW(miopenStatusInternalError,
+                             "Invoker missing in solver " + it->solver_id);
+            app_solvers.push_back(it->solver_id);
+        }
+    }
+    for(auto& elem : app_solvers)
+    {
+        std::cout << elem << std::endl;
     }
 
     output["applicable_solvers"] = app_solvers;
@@ -243,17 +248,12 @@ int BNFin<Tgpu, Tref>::GetandSetData()
 
     SetBNDescriptor();
 
-    auto in_len  = GetInputTensorLengths();
-
-    //inputTensor = {GetHandle().GetStream(), in_len, is_fwd_infer || is_fwd_train, is_bwd};
-    //const miopen::TensorDescriptor inputTensor;
-
-    //outputTensor = {GetHandle().GetStream(), in_len, is_fwd_infer || is_fwd_train, is_bwd};
+    auto in_len = GetInputTensorLengths();
 
     if(command["bias"].get<int>() != 0)
     {
-        auto bias_len = GetBiasTensorLengths();
-        biasScaleTensor    = {GetHandle().GetStream(), bias_len, true, true};
+        auto bias_len   = GetBiasTensorLengths();
+        biasScaleTensor = {GetHandle().GetStream(), bias_len, true, true};
     }
 
     std::vector<int> sb_len;
@@ -285,20 +285,16 @@ int BNFin<Tgpu, Tref>::GetandSetData()
         }
     }
 
-    //SetTensorNd(inputTensor, in_len, data_type);
     miopenSetTensorDescriptor(&inputTensor.desc, data_type, in_len.size(), in_len.data(), nullptr);
-    //SetTensorNd(biasScaleTensor, sb_len, ((sizeof(Tmix) == 4) ? miopenFloat : miopenHalf));
-    miopenSetTensorDescriptor(&biasScaleTensor.desc, data_type, sb_len.size(), sb_len.data(), nullptr);
-    //SetTensorNd(outputTensor, in_len, data_type);
+    miopenSetTensorDescriptor(
+        &biasScaleTensor.desc, data_type, sb_len.size(), sb_len.data(), nullptr);
     miopenSetTensorDescriptor(&outputTensor.desc, data_type, in_len.size(), in_len.data(), nullptr);
 
     // backwards
-    //SetTensorNd(dyInputTensor, in_len, data_type);
-    miopenSetTensorDescriptor(&dyInputTensor.desc, data_type, in_len.size(), in_len.data(), nullptr);
-    //SetTensorNd(dxOutputTensor, in_len, data_type);
-    miopenSetTensorDescriptor(&dxOutputTensor.desc, data_type, in_len.size(), in_len.data(), nullptr);
-
-
+    miopenSetTensorDescriptor(
+        &dyInputTensor.desc, data_type, in_len.size(), in_len.data(), nullptr);
+    miopenSetTensorDescriptor(
+        &dxOutputTensor.desc, data_type, in_len.size(), in_len.data(), nullptr);
     return (0);
 }
 
@@ -311,15 +307,16 @@ std::vector<int> BNFin<Tgpu, Tref>::GetInputTensorLengths()
     int in_w = command["in_w"];
     int in_d = command["in_d"];
 
-    if(command["in_d"] > 1){
-      isDepthSpecified = true;
-      // NxCxDxHxW -> NxCx(D*H)xW
-      return std::vector<int>({in_n, in_c, in_d, in_h, in_w});
+    if(command["in_d"] > 1)
+    {
+        isDepthSpecified = true;
+        // NxCxDxHxW -> NxCx(D*H)xW
+        return std::vector<int>({in_n, in_c, in_d, in_h, in_w});
     }
     else
     {
-      isDepthSpecified = false;
-      return std::vector<int>({in_n, in_c, in_h, in_w});
+        isDepthSpecified = false;
+        return std::vector<int>({in_n, in_c, in_h, in_w});
     }
 }
 
@@ -329,7 +326,7 @@ std::vector<int> BNFin<Tgpu, Tref>::GetBiasTensorLengths()
     int spatial_dim = 2;
     if(command["in_d"] > 1)
     {
-      spatial_dim = 3; 
+        spatial_dim = 3;
     }
 
     std::vector<int> bias_lens(2 + spatial_dim, 1);

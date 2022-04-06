@@ -172,12 +172,12 @@ int main(int argc, char* argv[], char* envp[])
         {
             if(step_it == "get_solvers")
             {
-              f->GetSolverList();
+                f->GetSolverList();
             }
             else
             {
-              std::string step = step_it.get<std::string>();
-              f->ProcessStep(step);
+                std::string step = step_it.get<std::string>();
+                f->ProcessStep(step);
             }
         }
         f->output["config_tuna_id"] = command["config_tuna_id"];
