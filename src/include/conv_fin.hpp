@@ -330,7 +330,11 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
                 auto compressed_hsaco    = miopen::compress(hsaco, &success);
                 const auto encoded_hsaco = base64_encode(compressed_hsaco);
                 kernel["kernel_file"]    = k.kernel_file + ".o";
-                kernel["comp_options"]   = k.comp_options + " -mcpu=" + handle.GetDeviceName();
+                kernel["comp_options"]   = k.comp_options;
+                if(!miopen::EndsWith(k.kernel_file, ".mlir"))
+                {
+                    kernel["comp_options"]   = k.comp_options + " -mcpu=" + handle.GetDeviceName();
+                }
 
                 if(success)
                 {
@@ -481,7 +485,11 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
                 auto compressed_hsaco    = miopen::compress(hsaco, &success);
                 const auto encoded_hsaco = base64_encode(compressed_hsaco);
                 kernel["kernel_file"]    = k.kernel_file + ".o";
-                kernel["comp_options"]   = k.comp_options + " -mcpu=" + handle.GetDeviceName();
+                kernel["comp_options"]   = k.comp_options;
+                if(!miopen::EndsWith(k.kernel_file, ".mlir"))
+                {
+                    kernel["comp_options"]   = k.comp_options + " -mcpu=" + handle.GetDeviceName();
+                }
 
                 if(success)
                 {
@@ -518,8 +526,11 @@ void SolutionHasProgram(miopen::Handle &handle, miopen::solver::ConvSolution &so
 {
     for(auto& kern : solution.construction_params)
     {
+        if(!miopen::EndsWith(kern.kernel_file, ".mlir"))
+        {
+            kern.comp_options += " -mcpu=" + handle.GetDeviceName();
+        }
         kern.kernel_file  += ".o";
-        kern.comp_options += " -mcpu=" + handle.GetDeviceName();
         std::cerr << "checking binary : " << kern.kernel_file << " : " << kern.comp_options << std::endl;
         if(!handle.HasProgram(kern.kernel_file, kern.comp_options))
         {
@@ -1057,8 +1068,13 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
             for(const auto& k : solution.construction_params)
             {
                 json kernel;
+                auto comp_opts = k.comp_options;
+                if(!miopen::EndsWith(k.kernel_file, ".mlir"))
+                {
+                    comp_opts = k.comp_options + " -mcpu=" + arch;
+                }
                 const auto hsaco = miopen::LoadBinary(
-                    tgt_props, num_cu, k.kernel_file, k.comp_options + " -mcpu=" + arch, false);
+                    tgt_props, num_cu, k.kernel_file, comp_opts, false);
                 if(hsaco.empty())
                     throw std::runtime_error("Got empty code object");
                 // Compress the blob
