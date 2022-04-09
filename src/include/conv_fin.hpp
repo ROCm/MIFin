@@ -329,12 +329,8 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
                 bool success             = false;
                 auto compressed_hsaco    = miopen::compress(hsaco, &success);
                 const auto encoded_hsaco = base64_encode(compressed_hsaco);
-                kernel["kernel_file"]    = k.kernel_file + ".o";
+                kernel["kernel_file"]    = k.kernel_file;
                 kernel["comp_options"]   = k.comp_options;
-                if(!miopen::EndsWith(k.kernel_file, ".mlir"))
-                {
-                    kernel["comp_options"]   = k.comp_options + " -mcpu=" + handle.GetDeviceName();
-                }
 
                 if(success)
                 {
@@ -484,12 +480,8 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
                 bool success             = false;
                 auto compressed_hsaco    = miopen::compress(hsaco, &success);
                 const auto encoded_hsaco = base64_encode(compressed_hsaco);
-                kernel["kernel_file"]    = k.kernel_file + ".o";
+                kernel["kernel_file"]    = k.kernel_file;
                 kernel["comp_options"]   = k.comp_options;
-                if(!miopen::EndsWith(k.kernel_file, ".mlir"))
-                {
-                    kernel["comp_options"]   = k.comp_options + " -mcpu=" + handle.GetDeviceName();
-                }
 
                 if(success)
                 {
@@ -623,9 +615,6 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
             }
 
             std::cerr << solver_name << " is applicable" << std::endl;
-            miopen::solver::ConvSolution solution;
-            solution              = s.FindSolution(ctx, db, {}); // auto tune is not expected here
-            res_item["workspace"] = solution.workspace_sz;
             // Get the binary
             std::cerr << "loading binaries from fin input" << std::endl;
             for(const auto& kernel_obj : kinder["kernel_objects"])
@@ -635,13 +624,29 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                 const auto encoded_hsaco = kernel_obj["blob"];
                 const auto decoded_hsaco = base64_decode(encoded_hsaco);
                 const auto hsaco         = miopen::decompress(decoded_hsaco, size);
+
+                std::string kernel_file_no_ext  = kernel_obj["kernel_file"];
+                std::string kernel_file  = kernel_file_no_ext + ".o";
                 std::string comp_opts    = kernel_obj["comp_options"];
-                std::string kernel_file  = kernel_obj["kernel_file"];
+                //LoadProgram doesn't add -mcpu for mlir
+                if(!miopen::EndsWith(kernel_file_no_ext, ".mlir"))
+                {
+                    comp_opts += " -mcpu=" + h.GetDeviceName();
+                }
+
                 if(miopen::md5(hsaco) == md5_sum)
                 {
                     auto p = miopen::Program{kernel_file, hsaco};
-                    std::cerr << "Add Program: "<< kernel_file << " : " << comp_opts << std::endl;
+                    std::cerr << "Add Program: "<< kernel_file << "; args: " << comp_opts << std::endl;
                     h.AddProgram(p, kernel_file, comp_opts);
+
+                    //SaveBinary adds ".o" to kernel_file
+                    miopen::SaveBinary(hsaco,
+                           h.GetTargetProperties(),
+                           h.GetMaxComputeUnits(),
+                           kernel_file_no_ext,
+                           comp_opts,
+                           false);
                 }
                 else
                 {
@@ -651,6 +656,9 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                 }
             }
 
+            miopen::solver::ConvSolution solution;
+            solution              = s.FindSolution(ctx, db, {}); // auto tune is not expected here
+            res_item["workspace"] = solution.workspace_sz;
             SolutionHasProgram(h, solution);
 
             std::cerr << "Checking for workspace" << std::endl;
@@ -696,12 +704,12 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                                                        convDesc.attribute.gfx90aFp16alt.GetFwd()};
 
                     solution = s.FindSolution(ctx, db, invoke_ctx); // forcing search here
+                    std::cerr << solver_name << "Finished Search FWD" << std::endl;
                     SolutionHasProgram(h, solution);
                     params   = s.GetPerfCfgParams(ctx, db);
 
                     const auto invoker =
                         h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
-                    std::cerr << "Finished Preparing FWD" << std::endl;
                     invoker(h, invoke_ctx);
                     time = h.GetKernelTime();
                 }
@@ -719,12 +727,12 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                                                        convDesc.attribute.gfx90aFp16alt.GetBwd()};
 
                     solution = s.FindSolution(ctx, db, invoke_ctx); // forcing search here
+                    std::cerr << solver_name << "Finished Search BWD" << std::endl;
                     SolutionHasProgram(h, solution);
                     params   = s.GetPerfCfgParams(ctx, db);
 
                     const auto invoker =
                         h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
-                    std::cerr << "Finished Preparing BWD" << std::endl;
                     invoker(h, invoke_ctx);
                     time = h.GetKernelTime();
                 }
@@ -742,12 +750,12 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                                                       convDesc.attribute.gfx90aFp16alt.GetWrW()};
 
                     solution = s.FindSolution(ctx, db, invoke_ctx); // forcing search here
+                    std::cerr << solver_name << "Finished Search WRW" << std::endl;
                     SolutionHasProgram(h, solution);
                     params   = s.GetPerfCfgParams(ctx, db);
 
                     const auto invoker =
                         h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
-                    std::cerr << "Finished Preparing WRW" << std::endl;
                     invoker(h, invoke_ctx);
                     time = h.GetKernelTime();
                 }
@@ -877,12 +885,20 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
                 const auto encoded_hsaco = kernel_obj["blob"];
                 const auto decoded_hsaco = base64_decode(encoded_hsaco);
                 const auto hsaco         = miopen::decompress(decoded_hsaco, size);
+
+                std::string kernel_file_no_ext  = kernel_obj["kernel_file"];
+                std::string kernel_file  = kernel_file_no_ext + ".o";
                 std::string comp_opts    = kernel_obj["comp_options"];
-                std::string kernel_file  = kernel_obj["kernel_file"];
+                //LoadProgram doesn't add -mcpu for mlir
+                if(!miopen::EndsWith(kernel_file_no_ext, ".mlir"))
+                {
+                    comp_opts += " -mcpu=" + h.GetDeviceName();
+                }
+
                 if(miopen::md5(hsaco) == md5_sum)
                 {
                     auto p = miopen::Program{kernel_file, hsaco};
-                    std::cerr << "Add Program: "<< kernel_file << " : " << comp_opts << std::endl;
+                    std::cerr << "Add Program: "<< kernel_file << "; args: " << comp_opts << std::endl;
                     h.AddProgram(p, kernel_file, comp_opts);
                 }
                 else
