@@ -33,11 +33,13 @@
 
 #include <miopen/execution_context.hpp>
 #include <miopen/miopen.h>
-
+#include <miopen/stringutils.hpp>
 #include <miopen/batchnorm/problem_description.hpp>
 #include <miopen/batch_norm.hpp>
 #include <miopen/batchnorm/invoke_params.hpp>
 #include <miopen/batchnorm/solvers.hpp>
+#include <miopen/find_solution.hpp>
+#include <miopen/solver.hpp>
 
 #include <nlohmann/json.hpp>
 
@@ -111,6 +113,8 @@ class BNFin : public Fin
     int TestApplicability();
     int GetandSetData();
 
+    int MIOpenFindCompile();
+
     // Utility functions
     void InitNoGpuHandle(miopen::Handle& handle);
 
@@ -150,7 +154,7 @@ int BNFin<Tgpu, Tref>::TestApplicability()
                              "to test applicability");
 #endif
 
-    auto handle = miopen::Handle{};
+    auto& handle  = GetHandle();
     auto ctx    = miopen::ExecutionContext(&handle);
 #if MIOPEN_MODE_NOGPU
     InitNoGpuHandle(handle);
@@ -344,6 +348,7 @@ int BNFin<Tgpu, Tref>::ProcessStep(const std::string& step_name)
     {
         return TestApplicability();
     }
+    return 0;
 }
 
 template <typename Tgpu, typename Tref>
@@ -402,6 +407,137 @@ void BNFin<Tgpu, Tref>::InitNoGpuHandle(miopen::Handle& handle)
 #else
     std::ignore = handle;
 #endif
+}
+
+
+
+const std::vector<miopen::solver::AnySolver> GetSolvers(bool is_fwd_train, bool is_fwd_infer, bool is_bwd)
+{
+    std::vector<miopen::solver::AnySolver> solvers{};
+    if(is_fwd_train)
+    {
+        solvers.push_back(boost::any_cast<miopen::solver::AnySolver>(miopen::solver::batchnorm::BnFwdTrainingSpatialSingle{}));
+        solvers.push_back(boost::any_cast<miopen::solver::AnySolver>(miopen::solver::batchnorm::BnFwdTrainingSpatialMultiple{}));
+        solvers.push_back(boost::any_cast<miopen::solver::AnySolver>(miopen::solver::batchnorm::BnFwdTrainingPerActivation{}));
+    }
+    else if(is_fwd_infer)
+    {
+        solvers.push_back(boost::any_cast<miopen::solver::AnySolver>(miopen::solver::batchnorm::BnFwdInference{}));
+    }
+    else if(is_bwd)
+    {
+        solvers.push_back(boost::any_cast<miopen::solver::AnySolver>(miopen::solver::batchnorm::BnBwdTrainingSpatialSingle{}));
+        solvers.push_back(boost::any_cast<miopen::solver::AnySolver>(miopen::solver::batchnorm::BnBwdTrainingSpatialMultiple{}));
+        solvers.push_back(boost::any_cast<miopen::solver::AnySolver>(miopen::solver::batchnorm::BnBwdTrainingPerActivation{}));
+    }
+    else
+    { 
+        throw std::runtime_error(
+            "Unable to determine batch norm direction");
+    }
+    return solvers;
+};
+
+template <typename Tgpu, typename Tref>
+int BNFin<Tgpu, Tref>::MIOpenFindCompile()
+{
+    std::cerr << "MIOpenFinCompile" << std::endl;
+    std::cerr << "Processing command: " << command << std::endl;
+#if MIOPEN_MODE_NOGPU
+    GetandSetData();
+#else
+    throw std::runtime_error(
+        "Unable to perform MIOpenFindCompile MIOpen was not compiled using HIPNOGPU backend");
+#endif
+    //const auto conv_dir = GetDirection();
+    //const miopen::ProblemDescription problem(
+    //    inputTensor.desc, weightTensor.desc, outputTensor.desc, convDesc, conv_dir);
+    auto& handle  = GetHandle();
+    GetHandle().EnableProfiling(true);
+    auto ctx    = miopen::ExecutionContext(&handle);
+#if MIOPEN_MODE_NOGPU
+    InitNoGpuHandle(handle);
+#else
+    throw std::runtime_error("MIOpen needs to be compiled with the NOGPU backend "
+                             "for MIOpenFindCompile");
+#endif
+    ctx.SetStream(&handle);
+    ctx.DetectRocm();
+    //ctx.SetupFloats();
+
+    //const auto network_config   = ctx.BuildConfKey();
+    //const bool is_winograd_only = convDesc.IsWinograd3x3SupportedAndFast(ctx);
+    //output["is_winograd_only"]  = is_winograd_only;
+    //output["network_config"]    = network_config;
+    std::ostringstream ss;
+    const auto problem = miopen::batchnorm::ProblemDescription{bn_mode,
+                                                               inputTensor.desc,
+                                                               outputTensor.desc,
+                                                               biasScaleTensor.desc,
+                                                               expAvgFactor,
+                                                               epsilon,
+                                                               saveMeanVar,
+                                                               keepRunningMeanVar};
+    problem.Serialize(ss);
+    output["db_key"] = ss.str();
+
+    json find_result;
+    const auto& tgt_props  = handle.GetTargetProperties();
+    const std::string arch = tgt_props.Name();
+    const size_t num_cu    = handle.GetMaxComputeUnits();
+    std::cerr << "Job Arch: " << job["arch"] << ": Handle Arch: " << arch << std::endl;
+    std::cerr << "Job Num CU: " << job["num_cu"] << ": Handle Num Cu: " << num_cu << std::endl;
+    //need to add a getSolvers function
+    //const auto solvers = miopen::solver::SolverContainer<
+    //    miopen::solver::batchnorm::BnFwdTrainingSpatialSingle,
+    //    miopen::solver::batchnorm::BnFwdTrainingSpatialMultiple,
+    //    miopen::solver::batchnorm::BnFwdTrainingPerActivation>{};
+    const auto solvers = GetSolvers(is_fwd_train, is_fwd_infer, is_bwd);
+    for(const auto &s : solvers)
+        std::cout<<s.GetSolverDbId()<<std::endl;
+    //std::vector<Solver> solver_container;
+    //for(auto it = solvers.begin(); it != solvers.end(); ++it)
+    //    solver_container.push_back(&it);
+    //const auto slns = solvers.SearchForSolutions(ctx, problem, 1);
+
+    /*
+    for(const auto& solver_id : solver_list)
+    {
+        json res_item;
+        // remove the user db files
+        boost::filesystem::remove_all(miopen::GetCachePath(false));
+        auto process_solver = [&]() -> bool {
+            std::cerr << "Processing Solver: " << solver_id.ToString() << std::endl;
+            res_item["solver_id"] = solver_id.ToString();
+            if(solver_id.ToString() == "ConvBiasActivAsm1x1U" ||
+               solver_id.ToString().find("Fused") != std::string::npos)
+            {
+                std::cerr << "Skipping fused solvers" << std::endl;
+                return false;
+            }
+            const auto& s         = solver_id.GetSolver();
+            //const auto algo = bn_mode == miopenBNSpatial
+            //              ? AlgorithmName{"miopenBatchNormForwardTrainingSpatial"}
+            //              : AlgorithmName{"miopenBatchNormForwardTrainingPerActivation"};
+            //res_item["algorithm"] = algo;
+            if(s.IsEmpty())
+            {
+                res_item["reason"] = "Empty Solver";
+                std::cerr << "Skipping invalid solver: " << solver_id.ToString() << std::endl;
+                return false;
+            }
+            if(!s.IsTunable())
+            {
+                res_item["reason"] = "Not Tunable";
+                std::cerr << "Skipping non-tunable solver: " << solver_id.ToString() << std::endl;
+                return false;
+            }
+
+
+        };
+
+    };*/
+
 }
 } // namespace fin
 #endif // GUARD_MIOPEN_BN_FIN_HPP
