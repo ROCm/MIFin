@@ -126,17 +126,16 @@ class BNFin : public Fin
 
     miopenBatchNormMode_t bn_mode;
     std::vector<std::string> steps_processed;
-    bool saveMeanVar;
-    bool keepRunningMeanVar;
-
-    double epsilon        = 1.0;
-    double expAvgFactor   = 1.0;
-    bool isDepthSpecified = false;
-    int forw              = 0;
-    int back              = 1;
-    bool is_fwd_train     = true;
-    bool is_fwd_infer     = false;
-    bool is_bwd           = false;
+    bool saveMeanVar        = false;
+    bool keepRunningMeanVar = false;
+    double epsilon          = 1.0;
+    double expAvgFactor     = 1.0;
+    bool isDepthSpecified   = false;
+    int forw                = 0;
+    int back                = 1;
+    bool is_fwd_train       = true;
+    bool is_fwd_infer       = false;
+    bool is_bwd             = false;
 
     tensor<Tgpu, Tcpu> inputTensor;
     tensor<Tgpu, Tcpu> outputTensor;
