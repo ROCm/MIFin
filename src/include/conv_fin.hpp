@@ -515,6 +515,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
 }
 
 #ifdef MIOPEN_GETALLSOLVER
+
 template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
 {
@@ -1394,14 +1395,14 @@ int ConvFin<Tgpu, Tref>::ProcessStep(const std::string& step_name)
         return MIOpenFind();
     if(step_name == "miopen_find_compile")
         return MIOpenFindCompile();
-#ifdef MIOPEN_GETALLSOLVER
-    if(step_name == "miopen_perf_eval")
-        return MIOpenPerfEval();
-    if(step_name == "miopen_perf_compile")
-        return MIOpenPerfCompile();
-#endif
     if(step_name == "miopen_find_eval")
         return MIOpenFindEval();
+#ifdef MIOPEN_GETALLSOLVER
+    if(step_name == "miopen_perf_compile")
+        return MIOpenPerfCompile();
+    if(step_name == "miopen_perf_eval")
+        return MIOpenPerfEval();
+#endif
     return 0;
 }
 
