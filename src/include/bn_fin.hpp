@@ -41,6 +41,8 @@
 
 #include <nlohmann/json.hpp>
 
+#define EPSILON 1e-3
+
 namespace fin {
 
 using json = nlohmann::json;
@@ -110,9 +112,14 @@ class BNFin : public Fin
     // Steps
     int TestApplicability();
     int GetandSetData();
+    miopen::batchnorm::ProblemDescription GetProblemDescription();
+    std::vector<miopen::solver::ConvSolution> GetBNSolutions(miopen::ExecutionContext& ctx);
 
     // Utility functions
     void InitNoGpuHandle(miopen::Handle& handle);
+    auto GetFwdTrainSolvers();
+    auto GetFwdInferSolvers();
+    auto GetBwdSolvers();
 
     json command;
     json job;
@@ -121,8 +128,8 @@ class BNFin : public Fin
     std::vector<std::string> steps_processed;
     bool saveMeanVar;
     bool keepRunningMeanVar;
-    double epsilon;
 
+    double epsilon        = 1.0;
     double expAvgFactor   = 1.0;
     bool isDepthSpecified = false;
     int forw              = 0;
@@ -150,8 +157,8 @@ int BNFin<Tgpu, Tref>::TestApplicability()
                              "to test applicability");
 #endif
 
-    auto handle = miopen::Handle{};
-    auto ctx    = miopen::ExecutionContext(&handle);
+    auto& handle = GetHandle();
+    auto ctx     = miopen::ExecutionContext(&handle);
 #if MIOPEN_MODE_NOGPU
     InitNoGpuHandle(handle);
 #else
@@ -163,75 +170,15 @@ int BNFin<Tgpu, Tref>::TestApplicability()
 
     std::vector<std::string> app_solvers;
 
-    if(is_fwd_train)
+    const auto slns = GetBNSolutions(ctx);
+    for(auto it = slns.begin(); it != slns.end(); ++it)
     {
-        const auto problem = miopen::batchnorm::ProblemDescription{bn_mode,
-                                                                   inputTensor.desc,
-                                                                   outputTensor.desc,
-                                                                   biasScaleTensor.desc,
-                                                                   expAvgFactor,
-                                                                   epsilon,
-                                                                   saveMeanVar,
-                                                                   keepRunningMeanVar};
-        const auto solvers = miopen::solver::SolverContainer<
-            miopen::solver::batchnorm::BnFwdTrainingSpatialSingle,
-            miopen::solver::batchnorm::BnFwdTrainingSpatialMultiple,
-            miopen::solver::batchnorm::BnFwdTrainingPerActivation>{};
-        const auto slns = solvers.SearchForSolutions(ctx, problem, 1);
-        if(slns.empty())
+        std::cout << it->solver_id << std::endl;
+        if(!it->invoker_factory)
         {
-            MIOPEN_THROW(miopenStatusNotImplemented, "No solver found.");
+            MIOPEN_THROW(miopenStatusInternalError, "Invoker missing in solver " + it->solver_id);
         }
-        for(auto it = slns.begin(); it != slns.end(); ++it)
-        {
-            if(!it->invoker_factory)
-            {
-                MIOPEN_THROW(miopenStatusInternalError,
-                             "Invoker missing in solver " + it->solver_id);
-            }
-            app_solvers.push_back(it->solver_id);
-        }
-    }
-    else if(is_fwd_infer)
-    {
-        const auto problem = miopen::batchnorm::ProblemDescription(
-            bn_mode, inputTensor.desc, outputTensor.desc, biasScaleTensor.desc, epsilon);
-        const auto solvers =
-            miopen::solver::SolverContainer<miopen::solver::batchnorm::BnFwdInference>{};
-        const auto slns = solvers.SearchForSolutions(ctx, problem, 1);
-        if(slns.empty())
-            MIOPEN_THROW(miopenStatusNotImplemented, "No solver found.");
-        for(auto it = slns.begin(); it != slns.end(); ++it)
-        {
-            if(!it->invoker_factory)
-                MIOPEN_THROW(miopenStatusInternalError,
-                             "Invoker missing in solver " + it->solver_id);
-            app_solvers.push_back(it->solver_id);
-        }
-    }
-    else if(is_bwd)
-    {
-        const auto problem = miopen::batchnorm::ProblemDescription(bn_mode,
-                                                                   inputTensor.desc,
-                                                                   dyInputTensor.desc,
-                                                                   dxOutputTensor.desc,
-                                                                   biasScaleTensor.desc,
-                                                                   epsilon,
-                                                                   saveMeanVar);
-        const auto solvers = miopen::solver::SolverContainer<
-            miopen::solver::batchnorm::BnBwdTrainingSpatialSingle,
-            miopen::solver::batchnorm::BnBwdTrainingSpatialMultiple,
-            miopen::solver::batchnorm::BnBwdTrainingPerActivation>{};
-        const auto slns = solvers.SearchForSolutions(ctx, problem, 1);
-        if(slns.empty())
-            MIOPEN_THROW(miopenStatusNotImplemented, "No solver found.");
-        for(auto it = slns.begin(); it != slns.end(); ++it)
-        {
-            if(!it->invoker_factory)
-                MIOPEN_THROW(miopenStatusInternalError,
-                             "Invoker missing in solver " + it->solver_id);
-            app_solvers.push_back(it->solver_id);
-        }
+        app_solvers.push_back(it->solver_id);
     }
     for(auto& elem : app_solvers)
     {
@@ -344,6 +291,7 @@ int BNFin<Tgpu, Tref>::ProcessStep(const std::string& step_name)
     {
         return TestApplicability();
     }
+    return 0;
 }
 
 template <typename Tgpu, typename Tref>
@@ -403,5 +351,86 @@ void BNFin<Tgpu, Tref>::InitNoGpuHandle(miopen::Handle& handle)
     std::ignore = handle;
 #endif
 }
+
+template <typename Tgpu, typename Tref>
+auto BNFin<Tgpu, Tref>::GetFwdTrainSolvers()
+{
+    return miopen::solver::SolverContainer<miopen::solver::batchnorm::BnFwdTrainingSpatialSingle,
+                                           miopen::solver::batchnorm::BnFwdTrainingSpatialMultiple,
+                                           miopen::solver::batchnorm::BnFwdTrainingPerActivation>{};
+}
+
+template <typename Tgpu, typename Tref>
+auto BNFin<Tgpu, Tref>::GetFwdInferSolvers()
+{
+    return miopen::solver::SolverContainer<miopen::solver::batchnorm::BnFwdInference>{};
+}
+
+template <typename Tgpu, typename Tref>
+auto BNFin<Tgpu, Tref>::GetBwdSolvers()
+{
+    return miopen::solver::SolverContainer<miopen::solver::batchnorm::BnBwdTrainingSpatialSingle,
+                                           miopen::solver::batchnorm::BnBwdTrainingSpatialMultiple,
+                                           miopen::solver::batchnorm::BnBwdTrainingPerActivation>{};
+}
+
+template <typename Tgpu, typename Tref>
+miopen::batchnorm::ProblemDescription BNFin<Tgpu, Tref>::GetProblemDescription()
+{
+    if(is_fwd_train)
+    {
+        return miopen::batchnorm::ProblemDescription{bn_mode,
+                                                     inputTensor.desc,
+                                                     outputTensor.desc,
+                                                     biasScaleTensor.desc,
+                                                     expAvgFactor,
+                                                     epsilon,
+                                                     saveMeanVar,
+                                                     keepRunningMeanVar};
+    }
+    else if(is_fwd_infer)
+    {
+        return miopen::batchnorm::ProblemDescription(
+            bn_mode, inputTensor.desc, outputTensor.desc, biasScaleTensor.desc, epsilon);
+    }
+    else if(is_bwd)
+    {
+        return miopen::batchnorm::ProblemDescription(bn_mode,
+                                                     inputTensor.desc,
+                                                     dyInputTensor.desc,
+                                                     dxOutputTensor.desc,
+                                                     biasScaleTensor.desc,
+                                                     epsilon,
+                                                     saveMeanVar);
+    }
+    else
+    {
+        throw std::runtime_error("Unable to determine batch norm direction");
+    }
+}
+
+template <typename Tgpu, typename Tref>
+std::vector<miopen::solver::ConvSolution>
+BNFin<Tgpu, Tref>::GetBNSolutions(miopen::ExecutionContext& ctx)
+{
+    const auto problem = GetProblemDescription();
+    if(is_fwd_train)
+    {
+        return GetFwdTrainSolvers().SearchForSolutions(ctx, problem, 1);
+    }
+    else if(is_fwd_infer)
+    {
+        return GetFwdInferSolvers().SearchForSolutions(ctx, problem, 1);
+    }
+    else if(is_bwd)
+    {
+        return GetBwdSolvers().SearchForSolutions(ctx, problem, 1);
+    }
+    else
+    {
+        throw std::runtime_error("Unable to determine batch norm direction");
+    }
+}
+
 } // namespace fin
 #endif // GUARD_MIOPEN_BN_FIN_HPP
