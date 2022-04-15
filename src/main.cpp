@@ -129,8 +129,6 @@ int main(int argc, char* argv[], char* envp[])
     {
         auto command                = it;
         std::unique_ptr<fin::Fin> f = nullptr;
-        // TODO : Move this to a factory function
-        std::cout << "command: " << command << std::endl;
         if(command.contains("config"))
         {
             if(command["config"]["cmd"] == "conv")

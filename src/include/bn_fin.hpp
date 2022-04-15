@@ -2,7 +2,7 @@
  *
  * MIT License
  *
- * Copyright (c) 2020 Advanced Micro Devices, Inc.
+ * Copyright (c) 2022 Advanced Micro Devices, Inc.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -46,8 +46,6 @@
 namespace fin {
 
 using json = nlohmann::json;
-// TODO: Create a config class to encapsulate config
-// related code, such as checking direction etc
 template <typename Tgpu, typename Tcpu>
 class BNFin : public Fin
 {
@@ -304,7 +302,7 @@ int BNFin<Tgpu, Tref>::SetBNDescriptor()
     {
         bn_mode = miopenBNPerActivation;
     }
-    else if(command["mode"] == 1)
+    else
     {
         bn_mode = miopenBNSpatial;
     }
@@ -314,7 +312,7 @@ int BNFin<Tgpu, Tref>::SetBNDescriptor()
     {
         saveMeanVar = false;
     }
-    else if(command["save"] == 1)
+    else
     {
         saveMeanVar = true;
     }
@@ -324,7 +322,7 @@ int BNFin<Tgpu, Tref>::SetBNDescriptor()
     {
         keepRunningMeanVar = false;
     }
-    else if(command["run"] == 1)
+    else
     {
         keepRunningMeanVar = true;
     }
