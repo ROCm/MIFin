@@ -73,7 +73,7 @@ class Fin
 #elif FIN_BACKEND_HIP
     hipStream_t& GetStream() { return q; }
 #endif
-    virtual ~Fin() {} // TODO: do we need this
+    virtual ~Fin() {}
 
     virtual int ProcessStep(const std::string& step_name) = 0;
 
@@ -81,7 +81,6 @@ class Fin
 
     int GetSolverList()
     {
-        // pair.first = id, pair. second = string id
         std::vector<std::unordered_map<std::string, std::string>> solvers;
         for(const auto& id :
             miopen::solver::GetSolversByPrimitive(miopen::solver::Primitive::Convolution))

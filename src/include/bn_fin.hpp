@@ -2,7 +2,7 @@
  *
  * MIT License
  *
- * Copyright (c) 2020 Advanced Micro Devices, Inc.
+ * Copyright (c) 2022 Advanced Micro Devices, Inc.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -43,11 +43,11 @@
 
 #include <nlohmann/json.hpp>
 
+#define EPSILON 1e-3
+
 namespace fin {
 
 using json = nlohmann::json;
-// TODO: Create a config class to encapsulate config
-// related code, such as checking direction etc
 template <typename Tgpu, typename Tcpu>
 class BNFin : public Fin
 {
@@ -113,34 +113,30 @@ class BNFin : public Fin
     int TestApplicability();
     int GetandSetData();
     miopen::batchnorm::ProblemDescription GetProblemDescription();
-    std::vector<miopen::solver::ConvSolution>
-    GetBNSolutions(miopen::ExecutionContext &ctx);
     int MIOpenFindCompile();
+    std::vector<miopen::solver::ConvSolution> GetBNSolutions(miopen::ExecutionContext& ctx);
 
     // Utility functions
     void InitNoGpuHandle(miopen::Handle& handle);
     auto GetFwdTrainSolvers();
     auto GetFwdInferSolvers();
     auto GetBwdSolvers();
-    //template <typename... T>
-    //miopen::solver::SolverContainer<T...> GetBNSolvers();
 
     json command;
     json job;
 
     miopenBatchNormMode_t bn_mode;
     std::vector<std::string> steps_processed;
-    bool saveMeanVar;
-    bool keepRunningMeanVar;
-    double epsilon;
-
-    double expAvgFactor   = 1.0;
-    bool isDepthSpecified = false;
-    int forw              = 0;
-    int back              = 1;
-    bool is_fwd_train     = true;
-    bool is_fwd_infer     = false;
-    bool is_bwd           = false;
+    bool saveMeanVar        = false;
+    bool keepRunningMeanVar = false;
+    double epsilon          = 1.0;
+    double expAvgFactor     = 1.0;
+    bool isDepthSpecified   = false;
+    int forw                = 0;
+    int back                = 1;
+    bool is_fwd_train       = true;
+    bool is_fwd_infer       = false;
+    bool is_bwd             = false;
 
     tensor<Tgpu, Tcpu> inputTensor;
     tensor<Tgpu, Tcpu> outputTensor;
@@ -161,8 +157,8 @@ int BNFin<Tgpu, Tref>::TestApplicability()
                              "to test applicability");
 #endif
 
-    auto& handle  = GetHandle();
-    auto ctx    = miopen::ExecutionContext(&handle);
+    auto& handle = GetHandle();
+    auto ctx     = miopen::ExecutionContext(&handle);
 #if MIOPEN_MODE_NOGPU
     InitNoGpuHandle(handle);
 #else
@@ -180,12 +176,10 @@ int BNFin<Tgpu, Tref>::TestApplicability()
         std::cout << it->solver_id << std::endl;
         if(!it->invoker_factory)
         {
-            MIOPEN_THROW(miopenStatusInternalError,
-                         "Invoker missing in solver " + it->solver_id);
+            MIOPEN_THROW(miopenStatusInternalError, "Invoker missing in solver " + it->solver_id);
         }
         app_solvers.push_back(it->solver_id);
     }
-
     for(auto& elem : app_solvers)
     {
         std::cout << elem << std::endl;
@@ -311,7 +305,7 @@ int BNFin<Tgpu, Tref>::SetBNDescriptor()
     {
         bn_mode = miopenBNPerActivation;
     }
-    else if(command["mode"] == 1)
+    else
     {
         bn_mode = miopenBNSpatial;
     }
@@ -321,7 +315,7 @@ int BNFin<Tgpu, Tref>::SetBNDescriptor()
     {
         saveMeanVar = false;
     }
-    else if(command["save"] == 1)
+    else
     {
         saveMeanVar = true;
     }
@@ -331,7 +325,7 @@ int BNFin<Tgpu, Tref>::SetBNDescriptor()
     {
         keepRunningMeanVar = false;
     }
-    else if(command["run"] == 1)
+    else
     {
         keepRunningMeanVar = true;
     }
@@ -358,63 +352,26 @@ void BNFin<Tgpu, Tref>::InitNoGpuHandle(miopen::Handle& handle)
 #endif
 }
 
-
-/*
 template <typename Tgpu, typename Tref>
-template <typename... T>
-miopen::solver::SolverContainer<T...> BNFin<Tgpu, Tref>::GetBNSolvers()
+auto BNFin<Tgpu, Tref>::GetFwdTrainSolvers()
 {
-    if(is_fwd_train)
-    {
-        return
-            miopen::solver::SolverContainer<
-            miopen::solver::batchnorm::BnFwdTrainingSpatialSingle,
-            miopen::solver::batchnorm::BnFwdTrainingSpatialMultiple,
-            miopen::solver::batchnorm::BnFwdTrainingPerActivation>{};
-    }
-    else if(is_fwd_infer)
-    {
-        return
-           miopen::solver::SolverContainer<miopen::solver::batchnorm::BnFwdInference>{};
-    }
-    else if(is_bwd)
-    {
-        return
-            miopen::solver::SolverContainer<
-            miopen::solver::batchnorm::BnBwdTrainingSpatialSingle,
-            miopen::solver::batchnorm::BnBwdTrainingSpatialMultiple,
-            miopen::solver::batchnorm::BnBwdTrainingPerActivation>{};
-    }
-    else
-    { 
-        throw std::runtime_error(
-            "Unable to determine batch norm direction");
-    }
-}*/
-
-template <typename Tgpu, typename Tref>
-auto BNFin<Tgpu, Tref>::GetFwdTrainSolvers(){
-    return
-        miopen::solver::SolverContainer<
-        miopen::solver::batchnorm::BnFwdTrainingSpatialSingle,
-        miopen::solver::batchnorm::BnFwdTrainingSpatialMultiple,
-        miopen::solver::batchnorm::BnFwdTrainingPerActivation>{};
+    return miopen::solver::SolverContainer<miopen::solver::batchnorm::BnFwdTrainingSpatialSingle,
+                                           miopen::solver::batchnorm::BnFwdTrainingSpatialMultiple,
+                                           miopen::solver::batchnorm::BnFwdTrainingPerActivation>{};
 }
 
 template <typename Tgpu, typename Tref>
-auto BNFin<Tgpu, Tref>::GetFwdInferSolvers(){
-    return
-       miopen::solver::SolverContainer<miopen::solver::batchnorm::BnFwdInference>{};
+auto BNFin<Tgpu, Tref>::GetFwdInferSolvers()
+{
+    return miopen::solver::SolverContainer<miopen::solver::batchnorm::BnFwdInference>{};
 }
 
 template <typename Tgpu, typename Tref>
-auto BNFin<Tgpu, Tref>::GetBwdSolvers(){
-    return
-        miopen::solver::SolverContainer<
-        miopen::solver::batchnorm::BnBwdTrainingSpatialSingle,
-        miopen::solver::batchnorm::BnBwdTrainingSpatialMultiple,
-        miopen::solver::batchnorm::BnBwdTrainingPerActivation>{};
-
+auto BNFin<Tgpu, Tref>::GetBwdSolvers()
+{
+    return miopen::solver::SolverContainer<miopen::solver::batchnorm::BnBwdTrainingSpatialSingle,
+                                           miopen::solver::batchnorm::BnBwdTrainingSpatialMultiple,
+                                           miopen::solver::batchnorm::BnBwdTrainingPerActivation>{};
 }
 
 template <typename Tgpu, typename Tref>
@@ -430,7 +387,6 @@ miopen::batchnorm::ProblemDescription BNFin<Tgpu, Tref>::GetProblemDescription()
                                                      epsilon,
                                                      saveMeanVar,
                                                      keepRunningMeanVar};
-    
     }
     else if(is_fwd_infer)
     {
@@ -439,27 +395,25 @@ miopen::batchnorm::ProblemDescription BNFin<Tgpu, Tref>::GetProblemDescription()
     }
     else if(is_bwd)
     {
-       return miopen::batchnorm::ProblemDescription(bn_mode,
-                                                    inputTensor.desc,
-                                                    dyInputTensor.desc,
-                                                    dxOutputTensor.desc,
-                                                    biasScaleTensor.desc,
-                                                    epsilon,
-                                                    saveMeanVar);
+        return miopen::batchnorm::ProblemDescription(bn_mode,
+                                                     inputTensor.desc,
+                                                     dyInputTensor.desc,
+                                                     dxOutputTensor.desc,
+                                                     biasScaleTensor.desc,
+                                                     epsilon,
+                                                     saveMeanVar);
     }
     else
-    { 
-       throw std::runtime_error(
-           "Unable to determine batch norm direction");
+    {
+        throw std::runtime_error("Unable to determine batch norm direction");
     }
 }
 
 template <typename Tgpu, typename Tref>
 std::vector<miopen::solver::ConvSolution>
-BNFin<Tgpu, Tref>::GetBNSolutions(miopen::ExecutionContext &ctx)
+BNFin<Tgpu, Tref>::GetBNSolutions(miopen::ExecutionContext& ctx)
 {
     const auto problem = GetProblemDescription();
-    //const auto solvers = GetBNSolvers();
     if(is_fwd_train)
     {
         return GetFwdTrainSolvers().SearchForSolutions(ctx, problem, 1);
@@ -472,11 +426,6 @@ BNFin<Tgpu, Tref>::GetBNSolutions(miopen::ExecutionContext &ctx)
     {
         return GetBwdSolvers().SearchForSolutions(ctx, problem, 1);
     }
-     else
-     { 
-        throw std::runtime_error(
-            "Unable to determine batch norm direction");
-     }
 }
 
 template <typename Tgpu, typename Tref>
@@ -490,12 +439,9 @@ int BNFin<Tgpu, Tref>::MIOpenFindCompile()
     throw std::runtime_error(
         "Unable to perform MIOpenFindCompile MIOpen was not compiled using HIPNOGPU backend");
 #endif
-    //const auto conv_dir = GetDirection();
-    //const miopen::ProblemDescription problem(
-    //    inputTensor.desc, weightTensor.desc, outputTensor.desc, convDesc, conv_dir);
-    auto& handle  = GetHandle();
+    auto& handle = GetHandle();
+    auto ctx     = miopen::ExecutionContext(&handle);
     GetHandle().EnableProfiling(true);
-    auto ctx    = miopen::ExecutionContext(&handle);
     //auto db = GetDb(ctx);
 #if MIOPEN_MODE_NOGPU
     InitNoGpuHandle(handle);
