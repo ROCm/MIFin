@@ -291,6 +291,10 @@ int BNFin<Tgpu, Tref>::ProcessStep(const std::string& step_name)
     {
         return TestApplicability();
     }
+    if(step_name == "miopen_find_compile")
+    {
+        return MIOpenFindCompile();
+    }
     return 0;
 }
 
@@ -405,7 +409,7 @@ miopen::batchnorm::ProblemDescription BNFin<Tgpu, Tref>::GetProblemDescription()
     }
     else
     {
-        throw std::runtime_error("Unable to determine batch norm direction");
+        throw std::runtime_error("Unable to get sovlers for batch norm");
     }
 }
 
@@ -426,13 +430,17 @@ BNFin<Tgpu, Tref>::GetBNSolutions(miopen::ExecutionContext& ctx)
     {
         return GetBwdSolvers().SearchForSolutions(ctx, problem, 1);
     }
+    else
+    {
+        throw std::runtime_error("Unable to to get solutions for batch norm");
+    }
 }
 
 template <typename Tgpu, typename Tref>
 int BNFin<Tgpu, Tref>::MIOpenFindCompile()
 {
-    std::cerr << "MIOpenFinCompile" << std::endl;
-    std::cerr << "Processing command: " << command << std::endl;
+    std::cout << "MIOpenFinCompile" << std::endl;
+    std::cout << "Processing command: " << command << std::endl;
 #if MIOPEN_MODE_NOGPU
     GetandSetData();
 #else
@@ -459,7 +467,7 @@ int BNFin<Tgpu, Tref>::MIOpenFindCompile()
     //output["network_config"]    = network_config;
     std::ostringstream ss;
     const auto problem = GetProblemDescription();
-    problem.Serialize(ss);
+    //problem.Serialize(ss);
     output["db_key"] = ss.str();
 
     json find_result;
@@ -468,66 +476,75 @@ int BNFin<Tgpu, Tref>::MIOpenFindCompile()
     const size_t num_cu    = handle.GetMaxComputeUnits();
     std::cerr << "Job Arch: " << job["arch"] << ": Handle Arch: " << arch << std::endl;
     std::cerr << "Job Num CU: " << job["num_cu"] << ": Handle Num Cu: " << num_cu << std::endl;
-    //need to add a getSolvers function
-    const auto solvers = miopen::solver::SolverContainer<
-        miopen::solver::batchnorm::BnFwdTrainingSpatialSingle,
-        miopen::solver::batchnorm::BnFwdTrainingSpatialMultiple,
-        miopen::solver::batchnorm::BnFwdTrainingPerActivation>{};
-    //const auto solvers = GetSolvers(is_fwd_train, is_fwd_infer, is_bwd);
-    //for (auto it = std::begin(solvers); it!=std::end(solvers); ++it)
-    //    std::cout<<it->GetSolverDbId()<<std::endl;
-    //for(const auto &s : solvers)
-    //{
-    //    std::cout<<s.GetSolverDbId()<<std::endl;
-    //    auto sol = s.GetSolution(ctx, problem);
-    //}
-    //const auto slns = solvers.SearchForSolutions(ctx, problem, 1);
+    bool dynamic_only = false;
+    if(job.contains("dynamic_only"))
+        dynamic_only = job["dynamic_only"];
     const auto slns = GetBNSolutions(ctx);
     for(auto it = slns.begin(); it != slns.end(); ++it)
-            std::cout << it->solver_id << std::endl;
-    //std::vector<Solver> solver_container;
-    //for(auto it = solvers.begin(); it != solvers.end(); ++it)
-    //    solver_container.push_back(&it);
-    //const auto slns = solvers.SearchForSolutions(ctx, problem, 1);
-
-    /*
-    for(const auto& solver_id : solver_list)
     {
-        json res_item;
+            std::cout << it->solver_id << std::endl;
+    }
+
+    for(auto it = slns.begin(); it != slns.end(); ++it)
+    {
         // remove the user db files
         boost::filesystem::remove_all(miopen::GetCachePath(false));
-        auto process_solver = [&]() -> bool {
-            std::cerr << "Processing Solver: " << solver_id.ToString() << std::endl;
-            res_item["solver_id"] = solver_id.ToString();
-            if(solver_id.ToString() == "ConvBiasActivAsm1x1U" ||
-               solver_id.ToString().find("Fused") != std::string::npos)
+        json res_item;
+        res_item["solver_id"] = it->solver_id; 
+        res_item["reason"]    = "Success";
+        res_item["workspace"] = it->workspace_sz;
+        std::cout << "Solver id: " << res_item["solver_id"] << std::endl;
+        //const auto algo       = it->solver_id.GetAlgo(conv_dir);
+        std::vector<miopen::solver::KernelInfo> kernels;
+        for(auto&& kernel : it->construction_params)
+        {
+            kernels.push_back(kernel);
+        }
+        std::ignore = miopen::solver::PrecompileKernels(handle, kernels);
+        json kernel_list = json::array();
+        for(const auto& k : kernels)
+        {
+            json kernel;
+            auto comp_opts   = k.comp_options;
+            auto p           = handle.LoadProgram(k.kernel_file, comp_opts, false, "");
+            const auto hsaco = p.IsCodeObjectInMemory()
+                                   ? p.GetCodeObjectBlob()
+                                   : miopen::LoadFile(p.GetCodeObjectPathname().string());
+            if(hsaco.empty())
             {
-                std::cerr << "Skipping fused solvers" << std::endl;
-                return false;
+                std::cerr << "Got empty code object" << std::endl;
+                throw std::runtime_error("Got empty code object");
             }
-            const auto& s         = solver_id.GetSolver();
-            //const auto algo = bn_mode == miopenBNSpatial
-            //              ? AlgorithmName{"miopenBatchNormForwardTrainingSpatial"}
-            //              : AlgorithmName{"miopenBatchNormForwardTrainingPerActivation"};
-            //res_item["algorithm"] = algo;
-            if(s.IsEmpty())
+            // Compress the blob
+            auto md5_sum             = miopen::md5(hsaco);
+            auto size                = hsaco.size();
+            bool success             = false;
+            auto compressed_hsaco    = miopen::compress(hsaco, &success);
+            const auto encoded_hsaco = base64_encode(compressed_hsaco);
+            kernel["kernel_file"]    = k.kernel_file;
+            kernel["comp_options"]   = k.comp_options;
+            if(success)
             {
-                res_item["reason"] = "Empty Solver";
-                std::cerr << "Skipping invalid solver: " << solver_id.ToString() << std::endl;
-                return false;
+                kernel["uncompressed_size"] = size;
+                kernel["md5_sum"]           = md5_sum;
+                kernel["blob"]              = encoded_hsaco;
             }
-            if(!s.IsTunable())
+            else
             {
-                res_item["reason"] = "Not Tunable";
-                std::cerr << "Skipping non-tunable solver: " << solver_id.ToString() << std::endl;
-                return false;
+                kernel["md5_sum"]           = "Failed to compress kernel";
+                kernel["uncompressed_size"] = 0;
+                kernel["blob"]              = "";
             }
+            kernel_list.push_back(kernel);
+            std::cerr << "Successfully added new kernel" << std::endl;
+        }
+        res_item["kernel_objects"] = kernel_list;
+        res_item["find_compiled"] = true;
+        find_result.push_back(res_item);
+    }
+    output["miopen_find_compile_result"] = find_result;
+    return 1;
 
-
-        };
-
-    };*/
-
-}
+}//End FindCompile
 } // namespace fin
 #endif // GUARD_MIOPEN_BN_FIN_HPP
