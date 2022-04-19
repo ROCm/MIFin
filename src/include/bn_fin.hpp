@@ -450,7 +450,6 @@ int BNFin<Tgpu, Tref>::MIOpenFindCompile()
     auto& handle = GetHandle();
     auto ctx     = miopen::ExecutionContext(&handle);
     GetHandle().EnableProfiling(true);
-    //auto db = GetDb(ctx);
 #if MIOPEN_MODE_NOGPU
     InitNoGpuHandle(handle);
 #else
@@ -459,15 +458,16 @@ int BNFin<Tgpu, Tref>::MIOpenFindCompile()
 #endif
     ctx.SetStream(&handle);
     ctx.DetectRocm();
-    //ctx.SetupFloats();
+    // ctx.SetupFloats();
 
-    //const auto network_config   = ctx.BuildConfKey();
-    //const bool is_winograd_only = convDesc.IsWinograd3x3SupportedAndFast(ctx);
-    //output["is_winograd_only"]  = is_winograd_only;
-    //output["network_config"]    = network_config;
+    // const auto network_config   = ctx.BuildConfKey();
+    // const bool is_winograd_only = convDesc.IsWinograd3x3SupportedAndFast(ctx);
+    // output["is_winograd_only"]  = is_winograd_only;
+    // output["network_config"]    = network_config;
     std::ostringstream ss;
-    const auto problem = GetProblemDescription();
-    //problem.Serialize(ss);
+    const auto problem        = GetProblemDescription();
+    const auto network_config = problem.MakeNetworkConfig();
+    // problem.Serialize(ss);
     output["db_key"] = ss.str();
 
     json find_result;
@@ -479,28 +479,45 @@ int BNFin<Tgpu, Tref>::MIOpenFindCompile()
     bool dynamic_only = false;
     if(job.contains("dynamic_only"))
         dynamic_only = job["dynamic_only"];
-    const auto slns = GetBNSolutions(ctx);
-    for(auto it = slns.begin(); it != slns.end(); ++it)
+    const auto slns  = GetBNSolutions(ctx);
+    const auto solver_list =
+        miopen::solver::GetSolversByPrimitive(miopen::solver::Primitive::Batchnorm);
+    for(const auto& solver_id : solver_list)
     {
-            std::cout << it->solver_id << std::endl;
+        std::cerr << solver_id.ToString() << std::endl;
     }
 
     for(auto it = slns.begin(); it != slns.end(); ++it)
     {
         // remove the user db files
+        std::cout << it->solver_id << std::endl;
         boost::filesystem::remove_all(miopen::GetCachePath(false));
         json res_item;
-        res_item["solver_id"] = it->solver_id; 
+        res_item["solver_id"] = it->solver_id;
+        // const auto solver  = miopen::solver::Id(it->solver_id);
+        // std::cout << solver.ToString() << std::endl;
+        // const auto sid = miopen::solver::Id(it->solver_id);
+        // const auto algo = sid.GetAlgo();
+        const auto solver_list =
+            miopen::solver::GetSolversByPrimitive(miopen::solver::Primitive::Batchnorm);
+        for(const auto& solver_id : solver_list)
+        {
+            std::cerr << solver_id.ToString() << " - " << it->solver_id << std::endl;
+        }
+
+        // const auto idRegister = Register(miopen::IdRegistryData{}, miopen::Primitive::Bathchnorm,
+        // it->solver_id);
+        // res_item["algorithm"] = miopen::solver::Id(it->solver_id).GetAlgo();
+        // const auto algo = solver.id.GetAlgo();
         res_item["reason"]    = "Success";
         res_item["workspace"] = it->workspace_sz;
-        std::cout << "Solver id: " << res_item["solver_id"] << std::endl;
-        //const auto algo       = it->solver_id.GetAlgo(conv_dir);
+        std::cout << "res_item" << res_item << std::endl;
         std::vector<miopen::solver::KernelInfo> kernels;
         for(auto&& kernel : it->construction_params)
         {
             kernels.push_back(kernel);
         }
-        std::ignore = miopen::solver::PrecompileKernels(handle, kernels);
+        std::ignore      = miopen::solver::PrecompileKernels(handle, kernels);
         json kernel_list = json::array();
         for(const auto& k : kernels)
         {
@@ -539,12 +556,11 @@ int BNFin<Tgpu, Tref>::MIOpenFindCompile()
             std::cerr << "Successfully added new kernel" << std::endl;
         }
         res_item["kernel_objects"] = kernel_list;
-        res_item["find_compiled"] = true;
+        res_item["find_compiled"]  = true;
         find_result.push_back(res_item);
     }
     output["miopen_find_compile_result"] = find_result;
     return 1;
-
-}//End FindCompile
+}
 } // namespace fin
 #endif // GUARD_MIOPEN_BN_FIN_HPP
