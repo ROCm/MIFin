@@ -114,7 +114,6 @@ class BNFin : public Fin
     std::vector<miopen::solver::ConvSolution> GetBNSolutions(miopen::ExecutionContext& ctx);
 
     // Utility functions
-    void InitNoGpuHandle(miopen::Handle& handle);
     auto GetFwdTrainSolvers();
     auto GetFwdInferSolvers();
     auto GetBwdSolvers();
@@ -135,13 +134,16 @@ class BNFin : public Fin
     bool is_fwd_infer       = false;
     bool is_bwd             = false;
 
-    tensor<Tgpu, Tcpu> inputTensor;
-    tensor<Tgpu, Tcpu> outputTensor;
-    tensor<Tgpu, Tcpu> biasScaleTensor;
+    // tensor<Tgpu, Tcpu> inputTensor;
+    // tensor<Tgpu, Tcpu> outputTensor;
+    // tensor<Tgpu, Tcpu> biasScaleTensor;
+    miopen::TensorDescriptor inputTensor;
+    miopen::TensorDescriptor outputTensor;
+    miopen::TensorDescriptor biasScaleTensor;
 
     // for backward
-    tensor<Tgpu, Tcpu> dyInputTensor;
-    tensor<Tgpu, Tcpu> dxOutputTensor;
+    miopen::TensorDescriptor dyInputTensor;
+    miopen::TensorDescriptor dxOutputTensor;
 };
 
 template <typename Tgpu, typename Tref>
@@ -157,7 +159,7 @@ int BNFin<Tgpu, Tref>::TestApplicability()
     auto& handle = GetHandle();
     auto ctx     = miopen::ExecutionContext(&handle);
 #if MIOPEN_MODE_NOGPU
-    InitNoGpuHandle(handle);
+    fin::InitNoGpuHandle(handle, job["arch"], job["num_cu"]);
 #else
     throw std::runtime_error("MIOpen needs to be compiled with the NOGPU backend "
                              "to test applicability");
@@ -196,18 +198,16 @@ int BNFin<Tgpu, Tref>::GetandSetData()
 
     if(command["bias"].get<int>() != 0)
     {
-        auto bias_len   = GetBiasTensorLengths();
-        biasScaleTensor = {GetHandle().GetStream(), bias_len, true, true};
+        auto bias_len = GetBiasTensorLengths();
+        // biasScaleTensor = {GetHandle().GetStream(), bias_len, true, true};
+        // biasScaleTensor = miopen::TensorDescriptor(data_type, sb_len.data(), bias_len.size());
     }
 
     std::vector<int> sb_len;
     if(bn_mode == miopenBNPerActivation)
     {
         // 1xCxHxW | in_len.size = 4
-        sb_len.push_back(1);
-        sb_len.push_back(in_len[1]);
-        sb_len.push_back(in_len[2]);
-        sb_len.push_back(in_len[3]);
+        sb_len = {1, in_len[1], in_len[2], in_len[3]};
 
         // 1xCxDxHxW | in_len.size = 5
         if(in_len.size() == 5)
@@ -217,10 +217,7 @@ int BNFin<Tgpu, Tref>::GetandSetData()
     }
     else if(bn_mode == miopenBNSpatial)
     { // 1xCx1x1
-        sb_len.push_back(1);
-        sb_len.push_back(in_len[1]);
-        sb_len.push_back(1);
-        sb_len.push_back(1);
+        sb_len = {1, in_len[1], 1, 1};
 
         // 1xCx1x1x1
         if(in_len.size() == 5)
@@ -229,16 +226,37 @@ int BNFin<Tgpu, Tref>::GetandSetData()
         }
     }
 
-    miopenSetTensorDescriptor(&inputTensor.desc, data_type, in_len.size(), in_len.data(), nullptr);
-    miopenSetTensorDescriptor(
-        &biasScaleTensor.desc, data_type, sb_len.size(), sb_len.data(), nullptr);
-    miopenSetTensorDescriptor(&outputTensor.desc, data_type, in_len.size(), in_len.data(), nullptr);
+    if(command["bias"].get<int>() != 0)
+    {
+        auto bias_len = GetBiasTensorLengths();
+        // biasScaleTensor = {GetHandle().GetStream(), bias_len, true, true};
+        biasScaleTensor = miopen::TensorDescriptor(data_type, sb_len.data(), bias_len.size());
+    }
+    else
+    {
+        biasScaleTensor = miopen::TensorDescriptor(data_type, sb_len.data(), sb_len.size());
+    }
+
+    // miopenSetTensorDescriptor(&inputTensor.desc, data_type, in_len.size(), in_len.data(),
+    // nullptr);
+    inputTensor = miopen::TensorDescriptor(data_type, in_len.data(), in_len.size());
+
+    // miopenSetTensorDescriptor(
+    //    &biasScaleTensor.desc, data_type, sb_len.size(), sb_len.data(), nullptr);
+    biasScaleTensor = miopen::TensorDescriptor(data_type, sb_len.data(), sb_len.size());
+
+    // miopenSetTensorDescriptor(&outputTensor.desc, data_type, in_len.size(), in_len.data(),
+    // nullptr);
+    outputTensor = miopen::TensorDescriptor(data_type, in_len.data(), in_len.size());
 
     // backwards
-    miopenSetTensorDescriptor(
-        &dyInputTensor.desc, data_type, in_len.size(), in_len.data(), nullptr);
-    miopenSetTensorDescriptor(
-        &dxOutputTensor.desc, data_type, in_len.size(), in_len.data(), nullptr);
+    // miopenSetTensorDescriptor(
+    //    &dyInputTensor.desc, data_type, in_len.size(), in_len.data(), nullptr);
+    dyInputTensor = miopen::TensorDescriptor(data_type, in_len.data(), in_len.size());
+
+    // miopenSetTensorDescriptor(
+    //    &dxOutputTensor.desc, data_type, in_len.size(), in_len.data(), nullptr);
+    dxOutputTensor = miopen::TensorDescriptor(data_type, in_len.data(), in_len.size());
     return (0);
 }
 
@@ -298,34 +316,13 @@ int BNFin<Tgpu, Tref>::SetBNDescriptor()
     //    	double bnBeta = inflags.GetValueDouble("beta");
 
     // batch norm mode type
-    if(command["mode"] == 0)
-    {
-        bn_mode = miopenBNPerActivation;
-    }
-    else
-    {
-        bn_mode = miopenBNSpatial;
-    }
+    bn_mode = command["mode"] == 0 ? miopenBNPerActivation : miopenBNSpatial;
 
     // save off mean and variance?
-    if(command["save"] == 0)
-    {
-        saveMeanVar = false;
-    }
-    else
-    {
-        saveMeanVar = true;
-    }
+    saveMeanVar = command["save"] == 0 ? false : true;
 
     // keep running mean and variance
-    if(command["run"] == 0)
-    {
-        keepRunningMeanVar = false;
-    }
-    else
-    {
-        keepRunningMeanVar = true;
-    }
+    keepRunningMeanVar = command["run"] == 0 ? false : true;
 
     forw = command["forw"];
     back = command["back"];
@@ -333,20 +330,6 @@ int BNFin<Tgpu, Tref>::SetBNDescriptor()
     epsilon = 1;
 
     return miopenStatusSuccess;
-}
-
-template <typename Tgpu, typename Tref>
-void BNFin<Tgpu, Tref>::InitNoGpuHandle(miopen::Handle& handle)
-{
-#if MIOPEN_MODE_NOGPU
-    handle.impl->device_name        = job["arch"];
-    handle.impl->num_cu             = job["num_cu"];
-    handle.impl->max_mem_alloc_size = 32UL * 1024 * 1024 * 1024; // 32 GB
-    handle.impl->global_mem_size    = 32UL * 1024 * 1024 * 1024;
-    handle.impl->target_properties.Init(&handle);
-#else
-    std::ignore = handle;
-#endif
 }
 
 template <typename Tgpu, typename Tref>
@@ -377,9 +360,9 @@ miopen::batchnorm::ProblemDescription BNFin<Tgpu, Tref>::GetProblemDescription()
     if(is_fwd_train)
     {
         return miopen::batchnorm::ProblemDescription{bn_mode,
-                                                     inputTensor.desc,
-                                                     outputTensor.desc,
-                                                     biasScaleTensor.desc,
+                                                     inputTensor,
+                                                     outputTensor,
+                                                     biasScaleTensor,
                                                      expAvgFactor,
                                                      epsilon,
                                                      saveMeanVar,
@@ -388,15 +371,15 @@ miopen::batchnorm::ProblemDescription BNFin<Tgpu, Tref>::GetProblemDescription()
     else if(is_fwd_infer)
     {
         return miopen::batchnorm::ProblemDescription(
-            bn_mode, inputTensor.desc, outputTensor.desc, biasScaleTensor.desc, epsilon);
+            bn_mode, inputTensor, outputTensor, biasScaleTensor, epsilon);
     }
     else if(is_bwd)
     {
         return miopen::batchnorm::ProblemDescription(bn_mode,
-                                                     inputTensor.desc,
-                                                     dyInputTensor.desc,
-                                                     dxOutputTensor.desc,
-                                                     biasScaleTensor.desc,
+                                                     inputTensor,
+                                                     dyInputTensor,
+                                                     dxOutputTensor,
+                                                     biasScaleTensor,
                                                      epsilon,
                                                      saveMeanVar);
     }
