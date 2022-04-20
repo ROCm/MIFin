@@ -33,7 +33,6 @@
 
 #include <miopen/execution_context.hpp>
 #include <miopen/miopen.h>
-#include <miopen/stringutils.hpp>
 #include <miopen/batchnorm/problem_description.hpp>
 #include <miopen/batch_norm.hpp>
 #include <miopen/batchnorm/invoke_params.hpp>
@@ -469,6 +468,12 @@ int BNFin<Tgpu, Tref>::MIOpenFindCompile()
     const auto network_config = problem.MakeNetworkConfig();
     // problem.Serialize(ss);
     output["db_key"] = ss.str();
+    /*const auto solver_list =
+        miopen::solver::GetSolversByPrimitive(miopen::solver::Primitive::Batchnorm);
+    for(const auto& solver_id : solver_list)
+    {
+        std::cerr << "'" << solver_id.ToString() << "'" << std::endl;
+    }*/
 
     json find_result;
     const auto& tgt_props  = handle.GetTargetProperties();
@@ -480,12 +485,6 @@ int BNFin<Tgpu, Tref>::MIOpenFindCompile()
     if(job.contains("dynamic_only"))
         dynamic_only = job["dynamic_only"];
     const auto slns  = GetBNSolutions(ctx);
-    const auto solver_list =
-        miopen::solver::GetSolversByPrimitive(miopen::solver::Primitive::Batchnorm);
-    for(const auto& solver_id : solver_list)
-    {
-        std::cerr << solver_id.ToString() << std::endl;
-    }
 
     for(auto it = slns.begin(); it != slns.end(); ++it)
     {
@@ -494,8 +493,8 @@ int BNFin<Tgpu, Tref>::MIOpenFindCompile()
         boost::filesystem::remove_all(miopen::GetCachePath(false));
         json res_item;
         res_item["solver_id"] = it->solver_id;
-        // const auto solver  = miopen::solver::Id(it->solver_id);
-        // std::cout << solver.ToString() << std::endl;
+        const auto solver  = miopen::solver::Id(it->solver_id);
+        std::cout << solver.ToString() << std::endl;
         // const auto sid = miopen::solver::Id(it->solver_id);
         // const auto algo = sid.GetAlgo();
         const auto solver_list =
@@ -505,10 +504,6 @@ int BNFin<Tgpu, Tref>::MIOpenFindCompile()
             std::cerr << solver_id.ToString() << " - " << it->solver_id << std::endl;
         }
 
-        // const auto idRegister = Register(miopen::IdRegistryData{}, miopen::Primitive::Bathchnorm,
-        // it->solver_id);
-        // res_item["algorithm"] = miopen::solver::Id(it->solver_id).GetAlgo();
-        // const auto algo = solver.id.GetAlgo();
         res_item["reason"]    = "Success";
         res_item["workspace"] = it->workspace_sz;
         std::cout << "res_item" << res_item << std::endl;
