@@ -57,4 +57,16 @@ std::string Fin::ParseBaseArg(const int argc, const char* argv[])
     else
         return arg;
 }
+void InitNoGpuHandle(miopen::Handle& handle, const std::string& arch, const unsigned long num_cu)
+{
+#if MIOPEN_MODE_NOGPU
+    handle.impl->device_name        = arch;
+    handle.impl->num_cu             = num_cu;
+    handle.impl->max_mem_alloc_size = 32UL * 1024 * 1024 * 1024; // 32 GB
+    handle.impl->global_mem_size    = 32UL * 1024 * 1024 * 1024;
+    handle.impl->target_properties.Init(&handle);
+#else
+    std::ignore = handle;
+#endif
+}
 } // namespace fin

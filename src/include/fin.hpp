@@ -37,7 +37,9 @@
 #include <cstdio>
 #include <cstdlib>
 #include <memory>
+#include <miopen/kernel_cache.hpp>
 #include <miopen/handle.hpp>
+#include <miopen/nogpu/handle_impl.hpp>
 #include <miopen/any_solver.hpp>
 #include <numeric>
 #include <vector>
@@ -55,10 +57,15 @@ using json = nlohmann::json;
 #endif
 
 namespace fin {
+
+extern void
+InitNoGpuHandle(miopen::Handle& handle, const std::string& arch, const unsigned long num_cu);
+
 class Fin
 {
     public:
     Fin() {}
+    virtual ~Fin() {}
     void Usage();
     std::string ParseBaseArg(const int argc, const char* argv[]);
     miopen::Handle& GetHandle()
@@ -73,7 +80,6 @@ class Fin
 #elif FIN_BACKEND_HIP
     hipStream_t& GetStream() { return q; }
 #endif
-    virtual ~Fin() {}
 
     virtual int ProcessStep(const std::string& step_name) = 0;
 
@@ -135,6 +141,19 @@ void Fin::InitDataType()
 {
     static_assert(std::is_same<Tgpu, float>{}, "unsupported Tgpu");
 }
+
+/*void InitNoGpuHandle(miopen::Handle& handle, const std::string& arch, const unsigned long num_cu)
+{
+#if MIOPEN_MODE_NOGPU
+    handle.impl->device_name        = arch;
+    handle.impl->num_cu             = num_cu;
+    handle.impl->max_mem_alloc_size = 32UL * 1024 * 1024 * 1024; // 32 GB
+    handle.impl->global_mem_size    = 32UL * 1024 * 1024 * 1024;
+    handle.impl->target_properties.Init(&handle);
+#else
+    std::ignore = handle;
+#endif
+}*/
 
 template <typename T>
 std::ostream& operator<<(std::ostream& os, const std::vector<T>& vs)
