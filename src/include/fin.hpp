@@ -65,6 +65,7 @@ class Fin
 {
     public:
     Fin() {}
+    virtual ~Fin() {}
     void Usage();
     std::string ParseBaseArg(const int argc, const char* argv[]);
     miopen::Handle& GetHandle()
