@@ -158,10 +158,14 @@ class ConvFin : public Fin
     int TestPerfDbValid();
     int GetandSetData();
     int GetSolverList();
+#if 0
     int MIOpenPerfCompile();
+#endif
     int MIOpenFind();
     int MIOpenFindCompile();
+#if 0
     int MIOpenPerfEval();
+#endif
     int MIOpenFindEval();
 
     // Utility functions
@@ -208,6 +212,8 @@ void ConvFin<Tgpu, Tref>::InitNoGpuHandle(miopen::Handle& handle)
     std::ignore = handle;
 #endif
 }
+
+#if 0
 
 template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
@@ -359,6 +365,8 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
     return 1;
 }
 
+#endif
+
 template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
 {
@@ -509,6 +517,8 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
     output["miopen_find_compile_result"] = find_result;
     return 1;
 }
+
+#if 0
 
 template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
@@ -749,6 +759,8 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
     output["miopen_perf_eval_result"] = perf_result;
     return 1;
 }
+
+#endif
 
 template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::MIOpenFindEval()
@@ -1410,14 +1422,18 @@ int ConvFin<Tgpu, Tref>::ProcessStep(const std::string& step_name)
         return TestPerfDbValid();
     if(step_name == "get_solvers")
         return GetSolverList();
+#if 0
     if(step_name == "miopen_perf_compile")
         return MIOpenPerfCompile();
+#endif
     if(step_name == "miopen_find")
         return MIOpenFind();
     if(step_name == "miopen_find_compile")
         return MIOpenFindCompile();
+#if 0
     if(step_name == "miopen_perf_eval")
         return MIOpenPerfEval();
+#endif
     if(step_name == "miopen_find_eval")
         return MIOpenFindEval();
     return 0;
