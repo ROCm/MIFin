@@ -112,6 +112,7 @@ class BNFin : public Fin
     int TestApplicability();
     int GetandSetData();
     miopen::batchnorm::ProblemDescription GetProblemDescription();
+    miopen::batchnorm::Algorithm GetAlgorithm();
     int MIOpenFindCompile();
     std::vector<miopen::solver::ConvSolution> GetBNSolutions(miopen::ExecutionContext& ctx);
 
@@ -396,6 +397,34 @@ miopen::batchnorm::ProblemDescription BNFin<Tgpu, Tref>::GetProblemDescription()
 }
 
 template <typename Tgpu, typename Tref>
+miopen::batchnorm::Algorithm BNFin<Tgpu, Tref>::GetAlgorithm()
+{
+    if(is_fwd_train)
+    {
+        return bn_mode == miopenBNSpatial
+                          ? AlgorithmName{"miopenBatchNormForwardTrainingSpatial"}
+                          : AlgorithmName{"miopenBatchNormForwardTrainingPerActivation"};
+    }
+    else if(is_fwd_infer)
+    {
+        return AlgorithmName{"miopenBatchNormalizationForwardInference"};
+    }
+    else if(is_bwd)
+    {
+        return bn_mode == miopenBNSpatial
+                          ? AlgorithmName{"miopenBatchNormBackwardPropSpatial"}
+                          : AlgorithmName{"miopenBatchNormBackwardPropPerActivation"};
+    }
+    else
+    {
+        throw std::runtime_error("Unable to get sovlers for batch norm");
+    }
+
+
+
+}
+
+template <typename Tgpu, typename Tref>
 std::vector<miopen::solver::ConvSolution>
 BNFin<Tgpu, Tref>::GetBNSolutions(miopen::ExecutionContext& ctx)
 {
@@ -417,6 +446,8 @@ BNFin<Tgpu, Tref>::GetBNSolutions(miopen::ExecutionContext& ctx)
         throw std::runtime_error("Unable to to get solutions for batch norm");
     }
 }
+
+
 
 template <typename Tgpu, typename Tref>
 int BNFin<Tgpu, Tref>::MIOpenFindCompile()
