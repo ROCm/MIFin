@@ -143,6 +143,7 @@ class BNFin : public Fin
     miopen::TensorDescriptor inputTensor;
     miopen::TensorDescriptor outputTensor;
     miopen::TensorDescriptor biasScaleTensor;
+    tensor<Tgpu, Tcpu> workspace;
 
     // for backward
     miopen::TensorDescriptor dyInputTensor;
@@ -438,7 +439,7 @@ int BNFin<Tgpu, Tref>::MIOpenFindCompile()
     auto ctx     = miopen::ExecutionContext(&handle);
     GetHandle().EnableProfiling(true);
 #if MIOPEN_MODE_NOGPU
-    InitNoGpuHandle(handle);
+    fin::InitNoGpuHandle(handle, job["arch"], job["num_cu"]);
 #else
     throw std::runtime_error("MIOpen needs to be compiled with the NOGPU backend "
                              "for MIOpenFindCompile");
@@ -557,16 +558,16 @@ int BNFin<Tgpu, Tref>::MIOpenFindEval()
     throw std::runtime_error(
         "Unable to perform MIOpenFindEval MIOpen was not compiled using HIPNOGPU backend");
 #endif
-    auto& handle = GetHandle();
-    auto ctx     = miopen::ExecutionContext(&handle);
+    auto& h = GetHandle();
+    auto ctx     = miopen::ExecutionContext(&h);
     GetHandle().EnableProfiling(true);
 #if MIOPEN_MODE_NOGPU
-    InitNoGpuHandle(handle);
+    fin::InitNoGpuHandle(h, job["arch"], job["num_cu"]);
 #else
     throw std::runtime_error("MIOpen needs to be compiled with the NOGPU backend "
                              "for MIOpenFindEval");
 #endif
-    ctx.SetStream(&handle);
+    ctx.SetStream(&h);
     ctx.DetectRocm();
     // ctx.SetupFloats();
 
@@ -587,9 +588,9 @@ int BNFin<Tgpu, Tref>::MIOpenFindEval()
     }*/
 
     json find_result;
-    const auto& tgt_props  = handle.GetTargetProperties();
+    const auto& tgt_props  = h.GetTargetProperties();
     const std::string arch = tgt_props.Name();
-    const size_t num_cu    = handle.GetMaxComputeUnits();
+    const size_t num_cu    = h.GetMaxComputeUnits();
     std::cerr << "Job Arch: " << job["arch"] << ": Handle Arch: " << arch << std::endl;
     std::cerr << "Job Num CU: " << job["num_cu"] << ": Handle Num Cu: " << num_cu << std::endl;
     const auto slns  = GetBNSolutions(ctx);
@@ -625,13 +626,13 @@ int BNFin<Tgpu, Tref>::MIOpenFindEval()
                 std::cerr << "Skipping invalid solver: " << solver_id.ToString() << std::endl;
                 return false;
             }
-            if(!s.IsApplicable(ctx))
+            /*if(!s.IsApplicable(ctx))
             {
                 std::cerr << "Solver inapplicable: " << solver_name << std::endl;
                 throw std::runtime_error(
                     "InApplicable solver was sent to fin, check Tuna for errors");
                 return false;
-            }
+            }*/
             if(dynamic_only && !s.IsDynamic())
             {
                 res_item["reason"] = "Not Dynamic";
@@ -639,7 +640,7 @@ int BNFin<Tgpu, Tref>::MIOpenFindEval()
                 return false;
             }
             std::cerr << solver_name << " is applicable" << std::endl;
-            const miopen::Solution solution;
+            const miopen::solver::ConvSolution solution;
             for(auto it = slns.begin(); it != slns.end(); ++it)
             {
                 if(it->solver_id.compare(solver_name)==0)
