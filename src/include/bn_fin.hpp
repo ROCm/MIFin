@@ -134,9 +134,6 @@ class BNFin : public Fin
     bool is_fwd_infer       = false;
     bool is_bwd             = false;
 
-    // tensor<Tgpu, Tcpu> inputTensor;
-    // tensor<Tgpu, Tcpu> outputTensor;
-    // tensor<Tgpu, Tcpu> biasScaleTensor;
     miopen::TensorDescriptor inputTensor;
     miopen::TensorDescriptor outputTensor;
     miopen::TensorDescriptor biasScaleTensor;
@@ -196,13 +193,6 @@ int BNFin<Tgpu, Tref>::GetandSetData()
 
     auto in_len = GetInputTensorLengths();
 
-    if(command["bias"].get<int>() != 0)
-    {
-        auto bias_len = GetBiasTensorLengths();
-        // biasScaleTensor = {GetHandle().GetStream(), bias_len, true, true};
-        // biasScaleTensor = miopen::TensorDescriptor(data_type, sb_len.data(), bias_len.size());
-    }
-
     std::vector<int> sb_len;
     if(bn_mode == miopenBNPerActivation)
     {
@@ -229,7 +219,6 @@ int BNFin<Tgpu, Tref>::GetandSetData()
     if(command["bias"].get<int>() != 0)
     {
         auto bias_len = GetBiasTensorLengths();
-        // biasScaleTensor = {GetHandle().GetStream(), bias_len, true, true};
         biasScaleTensor = miopen::TensorDescriptor(data_type, sb_len.data(), bias_len.size());
     }
     else
@@ -237,25 +226,12 @@ int BNFin<Tgpu, Tref>::GetandSetData()
         biasScaleTensor = miopen::TensorDescriptor(data_type, sb_len.data(), sb_len.size());
     }
 
-    // miopenSetTensorDescriptor(&inputTensor.desc, data_type, in_len.size(), in_len.data(),
-    // nullptr);
     inputTensor = miopen::TensorDescriptor(data_type, in_len.data(), in_len.size());
-
-    // miopenSetTensorDescriptor(
-    //    &biasScaleTensor.desc, data_type, sb_len.size(), sb_len.data(), nullptr);
     biasScaleTensor = miopen::TensorDescriptor(data_type, sb_len.data(), sb_len.size());
-
-    // miopenSetTensorDescriptor(&outputTensor.desc, data_type, in_len.size(), in_len.data(),
-    // nullptr);
     outputTensor = miopen::TensorDescriptor(data_type, in_len.data(), in_len.size());
 
     // backwards
-    // miopenSetTensorDescriptor(
-    //    &dyInputTensor.desc, data_type, in_len.size(), in_len.data(), nullptr);
     dyInputTensor = miopen::TensorDescriptor(data_type, in_len.data(), in_len.size());
-
-    // miopenSetTensorDescriptor(
-    //    &dxOutputTensor.desc, data_type, in_len.size(), in_len.data(), nullptr);
     dxOutputTensor = miopen::TensorDescriptor(data_type, in_len.data(), in_len.size());
     return (0);
 }
@@ -312,9 +288,6 @@ int BNFin<Tgpu, Tref>::ProcessStep(const std::string& step_name)
 template <typename Tgpu, typename Tref>
 int BNFin<Tgpu, Tref>::SetBNDescriptor()
 {
-    //    	double bnAlpha = inflags.GetValueDouble("alpha");
-    //    	double bnBeta = inflags.GetValueDouble("beta");
-
     // batch norm mode type
     bn_mode = command["mode"] == 0 ? miopenBNPerActivation : miopenBNSpatial;
 
