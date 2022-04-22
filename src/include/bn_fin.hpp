@@ -433,7 +433,7 @@ int BNFin<Tgpu, Tref>::MIOpenFindCompile()
     auto ctx     = miopen::ExecutionContext(&handle);
     GetHandle().EnableProfiling(true);
 #if MIOPEN_MODE_NOGPU
-    InitNoGpuHandle(handle);
+    fin::InitNoGpuHandle(handle, job["arch"], job["num_cu"]);
 #else
     throw std::runtime_error("MIOpen needs to be compiled with the NOGPU backend "
                              "for MIOpenFindCompile");
