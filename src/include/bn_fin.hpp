@@ -112,6 +112,7 @@ class BNFin : public Fin
     int TestApplicability();
     int GetandSetData();
     miopen::batchnorm::ProblemDescription GetProblemDescription();
+    auto GetAlgorithm();
     int MIOpenFindCompile();
     std::vector<miopen::solver::ConvSolution> GetBNSolutions(miopen::ExecutionContext& ctx);
     int MIOpenFindEval();
@@ -402,6 +403,31 @@ miopen::batchnorm::ProblemDescription BNFin<Tgpu, Tref>::GetProblemDescription()
 }
 
 template <typename Tgpu, typename Tref>
+auto BNFin<Tgpu, Tref>::GetAlgorithm()
+{
+    if(is_fwd_train)
+    {
+        return bn_mode == miopenBNSpatial
+                   ? miopen::AlgorithmName{"miopenBatchNormForwardTrainingSpatial"}
+                   : miopen::AlgorithmName{"miopenBatchNormForwardTrainingPerActivation"};
+    }
+    else if(is_fwd_infer)
+    {
+        return miopen::AlgorithmName{"miopenBatchNormalizationForwardInference"};
+    }
+    else if(is_bwd)
+    {
+        return bn_mode == miopenBNSpatial
+                   ? miopen::AlgorithmName{"miopenBatchNormBackwardPropSpatial"}
+                   : miopen::AlgorithmName{"miopenBatchNormBackwardPropPerActivation"};
+    }
+    else
+    {
+        throw std::runtime_error("Unable to get sovlers for batch norm");
+    }
+}
+
+template <typename Tgpu, typename Tref>
 std::vector<miopen::solver::ConvSolution>
 BNFin<Tgpu, Tref>::GetBNSolutions(miopen::ExecutionContext& ctx)
 {
@@ -474,6 +500,7 @@ int BNFin<Tgpu, Tref>::MIOpenFindCompile()
     if(job.contains("dynamic_only"))
         dynamic_only = job["dynamic_only"];
     const auto slns  = GetBNSolutions(ctx);
+    const auto algo  = GetAlgorithm();
 
     for(auto it = slns.begin(); it != slns.end(); ++it)
     {
@@ -482,10 +509,10 @@ int BNFin<Tgpu, Tref>::MIOpenFindCompile()
         boost::filesystem::remove_all(miopen::GetCachePath(false));
         json res_item;
         res_item["solver_id"] = it->solver_id;
-        const auto solver  = miopen::solver::Id(it->solver_id);
-        std::cout << solver.ToString() << std::endl;
+        res_item["algorithm"] = algo;
+        const auto solver     = miopen::solver::Id(it->solver_id);
+        std::cout << "\nsolver: " << solver.ToString() << std::endl;
         // const auto sid = miopen::solver::Id(it->solver_id);
-        // const auto algo = sid.GetAlgo();
         const auto solver_list =
             miopen::solver::GetSolversByPrimitive(miopen::solver::Primitive::Batchnorm);
         for(const auto& solver_id : solver_list)
@@ -495,7 +522,7 @@ int BNFin<Tgpu, Tref>::MIOpenFindCompile()
 
         res_item["reason"]    = "Success";
         res_item["workspace"] = it->workspace_sz;
-        std::cout << "res_item" << res_item << std::endl;
+        std::cout << "\nres_item:" << res_item << std::endl;
         std::vector<miopen::solver::KernelInfo> kernels;
         for(auto&& kernel : it->construction_params)
         {
