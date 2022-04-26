@@ -193,13 +193,12 @@ int BNFin<Tgpu, Tref>::GetandSetData()
         biasScaleTensor = miopen::TensorDescriptor(data_type, sb_len.data(), sb_len.size());
     }
 
-    inputTensor     = miopen::TensorDescriptor(data_type, in_len.data(), in_len.size());
-    biasScaleTensor = miopen::TensorDescriptor(data_type, sb_len.data(), sb_len.size());
-    outputTensor    = miopen::TensorDescriptor(data_type, in_len.data(), in_len.size());
+    inputTensor  = miopen::TensorDescriptor(data_type, in_len);
+    outputTensor = miopen::TensorDescriptor(data_type, in_len);
 
     // backwards
-    dyInputTensor  = miopen::TensorDescriptor(data_type, in_len.data(), in_len.size());
-    dxOutputTensor = miopen::TensorDescriptor(data_type, in_len.data(), in_len.size());
+    dyInputTensor  = miopen::TensorDescriptor(data_type, in_len);
+    dxOutputTensor = miopen::TensorDescriptor(data_type, in_len);
     return (0);
 }
 
