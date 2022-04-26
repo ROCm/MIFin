@@ -39,6 +39,7 @@
 #include <miopen/batchnorm/solvers.hpp>
 #include <miopen/find_solution.hpp>
 #include <miopen/solver.hpp>
+#include <miopen/solver_id.hpp>
 
 #include <nlohmann/json.hpp>
 
@@ -399,7 +400,7 @@ int BNFin<Tgpu, Tref>::MIOpenFindCompile()
     auto ctx     = miopen::ExecutionContext(&handle);
     GetHandle().EnableProfiling(true);
 #if MIOPEN_MODE_NOGPU
-    fin::InitNoGpuHandle(handle, job["arch"], job["num_cu"]);
+    BaseFin::InitNoGpuHandle(handle, job["arch"], job["num_cu"]);
 #else
     throw std::runtime_error("MIOpen needs to be compiled with the NOGPU backend "
                              "for MIOpenFindCompile");
@@ -410,11 +411,10 @@ int BNFin<Tgpu, Tref>::MIOpenFindCompile()
 
     // const auto network_config   = ctx.BuildConfKey();
     // const bool is_winograd_only = convDesc.IsWinograd3x3SupportedAndFast(ctx);
-    // output["is_winograd_only"]  = is_winograd_only;
-    // output["network_config"]    = network_config;
     std::ostringstream ss;
     const auto problem        = GetProblemDescription();
     const auto network_config = problem.MakeNetworkConfig();
+    output["network_config"]  = network_config;
     // problem.Serialize(ss);
     output["db_key"] = ss.str();
     /*const auto solver_list =
@@ -433,32 +433,30 @@ int BNFin<Tgpu, Tref>::MIOpenFindCompile()
     bool dynamic_only = false;
     if(job.contains("dynamic_only"))
         dynamic_only = job["dynamic_only"];
-    const auto slns  = GetBNSolutions(ctx);
-    const auto algo  = GetAlgorithm();
 
-    for(auto it = slns.begin(); it != slns.end(); ++it)
+    // const auto solver_list =
+    // miopen::solver::GetSolversByPrimitive(miopen::solver::Primitive::Batchnorm);
+
+    for(const auto& sln : GetBNSolutions(ctx))
     {
         // remove the user db files
-        std::cout << it->solver_id << std::endl;
+        std::cout << sln.solver_id << std::endl;
         boost::filesystem::remove_all(miopen::GetCachePath(false));
         json res_item;
-        res_item["solver_id"] = it->solver_id;
-        res_item["algorithm"] = algo;
-        const auto solver     = miopen::solver::Id(it->solver_id);
-        std::cout << "\nsolver: " << solver.ToString() << std::endl;
-        // const auto sid = miopen::solver::Id(it->solver_id);
+        res_item["solver_id"] = sln.solver_id;
+        res_item["algorithm"] = GetAlgorithm();
         const auto solver_list =
             miopen::solver::GetSolversByPrimitive(miopen::solver::Primitive::Batchnorm);
         for(const auto& solver_id : solver_list)
         {
-            std::cerr << solver_id.ToString() << " - " << it->solver_id << std::endl;
+            std::cerr << solver_id.ToString() << " - " << sln.solver_id << std::endl;
         }
 
         res_item["reason"]    = "Success";
-        res_item["workspace"] = it->workspace_sz;
+        res_item["workspace"] = sln.workspace_sz;
         std::cout << "\nres_item:" << res_item << std::endl;
         std::vector<miopen::solver::KernelInfo> kernels;
-        for(auto&& kernel : it->construction_params)
+        for(auto&& kernel : sln.construction_params)
         {
             kernels.push_back(kernel);
         }
