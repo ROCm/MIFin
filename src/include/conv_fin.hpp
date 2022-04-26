@@ -129,15 +129,12 @@ class ConvFin : public BaseFin
     int TestApplicability();
     int TestPerfDbValid();
     int GetandSetData();
-#if 0
-    int MIOpenPerfCompile();
-#endif
     int MIOpenFind();
     int MIOpenFindCompile();
-#if 0
-    int MIOpenPerfEval();
-#endif
     int MIOpenFindEval();
+
+    int MIOpenPerfCompile();
+    int MIOpenPerfEval();
 
     // Utility functions
     bool IsInputTensorTransform() const;
@@ -169,8 +166,6 @@ miopen::conv::Direction ConvFin<Tgpu, Tref>::GetDirection() const
                             : miopen::conv::Direction::BackwardWeights);
 }
 
-
-#if 0
 template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
 {
@@ -325,8 +320,6 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
     return 1;
 }
 
-#endif
-
 template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
 {
@@ -477,8 +470,6 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
     output["miopen_find_compile_result"] = find_result;
     return 1;
 }
-
-#if 0
 
 template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
@@ -724,8 +715,6 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
     return 0;
 #endif
 }
-
-#endif
 
 template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::MIOpenFindEval()
@@ -1361,20 +1350,16 @@ int ConvFin<Tgpu, Tref>::ProcessStep(const std::string& step_name)
         return TestApplicability();
     if(step_name == "perf_db_test")
         return TestPerfDbValid();
-#if 0
-    if(step_name == "miopen_perf_compile")
-        return MIOpenPerfCompile();
-#endif
     if(step_name == "miopen_find")
         return MIOpenFind();
     if(step_name == "miopen_find_compile")
         return MIOpenFindCompile();
-#if 0
-    if(step_name == "miopen_perf_eval")
-        return MIOpenPerfEval();
-#endif
     if(step_name == "miopen_find_eval")
         return MIOpenFindEval();
+    if(step_name == "miopen_perf_compile")
+        return MIOpenPerfCompile();
+    if(step_name == "miopen_perf_eval")
+        return MIOpenPerfEval();
     return 0;
 }
 
