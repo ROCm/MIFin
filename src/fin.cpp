@@ -22,7 +22,7 @@ miopenDataType_t GetDataType<bfloat16>()
 {
     return miopenBFloat16;
 }
-[[gnu::noreturn]] void Fin::Usage()
+[[gnu::noreturn]] void BaseFin::Usage()
 {
     std::cout << "Usage: ./MIOpenFin *base_arg* *other_args*\n";
     std::cout << "Supported Base Arguments: conv[fp16][bfp16]\n";
@@ -37,7 +37,7 @@ void PadBufferSize(size_t& sz, int datatype_sz)
     }
 }
 
-std::string Fin::ParseBaseArg(const int argc, const char* argv[])
+std::string BaseFin::ParseBaseArg(const int argc, const char* argv[])
 {
     if(argc < 2)
     {
@@ -57,7 +57,7 @@ std::string Fin::ParseBaseArg(const int argc, const char* argv[])
     else
         return arg;
 }
-void InitNoGpuHandle(miopen::Handle& handle, const std::string& arch, const unsigned long num_cu)
+void BaseFin::InitNoGpuHandle(miopen::Handle& handle, const std::string& arch, const unsigned long num_cu)
 {
 #if MIOPEN_MODE_NOGPU
     handle.impl->device_name        = arch;

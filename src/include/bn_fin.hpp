@@ -47,11 +47,11 @@ namespace fin {
 
 using json = nlohmann::json;
 template <typename Tgpu, typename Tcpu>
-class BNFin : public Fin
+class BNFin : public BaseFin
 {
     public:
-    BNFin() : Fin() {}
-    BNFin(json _job) : Fin(), job(_job)
+    BNFin() : BaseFin() {}
+    BNFin(json _job) : BaseFin(), job(_job)
     {
         if(job.contains("config"))
             PrepBatchNorm();
@@ -156,7 +156,7 @@ int BNFin<Tgpu, Tref>::TestApplicability()
     auto& handle = GetHandle();
     auto ctx     = miopen::ExecutionContext(&handle);
 #if MIOPEN_MODE_NOGPU
-    fin::InitNoGpuHandle(handle, job["arch"], job["num_cu"]);
+    BaseFin::InitNoGpuHandle(handle, job["arch"], job["num_cu"]);
 #else
     throw std::runtime_error("MIOpen needs to be compiled with the NOGPU backend "
                              "to test applicability");

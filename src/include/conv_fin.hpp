@@ -81,11 +81,11 @@ using json             = nlohmann::json;
 // TODO: Create a config class to encapsulate config
 // related code, such as checking direction etc
 template <typename Tgpu, typename Tcpu>
-class ConvFin : public Fin
+class ConvFin : public BaseFin
 {
     public:
-    ConvFin() : Fin() {}
-    ConvFin(json _job) : Fin(), job(_job)
+    ConvFin() : BaseFin() {}
+    ConvFin(json _job) : BaseFin(), job(_job)
     {
         if(job.contains("config"))
             PrepConvolution();
@@ -216,7 +216,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
     auto ctx    = miopen::ConvolutionContext{problem};
     auto handle = miopen::Handle{};
 #if MIOPEN_MODE_NOGPU
-    fin::InitNoGpuHandle(handle, job["arch"], job["num_cu"]);
+    BaseFin::InitNoGpuHandle(handle, job["arch"], job["num_cu"]);
 #else
     throw std::runtime_error("MIOpen needs to be compiled with the NOGPU backend "
                              "for MIOpenPerfCompile");
@@ -369,7 +369,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
     auto ctx    = miopen::ConvolutionContext{problem};
     auto handle = miopen::Handle{};
 #if MIOPEN_MODE_NOGPU
-    fin::InitNoGpuHandle(handle, job["arch"], job["num_cu"]);
+    BaseFin::InitNoGpuHandle(handle, job["arch"], job["num_cu"]);
 #else
     throw std::runtime_error("MIOpen needs to be compiled with the NOGPU backend "
                              "for MIOpenFindCompile");
@@ -1163,7 +1163,7 @@ int ConvFin<Tgpu, Tref>::TestApplicability()
     auto ctx    = miopen::ConvolutionContext{problem};
     auto handle = miopen::Handle{};
 #if MIOPEN_MODE_NOGPU
-    fin::InitNoGpuHandle(handle, job["arch"], job["num_cu"]);
+    BaseFin::InitNoGpuHandle(handle, job["arch"], job["num_cu"]);
 #else
     throw std::runtime_error("MIOpen needs to be compiled with the NOGPU backend "
                              "to test applicability");
