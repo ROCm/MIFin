@@ -186,8 +186,7 @@ int BNFin<Tgpu, Tref>::GetandSetData()
 
     if(command["bias"].get<int>() != 0)
     {
-        auto bias_len   = GetBiasTensorLengths();
-        biasScaleTensor = miopen::TensorDescriptor(data_type, sb_len.data(), bias_len.size());
+        biasScaleTensor = miopen::TensorDescriptor(data_type,  GetBiasTensorLengths());
     }
     else
     {
