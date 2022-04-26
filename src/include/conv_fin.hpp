@@ -49,6 +49,7 @@
 #include <miopen/md5.hpp>
 #include <miopen/perf_field.hpp>
 #include <miopen/solver_id.hpp>
+#include <miopen/version.h>
 
 #if MIOPEN_MODE_NOGPU
 #include <miopen/kernel_cache.hpp>
@@ -71,6 +72,8 @@
 #include <type_traits>
 #include <vector>
 
+#define MIOPEN_ALLSOLVER (MIOPEN_VERSION_MAJOR > 3)
+
 namespace fin {
 
 const int INVOKE_LIMIT = 2;
@@ -78,50 +81,19 @@ using json             = nlohmann::json;
 // TODO: Create a config class to encapsulate config
 // related code, such as checking direction etc
 template <typename Tgpu, typename Tcpu>
-class ConvFin : public Fin
+class ConvFin : public BaseFin
 {
     public:
-    ConvFin() : Fin() {}
-    ConvFin(json _job) : Fin(), job(_job)
+    ConvFin() : BaseFin() {}
+    ConvFin(json _job) : BaseFin(), job(_job)
     {
         if(job.contains("config"))
             PrepConvolution();
     }
 
-    void VerifyDevProps()
-    {
-        std::cerr << "Verifying device properties" << std::endl;
-        std::string arch    = job["arch"];
-        arch                = arch.substr(0, arch.find(':'));
-        const size_t num_cu = job["num_cu"];
-        std::ignore         = num_cu;
-        if(arch == "gfx900")
-        {
-            assert(num_cu == 56 || num_cu == 64);
-        }
-        else if(arch == "gfx906")
-        {
-            assert(num_cu == 60 || num_cu == 64);
-        }
-        else if(arch == "gfx908")
-        {
-            assert(num_cu == 120);
-        }
-        else if(arch == "gfx1030")
-        {
-            assert(num_cu == 72 || num_cu == 36);
-        }
-        else if(arch == "gfx90a")
-        {
-            assert(num_cu == 110 || num_cu == 104);
-        }
-        else
-            throw std::runtime_error("Invalid Arch Name");
-    }
-
     void PrepConvolution()
     {
-        VerifyDevProps();
+        BaseFin::VerifyDevProps(job["arch"], job["num_cu"]);
         command         = job["config"];
         command["bias"] = 0;
         // timing is always enabled
@@ -157,18 +129,14 @@ class ConvFin : public Fin
     int TestApplicability();
     int TestPerfDbValid();
     int GetandSetData();
-    int GetSolverList();
     int MIOpenFind();
     int MIOpenFindCompile();
     int MIOpenFindEval();
-#ifdef MIOPEN_GETALLSOLVER
     int MIOpenPerfCompile();
     int MIOpenPerfEval();
-#endif
 
     // Utility functions
     bool IsInputTensorTransform() const;
-    void InitNoGpuHandle(miopen::Handle& handle);
     json command;
     json job;
 
@@ -198,23 +166,9 @@ miopen::conv::Direction ConvFin<Tgpu, Tref>::GetDirection() const
 }
 
 template <typename Tgpu, typename Tref>
-void ConvFin<Tgpu, Tref>::InitNoGpuHandle(miopen::Handle& handle)
-{
-#if MIOPEN_MODE_NOGPU
-    handle.impl->device_name        = job["arch"];
-    handle.impl->num_cu             = job["num_cu"];
-    handle.impl->max_mem_alloc_size = 32UL * 1024 * 1024 * 1024; // 32 GB
-    handle.impl->global_mem_size    = 32UL * 1024 * 1024 * 1024;
-    handle.impl->target_properties.Init(&handle);
-#else
-    std::ignore = handle;
-#endif
-}
-
-#ifdef MIOPEN_GETALLSOLVER
-template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
 {
+#if MIOPEN_ALLSOLVER
     std::cerr << "MIOpenPerfCompile" << std::endl;
     std::cerr << "Processing command: " << command << std::endl;
 #if MIOPEN_MODE_NOGPU
@@ -230,7 +184,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
     auto ctx    = miopen::ConvolutionContext{problem};
     auto handle = miopen::Handle{};
 #if MIOPEN_MODE_NOGPU
-    InitNoGpuHandle(handle);
+    BaseFin::InitNoGpuHandle(handle, job["arch"], job["num_cu"]);
 #else
     throw std::runtime_error("MIOpen needs to be compiled with the NOGPU backend "
                              "for MIOpenPerfCompile");
@@ -359,9 +313,12 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
         }
     }
     output["miopen_perf_compile_result"] = perf_result;
+#else
+    throw std::runtime_error("Unsupported feature");
+#endif
     return 1;
 }
-#endif
+
 
 template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
@@ -381,7 +338,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
     auto ctx    = miopen::ConvolutionContext{problem};
     auto handle = miopen::Handle{};
 #if MIOPEN_MODE_NOGPU
-    InitNoGpuHandle(handle);
+    BaseFin::InitNoGpuHandle(handle, job["arch"], job["num_cu"]);
 #else
     throw std::runtime_error("MIOpen needs to be compiled with the NOGPU backend "
                              "for MIOpenFindCompile");
@@ -533,11 +490,11 @@ void SolutionHasProgram(miopen::Handle& handle, miopen::solver::ConvSolution& so
     }
 }
 
-#ifdef MIOPEN_GETALLSOLVER
 
 template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
 {
+#if MIOPEN_ALLSOLVER
     std::cerr << "MIOpenPerfEval" << std::endl;
     std::cerr << "Processing command: " << command << std::endl;
 // Before this step is executed, the following steps should have been evaluated
@@ -791,8 +748,11 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
     }
     output["miopen_perf_eval_result"] = perf_result;
     return 1;
-}
+#else
+    throw std::runtime_error("Unsupported feature");
+    return 0;
 #endif
+}
 
 template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::MIOpenFindEval()
@@ -1219,7 +1179,7 @@ int ConvFin<Tgpu, Tref>::TestApplicability()
     auto ctx    = miopen::ConvolutionContext{problem};
     auto handle = miopen::Handle{};
 #if MIOPEN_MODE_NOGPU
-    InitNoGpuHandle(handle);
+    BaseFin::InitNoGpuHandle(handle, job["arch"], job["num_cu"]);
 #else
     throw std::runtime_error("MIOpen needs to be compiled with the NOGPU backend "
                              "to test applicability");
@@ -1381,30 +1341,6 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
 }
 
 template <typename Tgpu, typename Tref>
-int ConvFin<Tgpu, Tref>::GetSolverList()
-{
-    // pair.first = id, pair. second = string id
-    std::vector<std::unordered_map<std::string, std::string>> solvers;
-    for(const auto& id :
-        miopen::solver::GetSolversByPrimitive(miopen::solver::Primitive::Convolution))
-    {
-        std::unordered_map<std::string, std::string> solver;
-        solver["id"]      = std::to_string(id.Value());
-        solver["name"]    = id.ToString();
-        solver["tunable"] = "0";
-        solver["dynamic"] = "0";
-        if(id.GetSolver().IsTunable())
-            solver["tunable"] = "1";
-        if(id.GetSolver().IsDynamic())
-            solver["dynamic"] = "1";
-        solvers.push_back(solver);
-    }
-
-    output["all_solvers"] = solvers;
-    return 0;
-}
-
-template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::RunGPU()
 {
     assert(false);
@@ -1461,20 +1397,16 @@ int ConvFin<Tgpu, Tref>::ProcessStep(const std::string& step_name)
         return TestApplicability();
     if(step_name == "perf_db_test")
         return TestPerfDbValid();
-    if(step_name == "get_solvers")
-        return GetSolverList();
     if(step_name == "miopen_find")
         return MIOpenFind();
     if(step_name == "miopen_find_compile")
         return MIOpenFindCompile();
     if(step_name == "miopen_find_eval")
         return MIOpenFindEval();
-#ifdef MIOPEN_GETALLSOLVER
     if(step_name == "miopen_perf_compile")
         return MIOpenPerfCompile();
     if(step_name == "miopen_perf_eval")
         return MIOpenPerfEval();
-#endif
     return 0;
 }
 
