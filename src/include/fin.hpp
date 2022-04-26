@@ -58,14 +58,11 @@ using json = nlohmann::json;
 
 namespace fin {
 
-extern void
-InitNoGpuHandle(miopen::Handle& handle, const std::string& arch, const unsigned long num_cu);
-
-class Fin
+class BaseFin
 {
     public:
-    Fin() {}
-    virtual ~Fin() {}
+    BaseFin() {}
+    virtual ~BaseFin() {}
     void Usage();
     std::string ParseBaseArg(const int argc, const char* argv[]);
     miopen::Handle& GetHandle()
@@ -82,6 +79,9 @@ class Fin
 #endif
 
     virtual int ProcessStep(const std::string& step_name) = 0;
+    void
+    InitNoGpuHandle(miopen::Handle& handle, const std::string& arch, const unsigned long num_cu);
+    void VerifyDevProps(const std::string& in_arch, const unsigned long in_num_cu);
 
     json output;
 
@@ -137,23 +137,10 @@ class Fin
 // which occurs when the condition does not depend in any way on the template
 // parameters.
 template <typename Tgpu>
-void Fin::InitDataType()
+void BaseFin::InitDataType()
 {
     static_assert(std::is_same<Tgpu, float>{}, "unsupported Tgpu");
 }
-
-/*void InitNoGpuHandle(miopen::Handle& handle, const std::string& arch, const unsigned long num_cu)
-{
-#if MIOPEN_MODE_NOGPU
-    handle.impl->device_name        = arch;
-    handle.impl->num_cu             = num_cu;
-    handle.impl->max_mem_alloc_size = 32UL * 1024 * 1024 * 1024; // 32 GB
-    handle.impl->global_mem_size    = 32UL * 1024 * 1024 * 1024;
-    handle.impl->target_properties.Init(&handle);
-#else
-    std::ignore = handle;
-#endif
-}*/
 
 template <typename T>
 std::ostream& operator<<(std::ostream& os, const std::vector<T>& vs)
