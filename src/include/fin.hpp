@@ -58,9 +58,6 @@ using json = nlohmann::json;
 
 namespace fin {
 
-//extern void
-//InitNoGpuHandle(miopen::Handle& handle, const std::string& arch, const unsigned long num_cu);
-
 class BaseFin
 {
     public:
@@ -82,7 +79,9 @@ class BaseFin
 #endif
 
     virtual int ProcessStep(const std::string& step_name) = 0;
-    void InitNoGpuHandle(miopen::Handle& handle, const std::string& arch, const unsigned long num_cu);
+    void
+    InitNoGpuHandle(miopen::Handle& handle, const std::string& arch, const unsigned long num_cu);
+    void VerifyDevProps(const std::string& in_arch, const unsigned long in_num_cu);
 
     json output;
 

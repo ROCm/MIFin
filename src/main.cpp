@@ -127,7 +127,7 @@ int main(int argc, char* argv[], char* envp[])
     // process through the jobs
     for(auto& it : j)
     {
-        auto command                = it;
+        auto command                    = it;
         std::unique_ptr<fin::BaseFin> f = nullptr;
         if(command.contains("config"))
         {

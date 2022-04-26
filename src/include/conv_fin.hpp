@@ -91,40 +91,9 @@ class ConvFin : public BaseFin
             PrepConvolution();
     }
 
-    void VerifyDevProps()
-    {
-        std::cerr << "Verifying device properties" << std::endl;
-        std::string arch    = job["arch"];
-        arch                = arch.substr(0, arch.find(':'));
-        const size_t num_cu = job["num_cu"];
-        std::ignore         = num_cu;
-        if(arch == "gfx900")
-        {
-            assert(num_cu == 56 || num_cu == 64);
-        }
-        else if(arch == "gfx906")
-        {
-            assert(num_cu == 60 || num_cu == 64);
-        }
-        else if(arch == "gfx908")
-        {
-            assert(num_cu == 120);
-        }
-        else if(arch == "gfx1030")
-        {
-            assert(num_cu == 72 || num_cu == 36);
-        }
-        else if(arch == "gfx90a")
-        {
-            assert(num_cu == 110 || num_cu == 104);
-        }
-        else
-            throw std::runtime_error("Invalid Arch Name");
-    }
-
     void PrepConvolution()
     {
-        VerifyDevProps();
+        BaseFin::VerifyDevProps(job["arch"], job["num_cu"]);
         command         = job["config"];
         command["bias"] = 0;
         // timing is always enabled
