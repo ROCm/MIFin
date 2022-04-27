@@ -319,7 +319,6 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
     return 1;
 }
 
-
 template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
 {
@@ -489,7 +488,6 @@ void SolutionHasProgram(miopen::Handle& handle, miopen::solver::ConvSolution& so
         }
     }
 }
-
 
 template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
