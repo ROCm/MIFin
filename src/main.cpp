@@ -27,6 +27,7 @@
 #include <miopen/miopen.h>
 
 #include "conv_fin.hpp"
+#include "bn_fin.hpp"
 #include "error.hpp"
 #include "fin.hpp"
 
@@ -134,6 +135,8 @@ int main(int argc, char* argv[], char* envp[])
         std::cout << "command= " << command << std::endl;
 
         // TODO : Move this to a factory function
+        auto command                    = it;
+        std::unique_ptr<fin::BaseFin> f = nullptr;
         if(command.contains("config"))
         {
             if(command["config"]["cmd"] == "conv")
@@ -147,6 +150,14 @@ int main(int argc, char* argv[], char* envp[])
             else if(command["config"]["cmd"] == "convbfp16")
             {
                 f = std::make_unique<fin::ConvFin<bfloat16, float>>(command);
+            }
+            else if(command["config"]["cmd"] == "bnorm")
+            {
+                f = std::make_unique<fin::BNFin<float, float>>(command);
+            }
+            else if(command["config"]["cmd"] == "bnormfp16")
+            {
+                f = std::make_unique<fin::BNFin<float16, float>>(command);
             }
             else
             {
@@ -165,8 +176,15 @@ int main(int argc, char* argv[], char* envp[])
 
         for(auto& step_it : command["steps"])
         {
-            std::string step = step_it.get<std::string>();
-            f->ProcessStep(step);
+            if(step_it == "get_solvers")
+            {
+                f->GetSolverList();
+            }
+            else
+            {
+                std::string step = step_it.get<std::string>();
+                f->ProcessStep(step);
+            }
         }
         f->output["config_tuna_id"] = command["config_tuna_id"];
         f->output["arch"]           = command["arch"];
