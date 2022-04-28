@@ -81,10 +81,10 @@ class BNFin : public BaseFin
     // Steps
     int TestApplicability();
     int GetandSetData();
+    std::vector<miopen::solver::ConvSolution> GetBNSolutions(miopen::ExecutionContext& ctx);
     miopen::batchnorm::ProblemDescription GetProblemDescription();
     auto GetAlgorithm();
     int MIOpenFindCompile();
-    std::vector<miopen::solver::ConvSolution> GetBNSolutions(miopen::ExecutionContext& ctx);
 
     // Utility functions
     auto GetFwdTrainSolvers();
@@ -197,13 +197,12 @@ int BNFin<Tgpu, Tref>::GetandSetData()
         biasScaleTensor = miopen::TensorDescriptor(data_type, sb_len.data(), sb_len.size());
     }
 
-    inputTensor     = miopen::TensorDescriptor(data_type, in_len.data(), in_len.size());
-    biasScaleTensor = miopen::TensorDescriptor(data_type, sb_len.data(), sb_len.size());
-    outputTensor    = miopen::TensorDescriptor(data_type, in_len.data(), in_len.size());
+    inputTensor  = miopen::TensorDescriptor(data_type, in_len);
+    outputTensor = miopen::TensorDescriptor(data_type, in_len);
 
     // backwards
-    dyInputTensor  = miopen::TensorDescriptor(data_type, in_len.data(), in_len.size());
-    dxOutputTensor = miopen::TensorDescriptor(data_type, in_len.data(), in_len.size());
+    dyInputTensor  = miopen::TensorDescriptor(data_type, in_len);
+    dxOutputTensor = miopen::TensorDescriptor(data_type, in_len);
     return (0);
 }
 
@@ -338,6 +337,29 @@ miopen::batchnorm::ProblemDescription BNFin<Tgpu, Tref>::GetProblemDescription()
 }
 
 template <typename Tgpu, typename Tref>
+std::vector<miopen::solver::ConvSolution>
+BNFin<Tgpu, Tref>::GetBNSolutions(miopen::ExecutionContext& ctx)
+{
+    const auto problem = GetProblemDescription();
+    if(is_fwd_train)
+    {
+        return GetFwdTrainSolvers().SearchForSolutions(ctx, problem, 1);
+    }
+    else if(is_fwd_infer)
+    {
+        return GetFwdInferSolvers().SearchForSolutions(ctx, problem, 1);
+    }
+    else if(is_bwd)
+    {
+        return GetBwdSolvers().SearchForSolutions(ctx, problem, 1);
+    }
+    else
+    {
+        throw std::runtime_error("Unable to to get solutions for batch norm");
+    }
+}
+
+template <typename Tgpu, typename Tref>
 auto BNFin<Tgpu, Tref>::GetAlgorithm()
 {
     if(is_fwd_train)
@@ -359,29 +381,6 @@ auto BNFin<Tgpu, Tref>::GetAlgorithm()
     else
     {
         throw std::runtime_error("Unable to get sovlers for batch norm");
-    }
-}
-
-template <typename Tgpu, typename Tref>
-std::vector<miopen::solver::ConvSolution>
-BNFin<Tgpu, Tref>::GetBNSolutions(miopen::ExecutionContext& ctx)
-{
-    const auto problem = GetProblemDescription();
-    if(is_fwd_train)
-    {
-        return GetFwdTrainSolvers().SearchForSolutions(ctx, problem, 1);
-    }
-    else if(is_fwd_infer)
-    {
-        return GetFwdInferSolvers().SearchForSolutions(ctx, problem, 1);
-    }
-    else if(is_bwd)
-    {
-        return GetBwdSolvers().SearchForSolutions(ctx, problem, 1);
-    }
-    else
-    {
-        throw std::runtime_error("Unable to to get solutions for batch norm");
     }
 }
 
@@ -505,5 +504,6 @@ int BNFin<Tgpu, Tref>::MIOpenFindCompile()
     output["miopen_find_compile_result"] = find_result;
     return 1;
 }
+
 } // namespace fin
 #endif // GUARD_MIOPEN_BN_FIN_HPP
