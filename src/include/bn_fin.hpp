@@ -418,9 +418,6 @@ int BNFin<Tgpu, Tref>::MIOpenFindCompile()
               << std::endl;
     std::cerr << "Job Num CU: " << job["num_cu"]
               << ": Handle Num Cu: " << handle.GetTargetProperties().Name() << std::endl;
-    bool dynamic_only = false;
-    if(job.contains("dynamic_only"))
-        dynamic_only = job["dynamic_only"];
 
     for(const auto& sln : GetBNSolutions(ctx))
     {
