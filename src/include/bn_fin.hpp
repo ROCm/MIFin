@@ -387,8 +387,8 @@ auto BNFin<Tgpu, Tref>::GetAlgorithm()
 template <typename Tgpu, typename Tref>
 int BNFin<Tgpu, Tref>::MIOpenFindCompile()
 {
-    std::cout << "MIOpenFinCompile" << std::endl;
-    std::cout << "Processing command: " << command << std::endl;
+    std::cerr << "MIOpenFinCompile" << std::endl;
+    std::cerr << "Processing command: " << command << std::endl;
 #if MIOPEN_MODE_NOGPU
     GetandSetData();
 #else
@@ -407,18 +407,17 @@ int BNFin<Tgpu, Tref>::MIOpenFindCompile()
     ctx.SetStream(&handle);
     ctx.DetectRocm();
 
-    const auto problem        = GetProblemDescription();
-    const auto network_config = problem.MakeNetworkConfig();
-    output["network_config"]  = network_config;
-    output["db_key"] = network_config.ToString();
-    output["is_winograd_only"]  = false;
+    const auto problem         = GetProblemDescription();
+    const auto network_config  = problem.MakeNetworkConfig();
+    output["network_config"]   = network_config;
+    output["db_key"]           = network_config.ToString();
+    output["is_winograd_only"] = false;
 
     json find_result;
-    const auto& tgt_props  = handle.GetTargetProperties();
-    const std::string arch = tgt_props.Name();
-    const size_t num_cu    = handle.GetMaxComputeUnits();
-    std::cerr << "Job Arch: " << job["arch"] << ": Handle Arch: " << arch << std::endl;
-    std::cerr << "Job Num CU: " << job["num_cu"] << ": Handle Num Cu: " << num_cu << std::endl;
+    std::cerr << "Job Arch: " << job["arch"] << ": Handle Arch: " << handle.GetMaxComputeUnits()
+              << std::endl;
+    std::cerr << "Job Num CU: " << job["num_cu"]
+              << ": Handle Num Cu: " << handle.GetTargetProperties().Name() << std::endl;
     bool dynamic_only = false;
     if(job.contains("dynamic_only"))
         dynamic_only = job["dynamic_only"];
@@ -426,7 +425,7 @@ int BNFin<Tgpu, Tref>::MIOpenFindCompile()
     for(const auto& sln : GetBNSolutions(ctx))
     {
         // remove the user db files
-        std::cout << sln.solver_id << std::endl;
+        std::cerr << sln.solver_id << std::endl;
         boost::filesystem::remove_all(miopen::GetCachePath(false));
         json res_item;
         res_item["solver_id"] = sln.solver_id;
@@ -440,7 +439,6 @@ int BNFin<Tgpu, Tref>::MIOpenFindCompile()
 
         res_item["reason"]    = "Success";
         res_item["workspace"] = sln.workspace_sz;
-        std::cout << "\nres_item:" << res_item << std::endl;
         std::vector<miopen::solver::KernelInfo> kernels;
         for(auto&& kernel : sln.construction_params)
         {
