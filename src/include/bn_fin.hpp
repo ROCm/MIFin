@@ -425,17 +425,10 @@ int BNFin<Tgpu, Tref>::MIOpenFindCompile()
     for(const auto& sln : GetBNSolutions(ctx))
     {
         // remove the user db files
-        std::cerr << sln.solver_id << std::endl;
         boost::filesystem::remove_all(miopen::GetCachePath(false));
         json res_item;
         res_item["solver_id"] = sln.solver_id;
         res_item["algorithm"] = GetAlgorithm();
-        const auto solver_list =
-            miopen::solver::GetSolversByPrimitive(miopen::solver::Primitive::Batchnorm);
-        for(const auto& solver_id : solver_list)
-        {
-            std::cerr << solver_id.ToString() << " - " << sln.solver_id << std::endl;
-        }
 
         res_item["reason"]    = "Success";
         res_item["workspace"] = sln.workspace_sz;
