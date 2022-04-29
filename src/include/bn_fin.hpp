@@ -406,22 +406,12 @@ int BNFin<Tgpu, Tref>::MIOpenFindCompile()
 #endif
     ctx.SetStream(&handle);
     ctx.DetectRocm();
-    // ctx.SetupFloats();
 
-    // const auto network_config   = ctx.BuildConfKey();
-    // const bool is_winograd_only = convDesc.IsWinograd3x3SupportedAndFast(ctx);
-    std::ostringstream ss;
     const auto problem        = GetProblemDescription();
     const auto network_config = problem.MakeNetworkConfig();
     output["network_config"]  = network_config;
-    // problem.Serialize(ss);
-    output["db_key"] = ss.str();
-    /*const auto solver_list =
-        miopen::solver::GetSolversByPrimitive(miopen::solver::Primitive::Batchnorm);
-    for(const auto& solver_id : solver_list)
-    {
-        std::cerr << "'" << solver_id.ToString() << "'" << std::endl;
-    }*/
+    output["db_key"] = network_config.ToString();
+    output["is_winograd_only"]  = false;
 
     json find_result;
     const auto& tgt_props  = handle.GetTargetProperties();
@@ -432,9 +422,6 @@ int BNFin<Tgpu, Tref>::MIOpenFindCompile()
     bool dynamic_only = false;
     if(job.contains("dynamic_only"))
         dynamic_only = job["dynamic_only"];
-
-    // const auto solver_list =
-    // miopen::solver::GetSolversByPrimitive(miopen::solver::Primitive::Batchnorm);
 
     for(const auto& sln : GetBNSolutions(ctx))
     {
