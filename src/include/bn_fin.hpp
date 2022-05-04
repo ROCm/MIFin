@@ -85,7 +85,6 @@ class BNFin : public BaseFin
     miopen::batchnorm::ProblemDescription GetProblemDescription();
     auto GetAlgorithm();
     int MIOpenFindCompile();
-    std::vector<miopen::solver::ConvSolution> GetBNSolutions(miopen::ExecutionContext& ctx);
     int MIOpenFindEval();
 
     // Utility functions
@@ -581,11 +580,11 @@ int BNFin<Tgpu, Tref>::MIOpenFindEval()
             }
             std::cerr << solver_name << " is applicable" << std::endl;
             const miopen::solver::ConvSolution solution;
-            for(auto it = slns.begin(); it != slns.end(); ++it)
-            {
-                if(it->solver_id.compare(solver_name)==0)
-                    solution = it;
-            }
+            //for(auto it = slns.begin(); it != slns.end(); ++it)
+            //{
+            //    if(it->solver_id.compare(solver_name)==0)
+            //        solution = it;
+            //}
             //const auto solution   = s.FindSolution(ctx, db, {}); // auto tune is not expected here
             res_item["workspace"] = solution.workspace_sz;
             // Get the binary
