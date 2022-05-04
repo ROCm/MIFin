@@ -39,6 +39,7 @@
 #include <miopen/batchnorm/solvers.hpp>
 #include <miopen/find_solution.hpp>
 #include <miopen/solver.hpp>
+#include <miopen/solver_id.hpp>
 
 #include <nlohmann/json.hpp>
 
@@ -48,50 +49,19 @@ namespace fin {
 
 using json = nlohmann::json;
 template <typename Tgpu, typename Tcpu>
-class BNFin : public Fin
+class BNFin : public BaseFin
 {
     public:
-    BNFin() : Fin() {}
-    BNFin(json _job) : Fin(), job(_job)
+    BNFin() : BaseFin() {}
+    BNFin(json _job) : BaseFin(), job(_job)
     {
         if(job.contains("config"))
             PrepBatchNorm();
     }
 
-    void VerifyDevProps()
-    {
-        std::cerr << "Verifying device properties" << std::endl;
-        std::string arch    = job["arch"];
-        arch                = arch.substr(0, arch.find(':'));
-        const size_t num_cu = job["num_cu"];
-        std::ignore         = num_cu;
-        if(arch == "gfx900")
-        {
-            assert(num_cu == 56 || num_cu == 64);
-        }
-        else if(arch == "gfx906")
-        {
-            assert(num_cu == 60 || num_cu == 64);
-        }
-        else if(arch == "gfx908")
-        {
-            assert(num_cu == 120);
-        }
-        else if(arch == "gfx1030")
-        {
-            assert(num_cu == 72 || num_cu == 36);
-        }
-        else if(arch == "gfx90a")
-        {
-            assert(num_cu == 110 || num_cu == 104);
-        }
-        else
-            throw std::runtime_error("Invalid Arch Name");
-    }
-
     void PrepBatchNorm()
     {
-        VerifyDevProps();
+        BaseFin::VerifyDevProps(job["arch"], job["num_cu"]);
         command         = job["config"];
         command["bias"] = 0;
         SetBNDescriptor();
@@ -111,6 +81,7 @@ class BNFin : public Fin
     // Steps
     int TestApplicability();
     int GetandSetData();
+    std::vector<miopen::solver::ConvSolution> GetBNSolutions(miopen::ExecutionContext& ctx);
     miopen::batchnorm::ProblemDescription GetProblemDescription();
     auto GetAlgorithm();
     int MIOpenFindCompile();
@@ -138,9 +109,6 @@ class BNFin : public Fin
     bool is_fwd_infer       = false;
     bool is_bwd             = false;
 
-    // tensor<Tgpu, Tcpu> inputTensor;
-    // tensor<Tgpu, Tcpu> outputTensor;
-    // tensor<Tgpu, Tcpu> biasScaleTensor;
     miopen::TensorDescriptor inputTensor;
     miopen::TensorDescriptor outputTensor;
     miopen::TensorDescriptor biasScaleTensor;
@@ -164,7 +132,7 @@ int BNFin<Tgpu, Tref>::TestApplicability()
     auto& handle = GetHandle();
     auto ctx     = miopen::ExecutionContext(&handle);
 #if MIOPEN_MODE_NOGPU
-    fin::InitNoGpuHandle(handle, job["arch"], job["num_cu"]);
+    BaseFin::InitNoGpuHandle(handle, job["arch"], job["num_cu"]);
 #else
     throw std::runtime_error("MIOpen needs to be compiled with the NOGPU backend "
                              "to test applicability");
@@ -174,19 +142,18 @@ int BNFin<Tgpu, Tref>::TestApplicability()
 
     std::vector<std::string> app_solvers;
 
-    const auto slns = GetBNSolutions(ctx);
-    for(auto it = slns.begin(); it != slns.end(); ++it)
+    for(const auto& sln : GetBNSolutions(ctx))
     {
-        std::cout << it->solver_id << std::endl;
-        if(!it->invoker_factory)
+        std::cout << sln.solver_id << std::endl;
+        if(!sln.invoker_factory)
         {
-            MIOPEN_THROW(miopenStatusInternalError, "Invoker missing in solver " + it->solver_id);
+            MIOPEN_THROW(miopenStatusInternalError, "Invoker missing in solver " + sln.solver_id);
         }
-        app_solvers.push_back(it->solver_id);
+        app_solvers.push_back(sln.solver_id);
     }
     for(auto& elem : app_solvers)
     {
-        std::cout << elem << std::endl;
+        std::cerr << elem << std::endl;
     }
 
     output["applicable_solvers"] = app_solvers;
@@ -200,13 +167,6 @@ int BNFin<Tgpu, Tref>::GetandSetData()
     SetBNDescriptor();
 
     auto in_len = GetInputTensorLengths();
-
-    if(command["bias"].get<int>() != 0)
-    {
-        auto bias_len = GetBiasTensorLengths();
-        // biasScaleTensor = {GetHandle().GetStream(), bias_len, true, true};
-        // biasScaleTensor = miopen::TensorDescriptor(data_type, sb_len.data(), bias_len.size());
-    }
 
     std::vector<int> sb_len;
     if(bn_mode == miopenBNPerActivation)
@@ -233,35 +193,19 @@ int BNFin<Tgpu, Tref>::GetandSetData()
 
     if(command["bias"].get<int>() != 0)
     {
-        auto bias_len = GetBiasTensorLengths();
-        // biasScaleTensor = {GetHandle().GetStream(), bias_len, true, true};
-        biasScaleTensor = miopen::TensorDescriptor(data_type, sb_len.data(), bias_len.size());
+        biasScaleTensor = miopen::TensorDescriptor(data_type, GetBiasTensorLengths());
     }
     else
     {
         biasScaleTensor = miopen::TensorDescriptor(data_type, sb_len.data(), sb_len.size());
     }
 
-    // miopenSetTensorDescriptor(&inputTensor.desc, data_type, in_len.size(), in_len.data(),
-    // nullptr);
-    inputTensor = miopen::TensorDescriptor(data_type, in_len.data(), in_len.size());
-
-    // miopenSetTensorDescriptor(
-    //    &biasScaleTensor.desc, data_type, sb_len.size(), sb_len.data(), nullptr);
-    biasScaleTensor = miopen::TensorDescriptor(data_type, sb_len.data(), sb_len.size());
-
-    // miopenSetTensorDescriptor(&outputTensor.desc, data_type, in_len.size(), in_len.data(),
-    // nullptr);
-    outputTensor = miopen::TensorDescriptor(data_type, in_len.data(), in_len.size());
+    inputTensor  = miopen::TensorDescriptor(data_type, in_len);
+    outputTensor = miopen::TensorDescriptor(data_type, in_len);
 
     // backwards
-    // miopenSetTensorDescriptor(
-    //    &dyInputTensor.desc, data_type, in_len.size(), in_len.data(), nullptr);
-    dyInputTensor = miopen::TensorDescriptor(data_type, in_len.data(), in_len.size());
-
-    // miopenSetTensorDescriptor(
-    //    &dxOutputTensor.desc, data_type, in_len.size(), in_len.data(), nullptr);
-    dxOutputTensor = miopen::TensorDescriptor(data_type, in_len.data(), in_len.size());
+    dyInputTensor  = miopen::TensorDescriptor(data_type, in_len);
+    dxOutputTensor = miopen::TensorDescriptor(data_type, in_len);
     return (0);
 }
 
@@ -325,9 +269,6 @@ int BNFin<Tgpu, Tref>::ProcessStep(const std::string& step_name)
 template <typename Tgpu, typename Tref>
 int BNFin<Tgpu, Tref>::SetBNDescriptor()
 {
-    //    	double bnAlpha = inflags.GetValueDouble("alpha");
-    //    	double bnBeta = inflags.GetValueDouble("beta");
-
     // batch norm mode type
     bn_mode = command["mode"] == 0 ? miopenBNPerActivation : miopenBNSpatial;
 
@@ -403,6 +344,29 @@ miopen::batchnorm::ProblemDescription BNFin<Tgpu, Tref>::GetProblemDescription()
 }
 
 template <typename Tgpu, typename Tref>
+std::vector<miopen::solver::ConvSolution>
+BNFin<Tgpu, Tref>::GetBNSolutions(miopen::ExecutionContext& ctx)
+{
+    const auto problem = GetProblemDescription();
+    if(is_fwd_train)
+    {
+        return GetFwdTrainSolvers().SearchForSolutions(ctx, problem, 1);
+    }
+    else if(is_fwd_infer)
+    {
+        return GetFwdInferSolvers().SearchForSolutions(ctx, problem, 1);
+    }
+    else if(is_bwd)
+    {
+        return GetBwdSolvers().SearchForSolutions(ctx, problem, 1);
+    }
+    else
+    {
+        throw std::runtime_error("Unable to to get solutions for batch norm");
+    }
+}
+
+template <typename Tgpu, typename Tref>
 auto BNFin<Tgpu, Tref>::GetAlgorithm()
 {
     if(is_fwd_train)
@@ -428,33 +392,10 @@ auto BNFin<Tgpu, Tref>::GetAlgorithm()
 }
 
 template <typename Tgpu, typename Tref>
-std::vector<miopen::solver::ConvSolution>
-BNFin<Tgpu, Tref>::GetBNSolutions(miopen::ExecutionContext& ctx)
-{
-    const auto problem = GetProblemDescription();
-    if(is_fwd_train)
-    {
-        return GetFwdTrainSolvers().SearchForSolutions(ctx, problem, 1);
-    }
-    else if(is_fwd_infer)
-    {
-        return GetFwdInferSolvers().SearchForSolutions(ctx, problem, 1);
-    }
-    else if(is_bwd)
-    {
-        return GetBwdSolvers().SearchForSolutions(ctx, problem, 1);
-    }
-    else
-    {
-        throw std::runtime_error("Unable to to get solutions for batch norm");
-    }
-}
-
-template <typename Tgpu, typename Tref>
 int BNFin<Tgpu, Tref>::MIOpenFindCompile()
 {
-    std::cout << "MIOpenFinCompile" << std::endl;
-    std::cout << "Processing command: " << command << std::endl;
+    std::cerr << "MIOpenFinCompile" << std::endl;
+    std::cerr << "Processing command: " << command << std::endl;
 #if MIOPEN_MODE_NOGPU
     GetandSetData();
 #else
@@ -465,66 +406,38 @@ int BNFin<Tgpu, Tref>::MIOpenFindCompile()
     auto ctx     = miopen::ExecutionContext(&handle);
     GetHandle().EnableProfiling(true);
 #if MIOPEN_MODE_NOGPU
-    fin::InitNoGpuHandle(handle, job["arch"], job["num_cu"]);
+    BaseFin::InitNoGpuHandle(handle, job["arch"], job["num_cu"]);
 #else
     throw std::runtime_error("MIOpen needs to be compiled with the NOGPU backend "
                              "for MIOpenFindCompile");
 #endif
     ctx.SetStream(&handle);
     ctx.DetectRocm();
-    // ctx.SetupFloats();
 
-    // const auto network_config   = ctx.BuildConfKey();
-    // const bool is_winograd_only = convDesc.IsWinograd3x3SupportedAndFast(ctx);
-    // output["is_winograd_only"]  = is_winograd_only;
-    // output["network_config"]    = network_config;
-    std::ostringstream ss;
-    const auto problem        = GetProblemDescription();
-    const auto network_config = problem.MakeNetworkConfig();
-    // problem.Serialize(ss);
-    output["db_key"] = ss.str();
-    /*const auto solver_list =
-        miopen::solver::GetSolversByPrimitive(miopen::solver::Primitive::Batchnorm);
-    for(const auto& solver_id : solver_list)
-    {
-        std::cerr << "'" << solver_id.ToString() << "'" << std::endl;
-    }*/
+    const auto problem         = GetProblemDescription();
+    const auto network_config  = problem.MakeNetworkConfig();
+    output["network_config"]   = network_config;
+    output["db_key"]           = network_config.ToString();
+    output["is_winograd_only"] = false;
 
     json find_result;
-    const auto& tgt_props  = handle.GetTargetProperties();
-    const std::string arch = tgt_props.Name();
-    const size_t num_cu    = handle.GetMaxComputeUnits();
-    std::cerr << "Job Arch: " << job["arch"] << ": Handle Arch: " << arch << std::endl;
-    std::cerr << "Job Num CU: " << job["num_cu"] << ": Handle Num Cu: " << num_cu << std::endl;
-    bool dynamic_only = false;
-    if(job.contains("dynamic_only"))
-        dynamic_only = job["dynamic_only"];
-    const auto slns  = GetBNSolutions(ctx);
-    const auto algo  = GetAlgorithm();
+    std::cerr << "Job Arch: " << job["arch"] << ": Handle Arch: " << handle.GetMaxComputeUnits()
+              << std::endl;
+    std::cerr << "Job Num CU: " << job["num_cu"]
+              << ": Handle Num Cu: " << handle.GetTargetProperties().Name() << std::endl;
 
-    for(auto it = slns.begin(); it != slns.end(); ++it)
+    for(const auto& sln : GetBNSolutions(ctx))
     {
         // remove the user db files
-        std::cout << it->solver_id << std::endl;
         boost::filesystem::remove_all(miopen::GetCachePath(false));
         json res_item;
-        res_item["solver_id"] = it->solver_id;
-        res_item["algorithm"] = algo;
-        const auto solver     = miopen::solver::Id(it->solver_id);
-        std::cout << "\nsolver: " << solver.ToString() << std::endl;
-        // const auto sid = miopen::solver::Id(it->solver_id);
-        const auto solver_list =
-            miopen::solver::GetSolversByPrimitive(miopen::solver::Primitive::Batchnorm);
-        for(const auto& solver_id : solver_list)
-        {
-            std::cerr << solver_id.ToString() << " - " << it->solver_id << std::endl;
-        }
+        res_item["solver_id"] = sln.solver_id;
+        res_item["algorithm"] = GetAlgorithm();
 
         res_item["reason"]    = "Success";
-        res_item["workspace"] = it->workspace_sz;
-        std::cout << "\nres_item:" << res_item << std::endl;
+        res_item["workspace"] = sln.workspace_sz;
         std::vector<miopen::solver::KernelInfo> kernels;
-        for(auto&& kernel : it->construction_params)
+        for(auto&& kernel : sln.construction_params)
         {
             kernels.push_back(kernel);
         }
