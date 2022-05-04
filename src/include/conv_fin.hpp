@@ -165,7 +165,7 @@ miopen::conv::Direction ConvFin<Tgpu, Tref>::GetDirection() const
                             : miopen::conv::Direction::BackwardWeights);
 }
 
-json BuildJsonKernelList(const miopen::Handle handle, const std::vector<solver::KernelInfo>& kernels)
+json BuildJsonKernelList(const miopen::Handle& handle, const std::vector<miopen::solver::KernelInfo>& kernels)
 {
     // Get the binary
     json kernel_list = json::array();
@@ -239,7 +239,7 @@ void SolutionHasProgram(const miopen::Handle& handle, const miopen::solver::Conv
     }
 }
 
-void UpdateSolutionOpts(miopen::Handle& handle, miopen::solver::ConvSolution& solution)
+void UpdateSolutionOpts(const miopen::Handle& handle, miopen::solver::ConvSolution& solution)
 {
     for(auto& kern : solution.construction_params)
     {
