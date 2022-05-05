@@ -141,7 +141,7 @@ int BNFin<Tgpu, Tref>::TestApplicability()
 
     for(const auto& sln : GetBNSolutions(ctx))
     {
-        std::err << sln.solver_id << std::endl;
+        std::cerr << sln.solver_id << std::endl;
         if(!sln.invoker_factory)
         {
             MIOPEN_THROW(miopenStatusInternalError, "Invoker missing in solver " + sln.solver_id);
