@@ -501,7 +501,7 @@ int BNFin<Tgpu, Tref>::MIOpenFindEval()
     auto ctx     = miopen::ExecutionContext(&h);
     GetHandle().EnableProfiling(true);
 #if MIOPEN_MODE_NOGPU
-    fin::InitNoGpuHandle(h, job["arch"], job["num_cu"]);
+    BaseFin::InitNoGpuHandle(h, job["arch"], job["num_cu"]);
 #else
     throw std::runtime_error("MIOpen needs to be compiled with the NOGPU backend "
                              "for MIOpenFindEval");
@@ -534,7 +534,6 @@ int BNFin<Tgpu, Tref>::MIOpenFindEval()
     std::cerr << "Job Num CU: " << job["num_cu"] << ": Handle Num Cu: " << num_cu << std::endl;
     const auto slns  = GetBNSolutions(ctx);
 
-    //for(auto it = slns.begin(); it != slns.end(); ++it)
     bool dynamic_only = false;
     if(job.contains("dynamic_only"))
         dynamic_only = job["dynamic_only"];
@@ -580,11 +579,14 @@ int BNFin<Tgpu, Tref>::MIOpenFindEval()
             }
             std::cerr << solver_name << " is applicable" << std::endl;
             const miopen::solver::ConvSolution solution;
-            //for(auto it = slns.begin(); it != slns.end(); ++it)
-            //{
-            //    if(it->solver_id.compare(solver_name)==0)
-            //        solution = it;
-            //}
+            for(auto it = slns.begin(); it != slns.end(); ++it)
+            {
+                std::cout << it->solver_id << "-" << solver_name << std::endl;
+
+                bool is_same = it->solver_id.compare(solver_name)==0;
+                std::cout << is_same << std::endl;
+
+            }
             //const auto solution   = s.FindSolution(ctx, db, {}); // auto tune is not expected here
             res_item["workspace"] = solution.workspace_sz;
             // Get the binary
