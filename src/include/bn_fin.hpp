@@ -141,7 +141,7 @@ int BNFin<Tgpu, Tref>::TestApplicability()
 
     for(const auto& sln : GetBNSolutions(ctx))
     {
-        std::cout << sln.solver_id << std::endl;
+        std::err << sln.solver_id << std::endl;
         if(!sln.invoker_factory)
         {
             MIOPEN_THROW(miopenStatusInternalError, "Invoker missing in solver " + sln.solver_id);
@@ -402,7 +402,7 @@ int BNFin<Tgpu, Tref>::MIOpenFindCompile()
     BaseFin::InitNoGpuHandle(handle, job["arch"], job["num_cu"]);
 #else
     throw std::runtime_error("MIOpen needs to be compiled with the NOGPU backend "
-                             "for MIOpenFindCompile");
+                             "for Batch Norm find_compile");
 #endif
     ctx.SetStream(&handle);
     ctx.DetectRocm();
@@ -427,7 +427,6 @@ int BNFin<Tgpu, Tref>::MIOpenFindCompile()
         res_item["solver_id"] = sln.solver_id;
         res_item["algorithm"] = GetAlgorithm();
 
-        res_item["reason"]    = "Success";
         res_item["workspace"] = sln.workspace_sz;
         std::vector<miopen::solver::KernelInfo> kernels;
         for(auto&& kernel : sln.construction_params)
@@ -473,6 +472,7 @@ int BNFin<Tgpu, Tref>::MIOpenFindCompile()
             std::cerr << "Successfully added new kernel" << std::endl;
         }
         res_item["kernel_objects"] = kernel_list;
+        res_item["reason"]         = "Success";
         res_item["find_compiled"]  = true;
         find_result.push_back(res_item);
     }
