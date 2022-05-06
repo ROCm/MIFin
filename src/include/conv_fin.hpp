@@ -307,7 +307,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
         boost::filesystem::remove_all(miopen::GetCachePath(false));
         auto process_solver = [&]() -> bool {
             std::cerr << "Processing Solver: " << solver_id.ToString() << std::endl;
-            res_item["solver_id"] = solver_id.ToString();
+            res_item["solver_name"] = solver_id.ToString();
             if(solver_id.ToString() == "ConvBiasActivAsm1x1U" ||
                solver_id.ToString().find("Fused") != std::string::npos)
             {
@@ -422,7 +422,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
         boost::filesystem::remove_all(miopen::GetCachePath(false));
         auto process_solver = [&]() -> bool {
             std::cerr << "Processing Solver: " << solver_id.ToString() << std::endl;
-            res_item["solver_id"] = solver_id.ToString();
+            res_item["solver_name"] = solver_id.ToString();
             if(solver_id.ToString() == "ConvBiasActivAsm1x1U" ||
                solver_id.ToString().find("Fused") != std::string::npos)
             {
@@ -532,7 +532,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
             std::cerr << "Error while removing MIOpen cache: " << ec.message();
         }
         auto process_solver = [&]() -> bool {
-            const std::string solver_name = kinder["solver_id"];
+            const std::string solver_name = kinder["solver_name"];
             std::cerr << "Processing solver: " << solver_name << std::endl;
             const auto solver_id    = miopen::solver::Id{solver_name};
             const auto& s           = solver_id.GetSolver();
@@ -807,7 +807,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
             std::cerr << "Error while removing MIOpen cache: " << ec.message();
         }
         auto process_solver = [&]() -> bool {
-            const std::string solver_name = kinder["solver_id"];
+            const std::string solver_name = kinder["solver_name"];
             std::cerr << "Processing solver: " << solver_name << std::endl;
             const auto solver_id    = miopen::solver::Id{solver_name};
             const auto& s           = solver_id.GetSolver();
@@ -1022,7 +1022,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
     {
         json res_item;
         auto process_solver = [&]() -> bool {
-            res_item["solver_id"] = solver_id.ToString();
+            res_item["solver_name"] = solver_id.ToString();
             const auto& s         = solver_id.GetSolver();
             const auto algo       = solver_id.GetAlgo(conv_dir);
             res_item["algorithm"] = algo;
