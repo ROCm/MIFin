@@ -69,6 +69,8 @@ void BaseFin::InitNoGpuHandle(miopen::Handle& handle,
     handle.impl->target_properties.Init(&handle);
 #else
     std::ignore = handle;
+    std::ignore = arch;
+    std::ignore = num_cu;
 #endif
 }
 
