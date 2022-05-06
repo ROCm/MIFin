@@ -172,10 +172,19 @@ json BuildJsonKernelList(const miopen::Handle& handle, const std::vector<miopen:
     for(const auto& kern : kernels)
     {
         json kernel;
-        auto p           = handle.LoadProgram(kern.kernel_file, kern.comp_options, false, "");
-        const auto hsaco = p.IsCodeObjectInMemory()
-                               ? p.GetCodeObjectBlob()
-                               : miopen::LoadFile(p.GetCodeObjectPathname().string());
+
+        std::string kernel_file = kern.kernel_file;
+        std::string comp_opts = kern.comp_options;
+        if(!miopen::EndsWith(kernel_file, ".mlir"))
+        {
+            comp_opts += " -mcpu=" + handle.GetDeviceName();
+        }
+        const auto hsaco = miopen::LoadBinary(handle.GetTargetProperties(),
+                                    handle.GetMaxComputeUnits(),
+                                    kernel_file,
+                                    comp_opts,
+                                    false);
+
         if(hsaco.empty())
         {
             std::cerr << "Got empty code object" << std::endl;
@@ -203,7 +212,7 @@ json BuildJsonKernelList(const miopen::Handle& handle, const std::vector<miopen:
             kernel["blob"]              = "";
         }
         kernel_list.push_back(kernel);
-        std::cerr << "Successfully added new kernel" << std::endl;
+        std::cerr << "Successfully added new kernel to json output" << std::endl;
     }
     return kernel_list;
 }
@@ -215,18 +224,8 @@ void SolutionHasProgram(const miopen::Handle& handle, const miopen::solver::Conv
         std::string kernel_file = kern.kernel_file;
         std::string comp_opts = kern.comp_options;
 
-        /*
         //if file extention and comp_opts aren't appended HasProgram will fail
-        //leave out to ensure solution 
-        if(!miopen::EndsWith(kernel_file, ".o")
-        {
-            kernel_file += ".o";
-            if(!miopen::EndsWith(kernel_file, ".mlir"))
-            {
-                comp_opts += " -mcpu=" + handle.GetDeviceName();
-            }
-        }
-        */
+        //file_name + ".o", comp_opts + " -mcpu="
         std::cerr << "checking binary : " << kernel_file << " : " << comp_opts
                   << std::endl;
 
@@ -654,7 +653,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                                                        convDesc.attribute.gfx90aFp16alt.GetFwd()};
 
                     solution = s.FindSolution(ctx, db, invoke_ctx); // forcing search here
-                    std::cerr << solver_name << "Finished Search FWD" << std::endl;
+                    std::cerr << solver_name << " Finished Search FWD" << std::endl;
                     kern_objs = BuildJsonKernelList(h, solution.construction_params);
                     UpdateSolutionOpts(h, solution);
                     SolutionHasProgram(h, solution);
@@ -679,7 +678,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                                                        convDesc.attribute.gfx90aFp16alt.GetBwd()};
 
                     solution = s.FindSolution(ctx, db, invoke_ctx); // forcing search here
-                    std::cerr << solver_name << "Finished Search BWD" << std::endl;
+                    std::cerr << solver_name << " Finished Search BWD" << std::endl;
                     kern_objs = BuildJsonKernelList(h, solution.construction_params);
                     UpdateSolutionOpts(h, solution);
                     SolutionHasProgram(h, solution);
@@ -704,7 +703,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                                                       convDesc.attribute.gfx90aFp16alt.GetWrW()};
 
                     solution = s.FindSolution(ctx, db, invoke_ctx); // forcing search here
-                    std::cerr << solver_name << "Finished Search WRW" << std::endl;
+                    std::cerr << solver_name << " Finished Search WRW" << std::endl;
                     kern_objs = BuildJsonKernelList(h, solution.construction_params);
                     UpdateSolutionOpts(h, solution);
                     SolutionHasProgram(h, solution);
