@@ -173,15 +173,14 @@ json BuildJsonKernelList(const miopen::Handle& handle, const std::vector<miopen:
     {
         json kernel;
 
-        std::string kernel_file = kern.kernel_file;
         std::string comp_opts = kern.comp_options;
-        if(!miopen::EndsWith(kernel_file, ".mlir"))
+        if(!miopen::EndsWith(kern.kernel_file, ".mlir"))
         {
             comp_opts += " -mcpu=" + handle.GetDeviceName();
         }
         const auto hsaco = miopen::LoadBinary(handle.GetTargetProperties(),
                                     handle.GetMaxComputeUnits(),
-                                    kernel_file,
+                                    kern.kernel_file,
                                     comp_opts,
                                     false);
 
@@ -1045,7 +1044,6 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
             for(const auto& k : solution.construction_params)
             {
                 json kernel;
-                std::string kernel_file = k.kernel_file + ".o";
                 std::string comp_opts = k.comp_options;
                 if(!miopen::EndsWith(k.kernel_file, ".mlir"))
                 {
@@ -1053,7 +1051,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
                 }
 
                 const auto hsaco =
-                    miopen::LoadBinary(tgt_props, num_cu, kernel_file, comp_opts, false);
+                    miopen::LoadBinary(tgt_props, num_cu, k.kernel_file, comp_opts, false);
                 if(hsaco.empty())
                     throw std::runtime_error("Got empty code object");
                 // Compress the blob
