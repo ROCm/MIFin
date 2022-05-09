@@ -134,19 +134,19 @@ int main(int argc, char* argv[], char* envp[])
         {
             if(command["config"]["cmd"] == "conv")
             {
-                f = std::make_unique<BaseFin::ConvFin<float, float>>(command);
+                f = std::make_unique<fin::ConvFin<float, float>>(command);
             }
             else if(command["config"]["cmd"] == "convfp16")
             {
-                f = std::make_unique<BaseFin::ConvFin<float16, float>>(command);
+                f = std::make_unique<fin::ConvFin<float16, float>>(command);
             }
             else if(command["config"]["cmd"] == "convbfp16")
             {
-                f = std::make_unique<BaseFin::ConvFin<bfloat16, float>>(command);
+                f = std::make_unique<fin::ConvFin<bfloat16, float>>(command);
             }
             else if(command["config"]["cmd"] == "bnorm")
             {
-                f = std::make_unique<BaseFin::BNFin<float, float>>(command);
+                f = std::make_unique<fin::BNFin<float, float>>(command);
             }
             else if(command["config"]["cmd"] == "bnormfp16")
             {
@@ -160,11 +160,11 @@ int main(int argc, char* argv[], char* envp[])
         }
         else if(command.contains("pdb_verif") and command["pdb_verif"] == true)
         {
-            f = std::make_unique<BaseFin::ConvFin<float, float>>(command);
+            f = std::make_unique<fin::ConvFin<float, float>>(command);
         }
         else
         {
-            f = std::make_unique<BaseFin::ConvFin<float, float>>();
+            f = std::make_unique<fin::ConvFin<float, float>>();
         }
 
         for(auto& step_it : command["steps"])
