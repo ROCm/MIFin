@@ -107,13 +107,13 @@ class BNFin : public BaseFin
     bool is_fwd_infer       = false;
     bool is_bwd             = false;
 
-    miopen::TensorDescriptor inputTensor;
-    miopen::TensorDescriptor outputTensor;
-    miopen::TensorDescriptor biasScaleTensor;
+    tensor<Tgpu, Tcpu> inputTensor;
+    tensor<Tgpu, Tcpu> outputTensor;
+    tensor<Tgpu, Tcpu> biasScaleTensor;
 
     // for backward
-    miopen::TensorDescriptor dyInputTensor;
-    miopen::TensorDescriptor dxOutputTensor;
+    tensor<Tgpu, Tcpu> dyInputTensor;
+    tensor<Tgpu, Tcpu> dxOutputTensor;
 };
 
 template <typename Tgpu, typename Tref>
@@ -190,19 +190,19 @@ int BNFin<Tgpu, Tref>::GetandSetData()
 
     if(command["bias"].get<int>() != 0)
     {
-        biasScaleTensor = miopen::TensorDescriptor(data_type, GetBiasTensorLengths());
+        biasScaleTensor = {GetHandle().GetStream(), GetBiasTensorLengths(), true, true};
     }
     else
     {
-        biasScaleTensor = miopen::TensorDescriptor(data_type, sb_len.data(), sb_len.size());
+        biasScaleTensor = {GetHandle().GetStream(), sb_len, true, true};
     }
 
-    inputTensor  = miopen::TensorDescriptor(data_type, in_len);
-    outputTensor = miopen::TensorDescriptor(data_type, in_len);
+    inputTensor  = {GetHandle().GetStream(), in_len, true, false};
+    outputTensor = {GetHandle().GetStream(), in_len, false, true};
 
     // backwards
-    dyInputTensor  = miopen::TensorDescriptor(data_type, in_len);
-    dxOutputTensor = miopen::TensorDescriptor(data_type, in_len);
+    dyInputTensor  = {GetHandle().GetStream(), in_len, false, true};
+    dxOutputTensor = {GetHandle().GetStream(), in_len, true, false};
     return (0);
 }
 
@@ -307,9 +307,9 @@ miopen::batchnorm::ProblemDescription BNFin<Tgpu, Tref>::GetProblemDescription()
     if(is_fwd_train)
     {
         return miopen::batchnorm::ProblemDescription{bn_mode,
-                                                     inputTensor,
-                                                     outputTensor,
-                                                     biasScaleTensor,
+                                                     inputTensor.desc,
+                                                     outputTensor.desc,
+                                                     biasScaleTensor.desc,
                                                      expAvgFactor,
                                                      epsilon,
                                                      saveMeanVar,
@@ -318,21 +318,21 @@ miopen::batchnorm::ProblemDescription BNFin<Tgpu, Tref>::GetProblemDescription()
     else if(is_fwd_infer)
     {
         return miopen::batchnorm::ProblemDescription(
-            bn_mode, inputTensor, outputTensor, biasScaleTensor, epsilon);
+            bn_mode, inputTensor.desc, outputTensor.desc, biasScaleTensor.desc, epsilon);
     }
     else if(is_bwd)
     {
         return miopen::batchnorm::ProblemDescription(bn_mode,
-                                                     inputTensor,
-                                                     dyInputTensor,
-                                                     dxOutputTensor,
-                                                     biasScaleTensor,
+                                                     inputTensor.desc,
+                                                     dyInputTensor.desc,
+                                                     dxOutputTensor.desc,
+                                                     biasScaleTensor.desc,
                                                      epsilon,
                                                      saveMeanVar);
     }
     else
     {
-        throw std::runtime_error("Unable to get sovlers for batch norm");
+        throw std::runtime_error("Unable to get solvers for batch norm");
     }
 }
 
@@ -380,7 +380,7 @@ auto BNFin<Tgpu, Tref>::GetAlgorithm()
     }
     else
     {
-        throw std::runtime_error("Unable to get sovlers for batch norm");
+        throw std::runtime_error("Unable to get solvers for batch norm");
     }
 }
 
