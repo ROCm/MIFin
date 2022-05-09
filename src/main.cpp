@@ -87,7 +87,6 @@ int main(int argc, char* argv[], char* envp[])
                 std::cerr << "File: " << args[i + 1] << " does not exist" << std::endl;
                 exit(-1);
             }
-            std::cout << " file system" << args[i + 1] << std::endl;
             MapInputs[args[i].back()] = args[i + 1];
         }
         if(args[i] == "-o")
@@ -129,35 +128,29 @@ int main(int argc, char* argv[], char* envp[])
     // process through the jobs
     for(auto& it : j)
     {
-        auto command                = it;
-        std::unique_ptr<fin::Fin> f = nullptr;
-
-        std::cout << "command= " << command << std::endl;
-
-        // TODO : Move this to a factory function
         auto command                    = it;
         std::unique_ptr<fin::BaseFin> f = nullptr;
         if(command.contains("config"))
         {
             if(command["config"]["cmd"] == "conv")
             {
-                f = std::make_unique<fin::ConvFin<float, float>>(command);
+                f = std::make_unique<BaseFin::ConvFin<float, float>>(command);
             }
             else if(command["config"]["cmd"] == "convfp16")
             {
-                f = std::make_unique<fin::ConvFin<float16, float>>(command);
+                f = std::make_unique<BaseFin::ConvFin<float16, float>>(command);
             }
             else if(command["config"]["cmd"] == "convbfp16")
             {
-                f = std::make_unique<fin::ConvFin<bfloat16, float>>(command);
+                f = std::make_unique<BaseFin::ConvFin<bfloat16, float>>(command);
             }
             else if(command["config"]["cmd"] == "bnorm")
             {
-                f = std::make_unique<fin::BNFin<float, float>>(command);
+                f = std::make_unique<BaseFin::BNFin<float, float>>(command);
             }
             else if(command["config"]["cmd"] == "bnormfp16")
             {
-                f = std::make_unique<fin::BNFin<float16, float>>(command);
+                f = std::make_unique<fin::BNFin<float, float>>(command);
             }
             else
             {
@@ -167,11 +160,11 @@ int main(int argc, char* argv[], char* envp[])
         }
         else if(command.contains("pdb_verif") and command["pdb_verif"] == true)
         {
-            f = std::make_unique<fin::ConvFin<float, float>>(command);
+            f = std::make_unique<BaseFin::ConvFin<float, float>>(command);
         }
         else
         {
-            f = std::make_unique<fin::ConvFin<float, float>>();
+            f = std::make_unique<BaseFin::ConvFin<float, float>>();
         }
 
         for(auto& step_it : command["steps"])
