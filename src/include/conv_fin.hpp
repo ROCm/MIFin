@@ -165,7 +165,8 @@ miopen::conv::Direction ConvFin<Tgpu, Tref>::GetDirection() const
                             : miopen::conv::Direction::BackwardWeights);
 }
 
-json BuildJsonKernelList(const miopen::Handle& handle, const std::vector<miopen::solver::KernelInfo>& kernels)
+json BuildJsonKernelList(const miopen::Handle& handle,
+                         const std::vector<miopen::solver::KernelInfo>& kernels)
 {
     // Get the binary
     json kernel_list = json::array();
@@ -179,10 +180,10 @@ json BuildJsonKernelList(const miopen::Handle& handle, const std::vector<miopen:
             comp_opts += " -mcpu=" + handle.GetDeviceName();
         }
         const auto hsaco = miopen::LoadBinary(handle.GetTargetProperties(),
-                                    handle.GetMaxComputeUnits(),
-                                    kern.kernel_file,
-                                    comp_opts,
-                                    false);
+                                              handle.GetMaxComputeUnits(),
+                                              kern.kernel_file,
+                                              comp_opts,
+                                              false);
 
         if(hsaco.empty())
         {
@@ -221,12 +222,11 @@ void SolutionHasProgram(const miopen::Handle& handle, const miopen::solver::Conv
     for(auto& kern : solution.construction_params)
     {
         std::string kernel_file = kern.kernel_file;
-        std::string comp_opts = kern.comp_options;
+        std::string comp_opts   = kern.comp_options;
 
-        //if file extention and comp_opts aren't appended HasProgram will fail
-        //file_name + ".o", comp_opts + " -mcpu="
-        std::cerr << "checking binary : " << kernel_file << " : " << comp_opts
-                  << std::endl;
+        // if file extention and comp_opts aren't appended HasProgram will fail
+        // file_name + ".o", comp_opts + " -mcpu="
+        std::cerr << "checking binary : " << kernel_file << " : " << comp_opts << std::endl;
 
         if(!handle.HasProgram(kernel_file, comp_opts))
         {
@@ -248,7 +248,6 @@ void UpdateSolutionOpts(const miopen::Handle& handle, miopen::solver::ConvSoluti
         kern.kernel_file += ".o";
     }
 }
-
 
 template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
@@ -464,7 +463,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
             res_item["reason"]    = "Success";
             res_item["workspace"] = solution.workspace_sz;
 
-            //build the binaries
+            // build the binaries
             for(const auto& kern : solution.construction_params)
                 handle.LoadProgram(kern.kernel_file, kern.comp_options, false, "");
             res_item["kernel_objects"] = BuildJsonKernelList(handle, solution.construction_params);
@@ -637,7 +636,6 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                 float time    = 0.0f;
                 ctx.do_search = true;
                 ctx.db_update = true;
-
 
                 // This is required because DataInvokeParams switches tensor order due to
                 // direction and it does not have a
@@ -1026,9 +1024,9 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
         json res_item;
         auto process_solver = [&]() -> bool {
             res_item["solver_name"] = solver_id.ToString();
-            const auto& s         = solver_id.GetSolver();
-            const auto algo       = solver_id.GetAlgo(conv_dir);
-            res_item["algorithm"] = algo;
+            const auto& s           = solver_id.GetSolver();
+            const auto algo         = solver_id.GetAlgo(conv_dir);
+            res_item["algorithm"]   = algo;
             if(s.IsEmpty())
             {
                 res_item["reason"] = "Empty Solver";
