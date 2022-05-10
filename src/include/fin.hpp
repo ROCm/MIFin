@@ -44,6 +44,8 @@
 #include <miopen/any_solver.hpp>
 #include <miopen/md5.hpp>
 #include <miopen/bz2.hpp>
+#include <miopen/binary_cache.hpp>
+#include <miopen/load_file.hpp>
 #include <numeric>
 #include <vector>
 
