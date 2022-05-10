@@ -179,16 +179,22 @@ json BuildJsonKernelList(const miopen::Handle& handle,
         {
             comp_opts += " -mcpu=" + handle.GetDeviceName();
         }
-        const auto hsaco = miopen::LoadBinary(handle.GetTargetProperties(),
-                                              handle.GetMaxComputeUnits(),
-                                              kern.kernel_file,
-                                              comp_opts,
-                                              false);
+        auto hsaco = miopen::LoadBinary(handle.GetTargetProperties(),
+                                        handle.GetMaxComputeUnits(),
+                                        kern.kernel_file,
+                                        comp_opts,
+                                        false);
 
         if(hsaco.empty())
         {
-            std::cerr << "Got empty code object" << std::endl;
-            throw std::runtime_error("Got empty code object");
+            auto p = handle.LoadProgram(kern.kernel_file, kern.comp_options, false, "");
+            hsaco  = p.IsCodeObjectInMemory() ? p.GetCodeObjectBlob()
+                                             : miopen::LoadFile(p.GetCodeObjectPathname().string());
+            if(hsaco.empty())
+            {
+                std::cerr << "Got empty code object" << std::endl;
+                throw std::runtime_error("Got empty code object");
+            }
         }
         // Compress the blob
         auto md5_sum             = miopen::md5(hsaco);
@@ -463,9 +469,6 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
             res_item["reason"]    = "Success";
             res_item["workspace"] = solution.workspace_sz;
 
-            // build the binaries
-            for(const auto& kern : solution.construction_params)
-                handle.LoadProgram(kern.kernel_file, kern.comp_options, false, "");
             res_item["kernel_objects"] = BuildJsonKernelList(handle, solution.construction_params);
             return true;
         };
