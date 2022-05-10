@@ -79,6 +79,7 @@ class BNFin : public BaseFin
     int ProcessStep(const std::string& step_name) override;
 
     // Steps
+    int AllocateBuffers();
     int TestApplicability();
     int GetandSetData();
     std::vector<miopen::solver::ConvSolution> GetBNSolutions(miopen::ExecutionContext& ctx);
@@ -111,27 +112,38 @@ class BNFin : public BaseFin
     bool is_fwd_infer       = false;
     bool is_bwd             = false;
 
-    //miopen::TensorDescriptor inputTensor;
-    //miopen::TensorDescriptor outputTensor;
-    //miopen::TensorDescriptor biasScaleTensor;
     tensor<Tgpu, Tcpu> inputTensor;
     tensor<Tgpu, Tcpu> outputTensor;
     tensor<Tgpu, Tcpu> biasScaleTensor;
     tensor<Tgpu, Tcpu> workspace;
-    ConstData_t x = nullptr;
-    ConstData_t y = nullptr;
-    ConstData_t bnscale = nullptr;
-    ConstData_t bnBias = nullptr;
-    Data_t resultRunningMean = nullptr;
-    Data_t resultRunningVariance = nullptr;
-    Data_t resultSaveMean = nullptr;
-    Data_t resultSaveInvVariance = nullptr;
+    tensor<Tgpu, Tcpu> bnScale;
+    tensor<Tgpu, Tcpu> bnBias;
+    tensor<Tgpu, Tcpu> resultRunningMean;
+    tensor<Tgpu, Tcpu> resultRunningVariance;
+    tensor<Tgpu, Tcpu> resultSaveMean;
+    tensor<Tgpu, Tcpu> resultSaveInvVariance;
 
     // for backward
     tensor<Tgpu, Tcpu> dyInputTensor;
     tensor<Tgpu, Tcpu> dxOutputTensor;
 };
 
+template <typename Tgpu, typename Tref>
+int BNFin<Tgpu, Tref>::AllocateBuffers()
+{
+#if MIOPEN_MODE_NOGPU
+    throw std::runtime_error("Unable to allocate buffers with NOGPU backend");
+#else
+    GetandSetData();
+    inputTensor.AllocateBuffers();
+    outputTensor.AllocateBuffers();
+    biasTensor.AllocateBuffers();
+    // The workspace is actually allocated when the solver is about to be run
+    // since it varies from solver to solver
+    workspace.AllocateBuffers();
+#endif
+    return 0;
+}
 template <typename Tgpu, typename Tref>
 int BNFin<Tgpu, Tref>::TestApplicability()
 {
@@ -213,12 +225,18 @@ int BNFin<Tgpu, Tref>::GetandSetData()
         biasScaleTensor = {GetHandle().GetStream(), sb_len, true, true};
     }
 
-    inputTensor    = {GetHandle().GetStream(), in_len, true, false};
-    outputTensor   = {GetHandle().GetStream(), in_len, false, true};
+    inputTensor           = {GetHandle().GetStream(), in_len, true, false};
+    outputTensor          = {GetHandle().GetStream(), in_len, false, true};
+    bnScale               = {GetHandle().GetStream(), sb_len, false, false};
+    bnBias                = {GetHandle().GetStream(), sb_len, false, false};
+    resultRunningMean     = {GetHandle().GetStream(), sb_len, false, false};
+    resultRunningVariance = {GetHandle().GetStream(), sb_len, false, false};
+    resultSaveMean        = {GetHandle().GetStream(), sb_len, false, false};
+    resultSaveInvVariance = {GetHandle().GetStream(), sb_len, false, false};
 
     // backwards
     dyInputTensor  = {GetHandle().GetStream(), in_len, false, true};
-    dxOutputTensor = {GetHandle().GetStream(), in_len, true, false};  
+    dxOutputTensor = {GetHandle().GetStream(), in_len, true, false};
     return (0);
 }
 
@@ -264,6 +282,10 @@ template <typename Tgpu, typename Tref>
 int BNFin<Tgpu, Tref>::ProcessStep(const std::string& step_name)
 {
     steps_processed.push_back(step_name);
+    if(step_name == "alloc_buf")
+    {
+        return AllocateBuffers();
+    }
     if(step_name == "applicability")
     {
         return TestApplicability();
@@ -409,16 +431,16 @@ miopen::batchnorm::InvokeParams BNFin<Tgpu, Tref>::GetInvokeParams()
 {
     auto tmp                  = miopen::batchnorm::InvokeParams{};
     tmp.type                  = miopen::InvokeType::Run;
-    tmp.x                     = nullptr;//x;
-    tmp.y                     = nullptr;//y;
-    tmp.bnScale               = nullptr;//bnScale;
-    tmp.bnBias                = nullptr;//bnBias;
+    tmp.x                     = inputTensor.gpuData.buf.get();
+    tmp.y                     = outputTensor.gpuData.buf.get();
+    tmp.bnScale               = bnScale.gpuData.buf.get();
+    tmp.bnBias                = bnBias.gpuData.buf.get();
     tmp.expAvgFactor          = expAvgFactor;
-    tmp.resultRunningMean     = nullptr;//resultRunningMean;
-    tmp.resultRunningVariance = nullptr;//resultRunningVariance;
+    tmp.resultRunningMean     = resultRunningMean.gpuData.buf.get();
+    tmp.resultRunningVariance = resultRunningVariance.gpuData.buf.get();
     tmp.epsilon               = epsilon;
-    tmp.resultSaveMean        = nullptr;//resultSaveMean;
-    tmp.resultSaveInvVariance = nullptr;//resultSaveInvVariance;
+    tmp.resultSaveMean        = resultSaveMean.gpuData.buf.get();
+    tmp.resultSaveInvVariance = resultSaveInvVariance.gpuData.buf.get();
     return tmp;
 }
 template <typename Tgpu, typename Tref>
@@ -427,12 +449,12 @@ miopen::batchnorm::InfInvokeParams BNFin<Tgpu, Tref>::GetInfInvokeParams()
     auto tmp              = miopen::batchnorm::InfInvokeParams{};
     tmp.type              = miopen::InvokeType::Run;
     tmp.xDesc             = &inputTensor.desc;
-    tmp.x                 = nullptr;//x;
-    tmp.y                 = nullptr;//y;
-    tmp.bnScale           = nullptr;//bnScale;
-    tmp.bnBias            = nullptr;//bnBias;
-    tmp.estimatedMean     = nullptr;//estimatedMean;
-    tmp.estimatedVariance = nullptr;//estimatedVariance;
+    tmp.x                 = inputTensor.gpuData.buf.get();
+    tmp.y                 = outputTensor.gpuData.buf.get();
+    tmp.bnScale           = bnScale.gpuData.buf.get();
+    tmp.bnBias            = bnBias.gpuData.buf.get();
+    tmp.estimatedMean     = nullptr;
+    tmp.estimatedVariance = nullptr;
     tmp.epsilon           = epsilon;
     return tmp;
 }
@@ -441,16 +463,16 @@ miopen::batchnorm::BwdInvokeParams BNFin<Tgpu, Tref>::GetBwdInvokeParams()
 {
     auto tmp              = miopen::batchnorm::BwdInvokeParams{};
     tmp.type              = miopen::InvokeType::Run;
-    tmp.x                 = nullptr;//x;
-    tmp.dy                = nullptr;//dy;
-    tmp.dx                = nullptr;//dx;
-    tmp.bnScale           = nullptr;//bnScale;
-    tmp.resultBnScaleDiff = nullptr;//resultBnScaleDiff;
-    tmp.resultBnScaleDiff = nullptr;//resultBnScaleDiff;
-    tmp.resultBnBiasDiff  = nullptr;//resultBnBiasDiff;
+    tmp.x                 = inputTensor.gpuData.buf.get();
+    tmp.dy                = dyInputTensor.gpuData.buf.get();
+    tmp.dx                = dxOutputTensor.gpuData.buf.get();
+    tmp.bnScale           = bnScale.gpuData.buf.get();
+    tmp.resultBnScaleDiff = nullptr; // resultBnScaleDiff;
+    tmp.resultBnScaleDiff = nullptr; // resultBnScaleDiff;
+    tmp.resultBnBiasDiff  = nullptr; // resultBnBiasDiff;
     tmp.epsilon           = epsilon;
-    tmp.savedMean         = nullptr;//savedMean;
-    tmp.savedInvVariance  = nullptr;//savedInvVariance;
+    tmp.savedMean         = nullptr; // savedMean;
+    tmp.savedInvVariance  = nullptr; // savedInvVariance;
     return tmp;
 }
 
@@ -562,8 +584,8 @@ int BNFin<Tgpu, Tref>::MIOpenFindEval()
     throw std::runtime_error(
         "Unable to perform MIOpenFindEval MIOpen was not compiled using HIPNOGPU backend");
 #endif
-    auto& h = GetHandle();
-    auto ctx     = miopen::ExecutionContext(&h);
+    auto& h  = GetHandle();
+    auto ctx = miopen::ExecutionContext(&h);
     GetHandle().EnableProfiling(true);
 #if MIOPEN_MODE_NOGPU
     BaseFin::InitNoGpuHandle(h, job["arch"], job["num_cu"]);
@@ -597,7 +619,7 @@ int BNFin<Tgpu, Tref>::MIOpenFindEval()
     const size_t num_cu    = h.GetMaxComputeUnits();
     std::cerr << "Job Arch: " << job["arch"] << ": Handle Arch: " << arch << std::endl;
     std::cerr << "Job Num CU: " << job["num_cu"] << ": Handle Num Cu: " << num_cu << std::endl;
-    const auto slns  = GetBNSolutions(ctx);
+    const auto slns = GetBNSolutions(ctx);
 
     bool dynamic_only = false;
     if(job.contains("dynamic_only"))
@@ -619,11 +641,11 @@ int BNFin<Tgpu, Tref>::MIOpenFindEval()
         auto process_solver = [&]() -> bool {
             const std::string solver_name = kinder["solver_id"];
             std::cerr << "Processing solver: " << solver_name << std::endl;
-            //const auto solver_id    = miopen::solver::Id{solver_name};
-            //const auto& s           = solver_id.GetSolver();
+            // const auto solver_id    = miopen::solver::Id{solver_name};
+            // const auto& s           = solver_id.GetSolver();
             res_item["solver_name"] = solver_name;
-            //const auto algo         = solver_id.GetAlgo(conv_dir);
-            //res_item["algorithm"]   = algo;
+            // const auto algo         = solver_id.GetAlgo(conv_dir);
+            // res_item["algorithm"]   = algo;
             /*if(s.IsEmpty())
             {
                 std::cerr << "Skipping invalid solver: " << solver_id.ToString() << std::endl;
@@ -648,11 +670,11 @@ int BNFin<Tgpu, Tref>::MIOpenFindEval()
             {
                 std::cout << it->solver_id << "-" << solver_name << std::endl;
 
-                bool is_same = it->solver_id.compare(solver_name)==0;
+                bool is_same = it->solver_id.compare(solver_name) == 0;
                 std::cout << is_same << std::endl;
                 solution = *it;
             }
-            //const auto solution   = s.FindSolution(ctx, db, {}); // auto tune is not expected here
+            // const auto solution   = s.FindSolution(ctx, db, {});
             res_item["workspace"] = solution.workspace_sz;
             // Get the binary
             std::cerr << "loading binaries from fin input" << std::endl;
@@ -713,7 +735,8 @@ int BNFin<Tgpu, Tref>::MIOpenFindEval()
                 // direction and it does not have a
                 // copy constructor or a default constructor
                 std::cerr << "Finished preparing invokers" << std::endl;
-                if(is_fwd_train){
+                if(is_fwd_train)
+                {
                     const auto invoke_params = GetInvokeParams();
                     invoker(h, invoke_params);
                 }
