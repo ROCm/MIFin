@@ -30,6 +30,7 @@
 // using float16 = half_float::half;
 #include "config.h"
 #include "tensor.hpp"
+#include "base64.hpp"
 
 #include <nlohmann/json.hpp>
 #include <algorithm>
@@ -41,8 +42,11 @@
 #include <miopen/handle.hpp>
 #include <miopen/nogpu/handle_impl.hpp>
 #include <miopen/any_solver.hpp>
+#include <miopen/md5.hpp>
+#include <miopen/bz2.hpp>
 #include <numeric>
 #include <vector>
+
 
 using json = nlohmann::json;
 
@@ -119,6 +123,91 @@ class BaseFin
         output["all_solvers"] = solvers;
         return 0;
     }
+
+    json BuildJsonKernelList(const miopen::Handle& handle,
+                             const std::vector<miopen::solver::KernelInfo>& kernels)
+    {
+        // Get the binary
+        json kernel_list = json::array();
+        for(const auto& kern : kernels)
+        {
+            json kernel;
+
+            std::string comp_opts = kern.comp_options;
+            if(!miopen::EndsWith(kern.kernel_file, ".mlir"))
+            {
+                comp_opts += " -mcpu=" + handle.GetDeviceName();
+            }
+            const auto hsaco = miopen::LoadBinary(handle.GetTargetProperties(),
+                                                  handle.GetMaxComputeUnits(),
+                                                  kern.kernel_file,
+                                                  comp_opts,
+                                                  false);
+
+            if(hsaco.empty())
+            {
+                std::cerr << "Got empty code object" << std::endl;
+                throw std::runtime_error("Got empty code object");
+            }
+            // Compress the blob
+            auto md5_sum             = miopen::md5(hsaco);
+            auto size                = hsaco.size();
+            bool success             = false;
+            auto compressed_hsaco    = miopen::compress(hsaco, &success);
+            const auto encoded_hsaco = base64_encode(compressed_hsaco);
+            kernel["kernel_file"]    = kern.kernel_file;
+            kernel["comp_options"]   = kern.comp_options;
+
+            if(success)
+            {
+                kernel["uncompressed_size"] = size;
+                kernel["md5_sum"]           = md5_sum;
+                kernel["blob"]              = encoded_hsaco;
+            }
+            else
+            {
+                kernel["md5_sum"]           = "Failed to compress kernel";
+                kernel["uncompressed_size"] = 0;
+                kernel["blob"]              = "";
+            }
+            kernel_list.push_back(kernel);
+            std::cerr << "Successfully added new kernel to json output" << std::endl;
+        }
+        return kernel_list;
+    }
+
+    void SolutionHasProgram(const miopen::Handle& handle, const miopen::solver::ConvSolution& solution)
+    {
+        for(auto& kern : solution.construction_params)
+        {
+            std::string kernel_file = kern.kernel_file;
+            std::string comp_opts   = kern.comp_options;
+
+            // if file extention and comp_opts aren't appended HasProgram will fail
+            // file_name + ".o", comp_opts + " -mcpu="
+            std::cerr << "checking binary : " << kernel_file << " : " << comp_opts << std::endl;
+
+            if(!handle.HasProgram(kernel_file, comp_opts))
+            {
+                std::cerr << "Binary object check failed, either tuning params have changed or "
+                             "fin is unable to write binary to program cache"
+                          << std::endl;
+            }
+        }
+    }
+
+    void UpdateSolutionOpts(const miopen::Handle& handle, miopen::solver::ConvSolution& solution)
+    {
+        for(auto& kern : solution.construction_params)
+        {
+            if(!miopen::EndsWith(kern.kernel_file, ".mlir"))
+            {
+                kern.comp_options += " -mcpu=" + handle.GetDeviceName();
+            }
+            kern.kernel_file += ".o";
+        }
+    }
+
 
     protected:
     template <typename Tgpu>
