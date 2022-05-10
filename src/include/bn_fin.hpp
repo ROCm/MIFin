@@ -33,11 +33,13 @@
 
 #include <miopen/execution_context.hpp>
 #include <miopen/miopen.h>
-
 #include <miopen/batchnorm/problem_description.hpp>
 #include <miopen/batch_norm.hpp>
 #include <miopen/batchnorm/invoke_params.hpp>
 #include <miopen/batchnorm/solvers.hpp>
+#include <miopen/find_solution.hpp>
+#include <miopen/solver.hpp>
+#include <miopen/solver_id.hpp>
 
 #include <nlohmann/json.hpp>
 
@@ -79,8 +81,10 @@ class BNFin : public BaseFin
     // Steps
     int TestApplicability();
     int GetandSetData();
-    miopen::batchnorm::ProblemDescription GetProblemDescription();
     std::vector<miopen::solver::ConvSolution> GetBNSolutions(miopen::ExecutionContext& ctx);
+    miopen::batchnorm::ProblemDescription GetProblemDescription();
+    auto GetAlgorithm();
+    int MIOpenFindCompile();
 
     // Utility functions
     auto GetFwdTrainSolvers();
@@ -103,13 +107,13 @@ class BNFin : public BaseFin
     bool is_fwd_infer       = false;
     bool is_bwd             = false;
 
-    miopen::TensorDescriptor inputTensor;
-    miopen::TensorDescriptor outputTensor;
-    miopen::TensorDescriptor biasScaleTensor;
+    tensor<Tgpu, Tcpu> inputTensor;
+    tensor<Tgpu, Tcpu> outputTensor;
+    tensor<Tgpu, Tcpu> biasScaleTensor;
 
     // for backward
-    miopen::TensorDescriptor dyInputTensor;
-    miopen::TensorDescriptor dxOutputTensor;
+    tensor<Tgpu, Tcpu> dyInputTensor;
+    tensor<Tgpu, Tcpu> dxOutputTensor;
 };
 
 template <typename Tgpu, typename Tref>
@@ -137,7 +141,7 @@ int BNFin<Tgpu, Tref>::TestApplicability()
 
     for(const auto& sln : GetBNSolutions(ctx))
     {
-        std::cout << sln.solver_id << std::endl;
+        std::cerr << sln.solver_id << std::endl;
         if(!sln.invoker_factory)
         {
             MIOPEN_THROW(miopenStatusInternalError, "Invoker missing in solver " + sln.solver_id);
@@ -186,19 +190,19 @@ int BNFin<Tgpu, Tref>::GetandSetData()
 
     if(command["bias"].get<int>() != 0)
     {
-        biasScaleTensor = miopen::TensorDescriptor(data_type, GetBiasTensorLengths());
+        biasScaleTensor = {GetHandle().GetStream(), GetBiasTensorLengths(), true, true};
     }
     else
     {
-        biasScaleTensor = miopen::TensorDescriptor(data_type, sb_len.data(), sb_len.size());
+        biasScaleTensor = {GetHandle().GetStream(), sb_len, true, true};
     }
 
-    inputTensor  = miopen::TensorDescriptor(data_type, in_len);
-    outputTensor = miopen::TensorDescriptor(data_type, in_len);
+    inputTensor  = {GetHandle().GetStream(), in_len, true, false};
+    outputTensor = {GetHandle().GetStream(), in_len, false, true};
 
     // backwards
-    dyInputTensor  = miopen::TensorDescriptor(data_type, in_len);
-    dxOutputTensor = miopen::TensorDescriptor(data_type, in_len);
+    dyInputTensor  = {GetHandle().GetStream(), in_len, false, true};
+    dxOutputTensor = {GetHandle().GetStream(), in_len, true, false};
     return (0);
 }
 
@@ -247,6 +251,10 @@ int BNFin<Tgpu, Tref>::ProcessStep(const std::string& step_name)
     if(step_name == "applicability")
     {
         return TestApplicability();
+    }
+    if(step_name == "miopen_find_compile")
+    {
+        return MIOpenFindCompile();
     }
     return 0;
 }
@@ -299,9 +307,9 @@ miopen::batchnorm::ProblemDescription BNFin<Tgpu, Tref>::GetProblemDescription()
     if(is_fwd_train)
     {
         return miopen::batchnorm::ProblemDescription{bn_mode,
-                                                     inputTensor,
-                                                     outputTensor,
-                                                     biasScaleTensor,
+                                                     inputTensor.desc,
+                                                     outputTensor.desc,
+                                                     biasScaleTensor.desc,
                                                      expAvgFactor,
                                                      epsilon,
                                                      saveMeanVar,
@@ -310,21 +318,21 @@ miopen::batchnorm::ProblemDescription BNFin<Tgpu, Tref>::GetProblemDescription()
     else if(is_fwd_infer)
     {
         return miopen::batchnorm::ProblemDescription(
-            bn_mode, inputTensor, outputTensor, biasScaleTensor, epsilon);
+            bn_mode, inputTensor.desc, outputTensor.desc, biasScaleTensor.desc, epsilon);
     }
     else if(is_bwd)
     {
         return miopen::batchnorm::ProblemDescription(bn_mode,
-                                                     inputTensor,
-                                                     dyInputTensor,
-                                                     dxOutputTensor,
-                                                     biasScaleTensor,
+                                                     inputTensor.desc,
+                                                     dyInputTensor.desc,
+                                                     dxOutputTensor.desc,
+                                                     biasScaleTensor.desc,
                                                      epsilon,
                                                      saveMeanVar);
     }
     else
     {
-        throw std::runtime_error("Unable to determine batch norm direction");
+        throw std::runtime_error("Unable to get solvers for batch norm");
     }
 }
 
@@ -347,8 +355,129 @@ BNFin<Tgpu, Tref>::GetBNSolutions(miopen::ExecutionContext& ctx)
     }
     else
     {
-        throw std::runtime_error("Unable to determine batch norm direction");
+        throw std::runtime_error("Unable to to get solutions for batch norm");
     }
+}
+
+template <typename Tgpu, typename Tref>
+auto BNFin<Tgpu, Tref>::GetAlgorithm()
+{
+    if(is_fwd_train)
+    {
+        return bn_mode == miopenBNSpatial
+                   ? miopen::AlgorithmName{"miopenBatchNormForwardTrainingSpatial"}
+                   : miopen::AlgorithmName{"miopenBatchNormForwardTrainingPerActivation"};
+    }
+    else if(is_fwd_infer)
+    {
+        return miopen::AlgorithmName{"miopenBatchNormalizationForwardInference"};
+    }
+    else if(is_bwd)
+    {
+        return bn_mode == miopenBNSpatial
+                   ? miopen::AlgorithmName{"miopenBatchNormBackwardPropSpatial"}
+                   : miopen::AlgorithmName{"miopenBatchNormBackwardPropPerActivation"};
+    }
+    else
+    {
+        throw std::runtime_error("Unable to get solvers for batch norm");
+    }
+}
+
+template <typename Tgpu, typename Tref>
+int BNFin<Tgpu, Tref>::MIOpenFindCompile()
+{
+    std::cerr << "MIOpenFinCompile" << std::endl;
+    std::cerr << "Processing command: " << command << std::endl;
+#if MIOPEN_MODE_NOGPU
+    GetandSetData();
+#else
+    throw std::runtime_error(
+        "Unable to perform MIOpenFindCompile MIOpen was not compiled using HIPNOGPU backend");
+#endif
+    auto& handle = GetHandle();
+    auto ctx     = miopen::ExecutionContext(&handle);
+    GetHandle().EnableProfiling(true);
+#if MIOPEN_MODE_NOGPU
+    BaseFin::InitNoGpuHandle(handle, job["arch"], job["num_cu"]);
+#else
+    throw std::runtime_error("MIOpen needs to be compiled with the NOGPU backend "
+                             "for Batch Norm find_compile");
+#endif
+    ctx.SetStream(&handle);
+    ctx.DetectRocm();
+
+    const auto problem         = GetProblemDescription();
+    const auto network_config  = problem.MakeNetworkConfig();
+    output["network_config"]   = network_config;
+    output["db_key"]           = network_config.ToString();
+    output["is_winograd_only"] = false;
+
+    json find_result;
+    std::cerr << "Job Arch: " << job["arch"] << ": Handle Arch: " << handle.GetMaxComputeUnits()
+              << std::endl;
+    std::cerr << "Job Num CU: " << job["num_cu"]
+              << ": Handle Num Cu: " << handle.GetTargetProperties().Name() << std::endl;
+
+    for(const auto& sln : GetBNSolutions(ctx))
+    {
+        // remove the user db files
+        boost::filesystem::remove_all(miopen::GetCachePath(false));
+        json res_item;
+        res_item["solver_id"] = sln.solver_id;
+        res_item["algorithm"] = GetAlgorithm();
+
+        res_item["workspace"] = sln.workspace_sz;
+        std::vector<miopen::solver::KernelInfo> kernels;
+        for(auto&& kernel : sln.construction_params)
+        {
+            kernels.push_back(kernel);
+        }
+        std::ignore      = miopen::solver::PrecompileKernels(handle, kernels);
+        json kernel_list = json::array();
+        for(const auto& k : kernels)
+        {
+            json kernel;
+            auto comp_opts   = k.comp_options;
+            auto p           = handle.LoadProgram(k.kernel_file, comp_opts, false, "");
+            const auto hsaco = p.IsCodeObjectInMemory()
+                                   ? p.GetCodeObjectBlob()
+                                   : miopen::LoadFile(p.GetCodeObjectPathname().string());
+            if(hsaco.empty())
+            {
+                std::cerr << "Got empty code object" << std::endl;
+                throw std::runtime_error("Got empty code object");
+            }
+            // Compress the blob
+            auto md5_sum             = miopen::md5(hsaco);
+            auto size                = hsaco.size();
+            bool success             = false;
+            auto compressed_hsaco    = miopen::compress(hsaco, &success);
+            const auto encoded_hsaco = base64_encode(compressed_hsaco);
+            kernel["kernel_file"]    = k.kernel_file;
+            kernel["comp_options"]   = k.comp_options;
+            if(success)
+            {
+                kernel["uncompressed_size"] = size;
+                kernel["md5_sum"]           = md5_sum;
+                kernel["blob"]              = encoded_hsaco;
+            }
+            else
+            {
+                kernel["md5_sum"]           = "Failed to compress kernel";
+                kernel["uncompressed_size"] = 0;
+                kernel["blob"]              = "";
+            }
+            kernel_list.push_back(kernel);
+            std::cerr << "Successfully added new kernel" << std::endl;
+        }
+        res_item["kernel_objects"] = kernel_list;
+        res_item["reason"]         = "Success";
+        res_item["find_compiled"]  = true;
+        find_result.push_back(res_item);
+    }
+    output["miopen_find_compile_result"] = find_result;
+    return 1;
 }
 
 } // namespace fin
