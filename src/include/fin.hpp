@@ -47,7 +47,6 @@
 #include <numeric>
 #include <vector>
 
-
 using json = nlohmann::json;
 
 #if FIN_BACKEND_OPENCL
@@ -138,16 +137,23 @@ class BaseFin
             {
                 comp_opts += " -mcpu=" + handle.GetDeviceName();
             }
-            const auto hsaco = miopen::LoadBinary(handle.GetTargetProperties(),
-                                                  handle.GetMaxComputeUnits(),
-                                                  kern.kernel_file,
-                                                  comp_opts,
-                                                  false);
+            auto hsaco = miopen::LoadBinary(handle.GetTargetProperties(),
+                                            handle.GetMaxComputeUnits(),
+                                            kern.kernel_file,
+                                            comp_opts,
+                                            false);
 
             if(hsaco.empty())
             {
-                std::cerr << "Got empty code object" << std::endl;
-                throw std::runtime_error("Got empty code object");
+                auto p = handle.LoadProgram(kern.kernel_file, kern.comp_options, false, "");
+                hsaco  = p.IsCodeObjectInMemory()
+                            ? p.GetCodeObjectBlob()
+                            : miopen::LoadFile(p.GetCodeObjectPathname().string());
+                if(hsaco.empty())
+                {
+                    std::cerr << "Got empty code object" << std::endl;
+                    throw std::runtime_error("Got empty code object");
+                }
             }
             // Compress the blob
             auto md5_sum             = miopen::md5(hsaco);
@@ -176,7 +182,8 @@ class BaseFin
         return kernel_list;
     }
 
-    void SolutionHasProgram(const miopen::Handle& handle, const miopen::solver::ConvSolution& solution)
+    void SolutionHasProgram(const miopen::Handle& handle,
+                            const miopen::solver::ConvSolution& solution)
     {
         for(auto& kern : solution.construction_params)
         {
@@ -207,7 +214,6 @@ class BaseFin
             kern.kernel_file += ".o";
         }
     }
-
 
     protected:
     template <typename Tgpu>

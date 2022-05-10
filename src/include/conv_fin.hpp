@@ -379,9 +379,6 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
             res_item["reason"]    = "Success";
             res_item["workspace"] = solution.workspace_sz;
 
-            // build the binaries
-            for(const auto& kern : solution.construction_params)
-                handle.LoadProgram(kern.kernel_file, kern.comp_options, false, "");
             res_item["kernel_objects"] = BuildJsonKernelList(handle, solution.construction_params);
             return true;
         };
