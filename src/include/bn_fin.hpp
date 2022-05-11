@@ -137,7 +137,7 @@ int BNFin<Tgpu, Tref>::AllocateBuffers()
     GetandSetData();
     inputTensor.AllocateBuffers();
     outputTensor.AllocateBuffers();
-    biasTensor.AllocateBuffers();
+    biasScaleTensor.AllocateBuffers();
     // The workspace is actually allocated when the solver is about to be run
     // since it varies from solver to solver
     workspace.AllocateBuffers();
