@@ -50,6 +50,7 @@ using json = nlohmann::json;
 
 [[gnu::noreturn]] void Usage()
 {
+
     printf("Usage: ./fin *input_json *output_json\n\n");
     printf("Supported arguments:\n");
     printf("-i *input_json\n");
@@ -149,7 +150,7 @@ int main(int argc, char* argv[], char* envp[])
             }
             else if(command["config"]["cmd"] == "bnormfp16")
             {
-                f = std::make_unique<fin::BNFin<float16, float>>(command);
+                f = std::make_unique<fin::BNFin<float, float>>(command);
             }
             else
             {
