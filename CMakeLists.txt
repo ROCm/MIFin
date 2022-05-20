@@ -319,6 +319,7 @@ else()
 endif()
 
 find_package(miopen)
+find_package(rocblas) #MIOpen depends on rocBlas
 find_package(Threads REQUIRED)
 
 add_subdirectory(src)
