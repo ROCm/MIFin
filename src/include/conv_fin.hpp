@@ -369,7 +369,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
 
     std::vector<miopen::solver::Id> solver_list;
     if(job.contains("solvers"))
-        for(std::string solver_str : job["solvers"])
+        for(std::string& solver_str : job["solvers"])
             solver_list.push_back(miopen::solver::Id(solver_str));
     else
         solver_list = miopen::solver::GetSolversByPrimitive(miopen::solver::Primitive::Convolution);
