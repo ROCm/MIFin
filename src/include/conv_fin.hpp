@@ -208,6 +208,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
     const size_t num_cu    = handle.GetMaxComputeUnits();
     std::cerr << "Job Arch: " << job["arch"] << ": Handle Arch: " << arch << std::endl;
     std::cerr << "Job Num CU: " << job["num_cu"] << ": Handle Num Cu: " << num_cu << std::endl;
+
     std::vector<miopen::solver::Id> solver_list;
     if(job.contains("solvers"))
         for(std::string solver_str : job["solvers"])
@@ -365,9 +366,16 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
     bool dynamic_only = false;
     if(job.contains("dynamic_only"))
         dynamic_only = job["dynamic_only"];
+
+    std::vector<miopen::solver::Id> solver_list;
+    if(job.contains("solvers"))
+        for(std::string solver_str : job["solvers"])
+            solver_list.push_back(miopen::solver::Id(solver_str));
+    else
+        solver_list = miopen::solver::GetSolversByPrimitive(miopen::solver::Primitive::Convolution);
+
     // since applicability has been run, the solver list should come from Tuna
-    for(const auto& solver_id :
-        miopen::solver::GetSolversByPrimitive(miopen::solver::Primitive::Convolution))
+    for(const auto& solver_id : solver_list)
     {
         json res_item;
         // remove the user db files
@@ -529,6 +537,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
     const size_t num_cu    = h.GetMaxComputeUnits();
     std::cerr << "Job Arch: " << job["arch"] << ": Handle Arch: " << arch << std::endl;
     std::cerr << "Job Num CU: " << job["num_cu"] << ": Handle Num Cu: " << num_cu << std::endl;
+
     for(const auto& kinder :
         job["miopen_perf_compile_result"]) // The "miopen_perf_compile_result" list generated
                                            // by miopen_perf_compile operation
@@ -794,6 +803,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
     bool dynamic_only = false;
     if(job.contains("dynamic_only"))
         dynamic_only = job["dynamic_only"];
+
     for(const auto& kinder :
         job["miopen_find_compile_result"]) // The "miopen_find_compile_result" list generated
                                            // by miopen_find_compile operation
