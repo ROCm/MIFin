@@ -71,7 +71,7 @@
 #include <type_traits>
 #include <vector>
 
-#define MIOPEN_ALLSOLVER (MIOPEN_VERSION_MAJOR > 3)
+#define MIOPEN_ALLSOLVER 1//(MIOPEN_VERSION_MAJOR > 3)
 
 namespace fin {
 
@@ -166,6 +166,24 @@ miopen::conv::Direction ConvFin<Tgpu, Tref>::GetDirection() const
                             : miopen::conv::Direction::BackwardWeights);
 }
 
+
+void PopulateSolutions(miopen::solver::ConvSolution solution, std::vector<miopen::solver::ConvSolution> *_all_solutions = nullptr)
+{
+    static std::vector<miopen::solver::ConvSolution> *all_solutions;
+    if(_all_solutions != nullptr)
+    {
+        all_solutions = _all_solutions;
+        return;
+    }
+    all_solutions->push_back(solution);
+    std::cerr << "push solution  " << all_solutions->size() <<std::endl;
+}
+
+void PopulateSolutions(miopen::solver::ConvSolution solution)
+{
+    PopulateSolutions(solution, nullptr);
+}
+
 template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
 {
@@ -252,7 +270,13 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
                 return false;
             }
 
-            auto all_solutions = s.GetAllSolutions(ctx);
+            miopen::solver::ConvSolution solution;
+            std::vector<miopen::solver::ConvSolution> all_solutions;
+            //initalize all_solutions in function
+            PopulateSolutions(solution, &all_solutions);
+            //populate array
+            s.GetAllSolutions(ctx, PopulateSolutions);
+                    //[&](miopen::solver::ConvSolution solution){ all_solutions.push_back(solution); } );
 
             // PrecompileKernels call saves to binary_cache,
             // this needs to be escaped if KERN_CACHE is not on.
@@ -507,10 +531,12 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
 
                 if(miopen::md5(hsaco) == md5_sum)
                 {
+                    /*
                     auto p = miopen::Program{kernel_file, hsaco};
                     std::cerr << "Add Program: " << kernel_file << "; args: " << comp_opts
                               << std::endl;
                     h.AddProgram(p, kernel_file, comp_opts);
+                    */
 
                     // SaveBinary adds ".o" to kernel_file
                     miopen::SaveBinary(hsaco,
@@ -531,8 +557,6 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
             miopen::solver::ConvSolution solution;
             solution              = s.FindSolution(ctx, db, {}); // auto tune is not expected here
             res_item["workspace"] = solution.workspace_sz;
-            UpdateSolutionOpts(h, solution);
-            SolutionHasProgram(h, solution);
 
             std::cerr << "Checking for workspace" << std::endl;
             if(solution.workspace_sz > workspace.desc.GetNumBytes())
