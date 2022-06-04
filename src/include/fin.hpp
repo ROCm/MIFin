@@ -209,10 +209,11 @@ class BaseFin
     {
         for(auto& kern : solution.construction_params)
         {
+            if(miopen::EndsWith(kern.kernel_file, ".o"))
+                continue;
             if(!miopen::EndsWith(kern.kernel_file, ".mlir"))
-            {
                 kern.comp_options += " -mcpu=" + handle.GetDeviceName();
-            }
+
             kern.kernel_file += ".o";
         }
     }
