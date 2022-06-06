@@ -101,8 +101,6 @@ class BNFin : public BaseFin
     double epsilon          = 1.0;
     double expAvgFactor     = 1.0;
     bool isDepthSpecified   = false;
-    int forw                = 0;
-    int back                = 1;
     bool is_fwd_train       = true;
     bool is_fwd_infer       = false;
     bool is_bwd             = false;
@@ -271,9 +269,6 @@ int BNFin<Tgpu, Tref>::SetBNDescriptor()
     // keep running mean and variance
     keepRunningMeanVar = command["run"] == 0 ? false : true;
 
-    forw = command["forw"];
-    back = command["back"];
-
     epsilon = 1;
 
     return miopenStatusSuccess;
@@ -414,10 +409,10 @@ int BNFin<Tgpu, Tref>::MIOpenFindCompile()
     output["is_winograd_only"] = false;
 
     json find_result;
-    std::cerr << "Job Arch: " << job["arch"] << ": Handle Arch: " << handle.GetMaxComputeUnits()
-              << std::endl;
+    std::cerr << "Job Arch: " << job["arch"]
+              << ": Handle Arch: " << handle.GetTargetProperties().Name() << std::endl;
     std::cerr << "Job Num CU: " << job["num_cu"]
-              << ": Handle Num Cu: " << handle.GetTargetProperties().Name() << std::endl;
+              << ": Handle Num Cu: " << handle.GetMaxComputeUnits() << std::endl;
 
     for(const auto& sln : GetBNSolutions(ctx))
     {
