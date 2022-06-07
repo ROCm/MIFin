@@ -419,7 +419,7 @@ int BNFin<Tgpu, Tref>::MIOpenFindCompile()
         // remove the user db files
         boost::filesystem::remove_all(miopen::GetCachePath(false));
         json res_item;
-        res_item["solver_id"] = sln.solver_id;
+        res_item["solver_name"] = sln.solver_id;
         res_item["algorithm"] = GetAlgorithm();
 
         res_item["workspace"] = sln.workspace_sz;
