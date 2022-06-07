@@ -71,7 +71,7 @@
 #include <type_traits>
 #include <vector>
 
-#define MIOPEN_ALLSOLVER (MIOPEN_VERSION_MAJOR > 3)
+#define MIOPEN_ALLSOLVER 1 //(MIOPEN_VERSION_MAJOR > 3)
 
 namespace fin {
 
@@ -507,10 +507,19 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
 
                 if(miopen::md5(hsaco) == md5_sum)
                 {
-                    auto p = miopen::Program{kernel_file, hsaco};
-                    std::cerr << "Add Program: " << kernel_file << "; args: " << comp_opts
-                              << std::endl;
-                    h.AddProgram(p, kernel_file, comp_opts);
+                    try{
+                        std::cerr << "Make Program: " << kernel_file << "; args: " << comp_opts
+                                  << std::endl;
+                        auto p = miopen::Program{kernel_file, hsaco};
+                        std::cerr << "Add Program: " << kernel_file << "; args: " << comp_opts
+                                  << std::endl;
+                        h.AddProgram(p, kernel_file, comp_opts);
+                    }
+                    catch(const miopen::Exception& ex)
+                    {
+                        std::cerr << "program build failed: " << ex.what() << std::endl;
+                        continue;
+                    }
 
                     // SaveBinary adds ".o" to kernel_file
                     miopen::SaveBinary(hsaco,
@@ -574,6 +583,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                                                        workspace.desc.GetNumBytes(),
                                                        convDesc.attribute.gfx90aFp16alt.GetFwd()};
 
+                    std::cerr << solver_name << " Begin Search FWD" << std::endl;
                     solution = s.FindSolution(ctx, db, invoke_ctx); // forcing search here
                     std::cerr << solver_name << " Finished Search FWD" << std::endl;
                     kern_objs = BuildJsonKernelList(h, solution.construction_params);
