@@ -40,7 +40,9 @@
 #include <miopen/find_solution.hpp>
 #include <miopen/solver.hpp>
 #include <miopen/solver_id.hpp>
+#include <miopen/tensor.hpp>
 
+#include <miopen/handle.hpp>
 #include <nlohmann/json.hpp>
 
 #define EPSILON 1e-3
@@ -105,13 +107,20 @@ class BNFin : public BaseFin
     bool is_fwd_infer       = false;
     bool is_bwd             = false;
 
-    tensor<Tgpu, Tcpu> inputTensor;
-    tensor<Tgpu, Tcpu> outputTensor;
-    tensor<Tgpu, Tcpu> biasScaleTensor;
+    //tensor<Tgpu, Tcpu> inputTensor;
+    //tensor<Tgpu, Tcpu> outputTensor;
+    //tensor<Tgpu, Tcpu> biasScaleTensor;
 
     // for backward
-    tensor<Tgpu, Tcpu> dyInputTensor;
-    tensor<Tgpu, Tcpu> dxOutputTensor;
+    //tensor<Tgpu, Tcpu> dyInputTensor;
+    //tensor<Tgpu, Tcpu> dxOutputTensor;
+    miopen::TensorDescriptor inputTensor;
+    miopen::TensorDescriptor outputTensor;
+    miopen::TensorDescriptor biasScaleTensor;
+
+    // for backward
+    miopen::TensorDescriptor dyInputTensor;
+    miopen::TensorDescriptor dxOutputTensor;
 };
 
 template <typename Tgpu, typename Tref>
@@ -185,7 +194,22 @@ int BNFin<Tgpu, Tref>::GetandSetData()
             sb_len.push_back(1);
         }
     }
+    if(command["bias"].get<int>() != 0)
+    {
+        biasScaleTensor = miopen::TensorDescriptor(data_type, GetBiasTensorLengths());
+    }
+    else
+    {
+        biasScaleTensor = miopen::TensorDescriptor(data_type, sb_len.data(), sb_len.size());
+    }
 
+    inputTensor  = miopen::TensorDescriptor(data_type, in_len);
+    outputTensor = miopen::TensorDescriptor(data_type, in_len);
+
+    // backwards
+    dyInputTensor  = miopen::TensorDescriptor(data_type, in_len);
+    dxOutputTensor = miopen::TensorDescriptor(data_type, in_len);
+    /*
     if(command["bias"].get<int>() != 0)
     {
         biasScaleTensor = {GetHandle().GetStream(), GetBiasTensorLengths(), true, true};
@@ -201,6 +225,7 @@ int BNFin<Tgpu, Tref>::GetandSetData()
     // backwards
     dyInputTensor  = {GetHandle().GetStream(), in_len, false, true};
     dxOutputTensor = {GetHandle().GetStream(), in_len, true, false};
+    */
     return (0);
 }
 
@@ -302,9 +327,9 @@ miopen::batchnorm::ProblemDescription BNFin<Tgpu, Tref>::GetProblemDescription()
     if(is_fwd_train)
     {
         return miopen::batchnorm::ProblemDescription{bn_mode,
-                                                     inputTensor.desc,
-                                                     outputTensor.desc,
-                                                     biasScaleTensor.desc,
+                                                     inputTensor,
+                                                     outputTensor,
+                                                     biasScaleTensor,
                                                      expAvgFactor,
                                                      epsilon,
                                                      saveMeanVar,
@@ -313,15 +338,15 @@ miopen::batchnorm::ProblemDescription BNFin<Tgpu, Tref>::GetProblemDescription()
     else if(is_fwd_infer)
     {
         return miopen::batchnorm::ProblemDescription(
-            bn_mode, inputTensor.desc, outputTensor.desc, biasScaleTensor.desc, epsilon);
+            bn_mode, inputTensor, outputTensor, biasScaleTensor, epsilon);
     }
     else if(is_bwd)
     {
         return miopen::batchnorm::ProblemDescription(bn_mode,
-                                                     inputTensor.desc,
-                                                     dyInputTensor.desc,
-                                                     dxOutputTensor.desc,
-                                                     biasScaleTensor.desc,
+                                                     inputTensor,
+                                                     dyInputTensor,
+                                                     dxOutputTensor,
+                                                     biasScaleTensor,
                                                      epsilon,
                                                      saveMeanVar);
     }
