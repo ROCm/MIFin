@@ -177,7 +177,7 @@ set(CPACK_RPM_PACKAGE_REQUIRES "${MIOPEN_PACKAGE_REQS}, rocm-opencl-devel")
 rocm_create_package(
     NAME fin-${FIN_BACKEND}
     DESCRIPTION "Fin MIOpen Driver"
-    MAINTAINER "Jehandad Khan <jehandad.khan@amd.com>"
+    MAINTAINER "Tuna Devs <dl.MITunaX@amd.com>"
     LDCONFIG
     # DEPENDS rocm-opencl rocm-utils hip-hcc tinygemm
 )
@@ -318,6 +318,9 @@ else()
     message("MIOPEN_ENABLE_FIN is SET")
 endif()
 
+find_package(miopen)
+find_package(rocblas) #MIOpen depends on rocBlas
+find_package(Threads REQUIRED)
 
 add_subdirectory(src)
 add_subdirectory(tests)

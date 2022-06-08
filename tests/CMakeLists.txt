@@ -1,22 +1,22 @@
-include(FetchContent)
-FetchContent_Declare(
-  googletest
-  GIT_REPOSITORY https://github.com/google/googletest.git
-  GIT_TAG        e2239ee6043f73722e7aa812a459f54a28552929
-)
-set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(googletest)
-
+include(googletest)
 enable_testing()
-
-add_executable(
-  hello_test
-  hello_test.cpp
-)
-target_link_libraries(
-  hello_test
-  gtest_main
-)
-
 include(GoogleTest)
-gtest_discover_tests(hello_test)
+
+add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure -C ${CMAKE_CFG_INTDIR})
+add_custom_target(tests)
+
+function(add_gtest TEST_NAME)
+  message("Adding Test: " ${TEST_NAME})
+  add_executable(test_${TEST_NAME} ${TEST_NAME}.cpp)
+  add_dependencies(tests test_${TEST_NAME})
+  add_dependencies(check test_${TEST_NAME})
+  target_compile_options(test_${TEST_NAME} PRIVATE -Wno-global-constructors -Wno-undef)
+  target_link_libraries(test_${TEST_NAME} gtest_main MIOpen ${Boost_LIBRARIES} hip::host $<BUILD_INTERFACE:roc::rocblas>)
+  gtest_discover_tests(test_${TEST_NAME})
+endfunction()
+
+file(GLOB TESTS *.cpp)
+foreach(TEST ${TESTS})
+    get_filename_component(BASE_NAME ${TEST} NAME_WE)
+    add_gtest(${BASE_NAME})
+endforeach()
