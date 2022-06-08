@@ -50,6 +50,7 @@ using json = nlohmann::json;
 
 [[gnu::noreturn]] void Usage()
 {
+
     printf("Usage: ./fin *input_json *output_json\n\n");
     printf("Supported arguments:\n");
     printf("-i *input_json\n");

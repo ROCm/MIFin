@@ -167,7 +167,7 @@ pipeline {
                                 mkdir build; \
                                 cd build; \
                                 CXX=/opt/rocm/llvm/bin/clang++ cmake -DBUILD_DEV=On -DCMAKE_PREFIX_PATH=/root/dMIOpen/cget ..; \
-                                make -j\$(nproc) all && cd tests && ctest;"
+                                make -j\$(nproc) check;"
                     }
                     steps{
                         buildJob('clang++', '-DCMAKE_BUILD_TYPE=release', image, "", cmd)
