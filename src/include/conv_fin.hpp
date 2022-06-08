@@ -531,8 +531,6 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
             miopen::solver::ConvSolution solution;
             solution              = s.FindSolution(ctx, db, {}); // auto tune is not expected here
             res_item["workspace"] = solution.workspace_sz;
-            UpdateSolutionOpts(h, solution);
-            SolutionHasProgram(h, solution);
 
             std::cerr << "Checking for workspace" << std::endl;
             if(solution.workspace_sz > workspace.desc.GetNumBytes())
