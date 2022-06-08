@@ -40,9 +40,7 @@
 #include <miopen/find_solution.hpp>
 #include <miopen/solver.hpp>
 #include <miopen/solver_id.hpp>
-#include <miopen/tensor.hpp>
 
-#include <miopen/handle.hpp>
 #include <nlohmann/json.hpp>
 
 #define EPSILON 1e-3
@@ -114,13 +112,6 @@ class BNFin : public BaseFin
     // for backward
     tensor<Tgpu, Tcpu> dyInputTensor;
     tensor<Tgpu, Tcpu> dxOutputTensor;
-    //miopen::TensorDescriptor inputTensor;
-    //miopen::TensorDescriptor outputTensor;
-    //miopen::TensorDescriptor biasScaleTensor;
-
-    // for backward
-    //miopen::TensorDescriptor dyInputTensor;
-    //miopen::TensorDescriptor dxOutputTensor;
 };
 
 template <typename Tgpu, typename Tref>
@@ -194,24 +185,6 @@ int BNFin<Tgpu, Tref>::GetandSetData()
             sb_len.push_back(1);
         }
     }
-    /*
-    if(command["bias"].get<int>() != 0)
-    {
-        biasScaleTensor = miopen::TensorDescriptor(data_type, GetBiasTensorLengths());
-    }
-    else
-    {
-        biasScaleTensor = miopen::TensorDescriptor(data_type, sb_len.data(), sb_len.size());
-    }
-
-    inputTensor  = miopen::TensorDescriptor(data_type, in_len);
-    outputTensor = miopen::TensorDescriptor(data_type, in_len);
-
-    // backwards
-    dyInputTensor  = miopen::TensorDescriptor(data_type, in_len);
-    dxOutputTensor = miopen::TensorDescriptor(data_type, in_len);
-    */
-    
     if(command["bias"].get<int>() != 0)
     {
         biasScaleTensor = {GetHandle().GetStream(), GetBiasTensorLengths(), true, true};
@@ -227,7 +200,6 @@ int BNFin<Tgpu, Tref>::GetandSetData()
     // backwards
     dyInputTensor  = {GetHandle().GetStream(), in_len, false, true};
     dxOutputTensor = {GetHandle().GetStream(), in_len, true, false};
-    
     return (0);
 }
 
@@ -447,7 +419,7 @@ int BNFin<Tgpu, Tref>::MIOpenFindCompile()
         boost::filesystem::remove_all(miopen::GetCachePath(false));
         json res_item;
         res_item["solver_name"] = sln.solver_id;
-        res_item["algorithm"] = GetAlgorithm();
+        res_item["algorithm"]   = GetAlgorithm();
 
         res_item["workspace"] = sln.workspace_sz;
         std::vector<miopen::solver::KernelInfo> kernels;
