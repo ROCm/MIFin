@@ -101,8 +101,6 @@ class BNFin : public BaseFin
     double epsilon          = 1.0;
     double expAvgFactor     = 1.0;
     bool isDepthSpecified   = false;
-    int forw                = 0;
-    int back                = 1;
     bool is_fwd_train       = true;
     bool is_fwd_infer       = false;
     bool is_bwd             = false;
@@ -187,7 +185,6 @@ int BNFin<Tgpu, Tref>::GetandSetData()
             sb_len.push_back(1);
         }
     }
-
     if(command["bias"].get<int>() != 0)
     {
         biasScaleTensor = {GetHandle().GetStream(), GetBiasTensorLengths(), true, true};
@@ -270,9 +267,6 @@ int BNFin<Tgpu, Tref>::SetBNDescriptor()
 
     // keep running mean and variance
     keepRunningMeanVar = command["run"] == 0 ? false : true;
-
-    forw = command["forw"];
-    back = command["back"];
 
     epsilon = 1;
 
@@ -414,18 +408,18 @@ int BNFin<Tgpu, Tref>::MIOpenFindCompile()
     output["is_winograd_only"] = false;
 
     json find_result;
-    std::cerr << "Job Arch: " << job["arch"] << ": Handle Arch: " << handle.GetMaxComputeUnits()
-              << std::endl;
+    std::cerr << "Job Arch: " << job["arch"]
+              << ": Handle Arch: " << handle.GetTargetProperties().Name() << std::endl;
     std::cerr << "Job Num CU: " << job["num_cu"]
-              << ": Handle Num Cu: " << handle.GetTargetProperties().Name() << std::endl;
+              << ": Handle Num Cu: " << handle.GetMaxComputeUnits() << std::endl;
 
     for(const auto& sln : GetBNSolutions(ctx))
     {
         // remove the user db files
         boost::filesystem::remove_all(miopen::GetCachePath(false));
         json res_item;
-        res_item["solver_id"] = sln.solver_id;
-        res_item["algorithm"] = GetAlgorithm();
+        res_item["solver_name"] = sln.solver_id;
+        res_item["algorithm"]   = GetAlgorithm();
 
         res_item["workspace"] = sln.workspace_sz;
         std::vector<miopen::solver::KernelInfo> kernels;
