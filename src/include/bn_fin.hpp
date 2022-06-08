@@ -107,20 +107,20 @@ class BNFin : public BaseFin
     bool is_fwd_infer       = false;
     bool is_bwd             = false;
 
-    //tensor<Tgpu, Tcpu> inputTensor;
-    //tensor<Tgpu, Tcpu> outputTensor;
-    //tensor<Tgpu, Tcpu> biasScaleTensor;
+    tensor<Tgpu, Tcpu> inputTensor;
+    tensor<Tgpu, Tcpu> outputTensor;
+    tensor<Tgpu, Tcpu> biasScaleTensor;
 
     // for backward
-    //tensor<Tgpu, Tcpu> dyInputTensor;
-    //tensor<Tgpu, Tcpu> dxOutputTensor;
-    miopen::TensorDescriptor inputTensor;
-    miopen::TensorDescriptor outputTensor;
-    miopen::TensorDescriptor biasScaleTensor;
+    tensor<Tgpu, Tcpu> dyInputTensor;
+    tensor<Tgpu, Tcpu> dxOutputTensor;
+    //miopen::TensorDescriptor inputTensor;
+    //miopen::TensorDescriptor outputTensor;
+    //miopen::TensorDescriptor biasScaleTensor;
 
     // for backward
-    miopen::TensorDescriptor dyInputTensor;
-    miopen::TensorDescriptor dxOutputTensor;
+    //miopen::TensorDescriptor dyInputTensor;
+    //miopen::TensorDescriptor dxOutputTensor;
 };
 
 template <typename Tgpu, typename Tref>
@@ -194,6 +194,7 @@ int BNFin<Tgpu, Tref>::GetandSetData()
             sb_len.push_back(1);
         }
     }
+    /*
     if(command["bias"].get<int>() != 0)
     {
         biasScaleTensor = miopen::TensorDescriptor(data_type, GetBiasTensorLengths());
@@ -209,7 +210,8 @@ int BNFin<Tgpu, Tref>::GetandSetData()
     // backwards
     dyInputTensor  = miopen::TensorDescriptor(data_type, in_len);
     dxOutputTensor = miopen::TensorDescriptor(data_type, in_len);
-    /*
+    */
+    
     if(command["bias"].get<int>() != 0)
     {
         biasScaleTensor = {GetHandle().GetStream(), GetBiasTensorLengths(), true, true};
@@ -225,7 +227,7 @@ int BNFin<Tgpu, Tref>::GetandSetData()
     // backwards
     dyInputTensor  = {GetHandle().GetStream(), in_len, false, true};
     dxOutputTensor = {GetHandle().GetStream(), in_len, true, false};
-    */
+    
     return (0);
 }
 
@@ -327,9 +329,9 @@ miopen::batchnorm::ProblemDescription BNFin<Tgpu, Tref>::GetProblemDescription()
     if(is_fwd_train)
     {
         return miopen::batchnorm::ProblemDescription{bn_mode,
-                                                     inputTensor,
-                                                     outputTensor,
-                                                     biasScaleTensor,
+                                                     inputTensor.desc,
+                                                     outputTensor.desc,
+                                                     biasScaleTensor.desc,
                                                      expAvgFactor,
                                                      epsilon,
                                                      saveMeanVar,
@@ -338,15 +340,15 @@ miopen::batchnorm::ProblemDescription BNFin<Tgpu, Tref>::GetProblemDescription()
     else if(is_fwd_infer)
     {
         return miopen::batchnorm::ProblemDescription(
-            bn_mode, inputTensor, outputTensor, biasScaleTensor, epsilon);
+            bn_mode, inputTensor.desc, outputTensor.desc, biasScaleTensor.desc, epsilon);
     }
     else if(is_bwd)
     {
         return miopen::batchnorm::ProblemDescription(bn_mode,
-                                                     inputTensor,
-                                                     dyInputTensor,
-                                                     dxOutputTensor,
-                                                     biasScaleTensor,
+                                                     inputTensor.desc,
+                                                     dyInputTensor.desc,
+                                                     dxOutputTensor.desc,
+                                                     biasScaleTensor.desc,
                                                      epsilon,
                                                      saveMeanVar);
     }
