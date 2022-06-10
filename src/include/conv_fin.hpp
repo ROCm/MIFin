@@ -508,7 +508,8 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
 
                 if(miopen::md5(hsaco) == md5_sum)
                 {
-                    try{
+                    try
+                    {
                         auto p = miopen::Program{kernel_file, hsaco};
                         std::cerr << "Add Program: " << kernel_file << "; args: " << comp_opts
                                   << std::endl;
@@ -1342,7 +1343,6 @@ int ConvFin<Tgpu, Tref>::SearchPreCompiledKernels()
             bool retvalue;
             // to extract solver id ,context,solution
             auto process_solver = [&]() -> bool {
-
                 res_item["solver_id"] = solver_id.ToString();
                 const auto s          = solver_id.GetSolver();
                 if(s.IsEmpty())
