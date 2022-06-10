@@ -245,12 +245,9 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
                 std::cerr << "Skipping inapplicable solver: " << solver_id.ToString() << std::endl;
                 return false;
             }
+            res_item["tunable"] = true;
             if(!s.IsTunable())
-            {
-                res_item["reason"] = "Not Tunable";
-                std::cerr << "Skipping non-tunable solver: " << solver_id.ToString() << std::endl;
-                return false;
-            }
+                res_item["tunable"] = false;
 
             auto all_solutions = s.GetAllSolutions(ctx);
 
@@ -467,6 +464,12 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
             std::string params      = "";
             json kern_objs;
 
+            if(solver_id.ToString() == "ConvBiasActivAsm1x1U" ||
+               solver_id.ToString().find("Fused") != std::string::npos)
+            {
+                std::cerr << "Skipping fused solvers" << std::endl;
+                return false;
+            }
             if(s.IsEmpty())
             {
                 std::cerr << "Skipping invalid solver: " << solver_id.ToString() << std::endl;
@@ -479,11 +482,9 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                     "InApplicable solver was sent to fin, check Tuna for errors");
                 return false;
             }
+            res_item["tunable"] = true;
             if(!s.IsTunable())
-            {
-                std::cerr << "Skipping non-tunable solver: " << solver_id.ToString() << std::endl;
-                return false;
-            }
+                res_item["tunable"] = false;
 
             std::cerr << solver_name << " is applicable" << std::endl;
             // Get the binary
@@ -507,10 +508,17 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
 
                 if(miopen::md5(hsaco) == md5_sum)
                 {
-                    auto p = miopen::Program{kernel_file, hsaco};
-                    std::cerr << "Add Program: " << kernel_file << "; args: " << comp_opts
-                              << std::endl;
-                    h.AddProgram(p, kernel_file, comp_opts);
+                    try{
+                        auto p = miopen::Program{kernel_file, hsaco};
+                        std::cerr << "Add Program: " << kernel_file << "; args: " << comp_opts
+                                  << std::endl;
+                        h.AddProgram(p, kernel_file, comp_opts);
+                    }
+                    catch(const miopen::Exception& ex)
+                    {
+                        std::cerr << "program build failed: " << ex.what() << std::endl;
+                        continue;
+                    }
 
                     // SaveBinary adds ".o" to kernel_file
                     miopen::SaveBinary(hsaco,
