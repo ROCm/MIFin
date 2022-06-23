@@ -355,6 +355,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
             if(solver_id.ToString() == "ConvBiasActivAsm1x1U" ||
                solver_id.ToString().find("Fused") != std::string::npos)
             {
+                res_item["reason"] = "Skip Fused";
                 std::cerr << "Skipping fused solvers" << std::endl;
                 return false;
             }
@@ -476,16 +477,19 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
             if(solver_id.ToString() == "ConvBiasActivAsm1x1U" ||
                solver_id.ToString().find("Fused") != std::string::npos)
             {
+                res_item["reason"] = "Skip Fused";
                 std::cerr << "Skipping fused solvers" << std::endl;
                 return false;
             }
             if(s.IsEmpty())
             {
+                res_item["reason"] = "Empty Solver";
                 std::cerr << "Skipping invalid solver: " << solver_id.ToString() << std::endl;
                 return false;
             }
             if(!s.IsApplicable(ctx))
             {
+                res_item["reason"] = "Not Applicable";
                 std::cerr << "Solver inapplicable: " << solver_name << std::endl;
                 throw std::runtime_error(
                     "InApplicable solver was sent to fin, check Tuna for errors");
@@ -541,6 +545,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                 }
                 else
                 {
+                    res_item["reason"] = "Corrupt Binary";
                     std::cerr << "Corrupt Binary Object" << std::endl;
                     throw std::runtime_error("Corrupt binary object");
                     return false;
