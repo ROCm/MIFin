@@ -249,7 +249,16 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
             if(!s.IsTunable())
                 res_item["tunable"] = false;
 
-            auto all_solutions = s.GetAllSolutions(ctx);
+            std::vector<miopen::solver::ConvSolution> all_solutions;
+            try
+            {
+                all_solutions = s.GetAllSolutions(ctx);
+            }
+            catch(const std::exception& e)
+            {
+                std::cerr << "Error getting solutions: " << e.what() << std::endl;
+                return false;
+            }
 
             // PrecompileKernels call saves to binary_cache,
             // this needs to be escaped if KERN_CACHE is not on.
