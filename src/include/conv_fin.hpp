@@ -539,7 +539,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                 if(miopen::md5(hsaco) == md5_sum)
                 {
                     std::cerr << "Make Program: " << kernel_file << "; args: " << comp_opts
--                                  << std::endl;
+                              << std::endl;
                     auto p = miopen::Program{kernel_file, hsaco};
                     std::cerr << "Add Program: " << kernel_file << "; args: " << comp_opts
                               << std::endl;
@@ -815,7 +815,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
                 if(miopen::md5(hsaco) == md5_sum)
                 {
                     std::cerr << "Make Program: " << kernel_file << "; args: " << comp_opts
--                                  << std::endl;
+                              << std::endl;
                     auto p = miopen::Program{kernel_file, hsaco};
                     std::cerr << "Add Program: " << kernel_file << "; args: " << comp_opts
                               << std::endl;
