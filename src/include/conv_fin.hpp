@@ -538,12 +538,14 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
 
                 if(miopen::md5(hsaco) == md5_sum)
                 {
+                    /*
                     std::cerr << "Make Program: " << kernel_file << "; args: " << comp_opts
                               << std::endl;
                     auto p = miopen::Program{kernel_file, hsaco};
                     std::cerr << "Add Program: " << kernel_file << "; args: " << comp_opts
                               << std::endl;
                     h.AddProgram(p, kernel_file, comp_opts);
+                    */
 
                     // SaveBinary adds ".o" to kernel_file
                     miopen::SaveBinary(hsaco,
@@ -612,7 +614,6 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                     solution = s.FindSolution(ctx, db, invoke_ctx); // forcing search here
                     std::cerr << solver_name << " Finished Search FWD" << std::endl;
                     kern_objs = BuildJsonKernelList(h, solution.construction_params);
-                    UpdateSolutionOpts(h, solution);
                     SolutionHasProgram(h, solution);
                     params = s.GetPerfCfgParams(ctx, db);
 
@@ -637,7 +638,6 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                     solution = s.FindSolution(ctx, db, invoke_ctx); // forcing search here
                     std::cerr << solver_name << " Finished Search BWD" << std::endl;
                     kern_objs = BuildJsonKernelList(h, solution.construction_params);
-                    UpdateSolutionOpts(h, solution);
                     SolutionHasProgram(h, solution);
                     params = s.GetPerfCfgParams(ctx, db);
 
@@ -662,7 +662,6 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                     solution = s.FindSolution(ctx, db, invoke_ctx); // forcing search here
                     std::cerr << solver_name << " Finished Search WRW" << std::endl;
                     kern_objs = BuildJsonKernelList(h, solution.construction_params);
-                    UpdateSolutionOpts(h, solution);
                     SolutionHasProgram(h, solution);
                     params = s.GetPerfCfgParams(ctx, db);
 
@@ -791,8 +790,6 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
                 return false;
             }
             std::cerr << solver_name << " is applicable" << std::endl;
-            auto solution         = s.FindSolution(ctx, db, {}); // auto tune is not expected here
-            res_item["workspace"] = solution.workspace_sz;
             // Get the binary
             std::cerr << "loading binaries from fin input" << std::endl;
             for(const auto& kernel_obj : kinder["kernel_objects"])
@@ -829,7 +826,8 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
                 }
             }
 
-            UpdateSolutionOpts(h, solution);
+            auto solution         = s.FindSolution(ctx, db, {}); // auto tune is not expected here
+            res_item["workspace"] = solution.workspace_sz;
             SolutionHasProgram(h, solution);
 
             std::cerr << "Checking for workspace" << std::endl;
