@@ -391,6 +391,15 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
                 std::cerr << "Skipping static solver: " << solver_id.ToString() << std::endl;
                 return false;
             }
+
+            res_item["tunable"] = false;
+            res_item["params"] = 'x';
+            if(s.IsTunable())
+            {
+                res_item["tunable"] = true;
+                res_item["params"] = s.GetPerfCfgParams(ctx, db);
+            }
+
             miopen::solver::ConvSolution solution;
             try
             {
@@ -505,7 +514,9 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                     "InApplicable solver was sent to fin, check Tuna for errors");
                 return false;
             }
+
             res_item["tunable"] = true;
+            //allowing non-tunable solvers to enter here for fdb generation
             if(!s.IsTunable())
                 res_item["tunable"] = false;
 
@@ -678,6 +689,9 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                     throw std::runtime_error(ss.str());
                 }
 
+
+                if(res_item["tunable"] == false)
+                    params = 'x';
                 res_item["params"]         = params;
                 res_item["time"]           = time;
                 res_item["layout"]         = ctx.in_layout;
@@ -768,9 +782,10 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
             std::cerr << "Processing solver: " << solver_name << std::endl;
             const auto solver_id    = miopen::solver::Id{solver_name};
             const auto& s           = solver_id.GetSolver();
-            res_item["solver_name"] = solver_name;
             const auto algo         = solver_id.GetAlgo(conv_dir);
+            res_item["solver_name"] = solver_name;
             res_item["algorithm"]   = algo;
+
             if(s.IsEmpty())
             {
                 std::cerr << "Skipping invalid solver: " << solver_id.ToString() << std::endl;
@@ -789,6 +804,15 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
                 std::cerr << "Skipping static solver: " << solver_id.ToString() << std::endl;
                 return false;
             }
+
+            res_item["tunable"] = false;
+            res_item["params"] = 'x';
+            if(s.IsTunable())
+            {
+                res_item["tunable"] = true;
+                res_item["params"] = s.GetPerfCfgParams(ctx, db);
+            }
+
             std::cerr << solver_name << " is applicable" << std::endl;
             // Get the binary
             std::cerr << "loading binaries from fin input" << std::endl;
@@ -1369,7 +1393,6 @@ int ConvFin<Tgpu, Tref>::SearchPreCompiledKernels()
             bool retvalue;
             // to extract solver id ,context,solution
             auto process_solver = [&]() -> bool {
-
                 res_item["solver_id"] = solver_id.ToString();
                 const auto s          = solver_id.GetSolver();
                 if(s.IsEmpty())
