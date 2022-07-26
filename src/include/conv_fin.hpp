@@ -392,13 +392,10 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
                 return false;
             }
 
+            res_item["params"] = s.GetPerfCfgParams(ctx, db);
             res_item["tunable"] = false;
-            res_item["params"] = 'x';
             if(s.IsTunable())
-            {
                 res_item["tunable"] = true;
-                res_item["params"] = s.GetPerfCfgParams(ctx, db);
-            }
 
             miopen::solver::ConvSolution solution;
             try
@@ -690,8 +687,6 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                 }
 
 
-                if(res_item["tunable"] == false)
-                    params = 'x';
                 res_item["params"]         = params;
                 res_item["time"]           = time;
                 res_item["layout"]         = ctx.in_layout;
@@ -805,13 +800,10 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
                 return false;
             }
 
+            res_item["params"] = s.GetPerfCfgParams(ctx, db);
             res_item["tunable"] = false;
-            res_item["params"] = 'x';
             if(s.IsTunable())
-            {
                 res_item["tunable"] = true;
-                res_item["params"] = s.GetPerfCfgParams(ctx, db);
-            }
 
             std::cerr << solver_name << " is applicable" << std::endl;
             // Get the binary
