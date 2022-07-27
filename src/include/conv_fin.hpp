@@ -224,10 +224,10 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
         boost::filesystem::remove_all(miopen::GetCachePath(false));
         auto process_solver = [&]() -> bool {
             std::cerr << "Processing Solver: " << solver_id.ToString() << std::endl;
-            const auto& s         = solver_id.GetSolver();
-            const auto algo       = solver_id.GetAlgo(conv_dir);
+            const auto& s           = solver_id.GetSolver();
+            const auto algo         = solver_id.GetAlgo(conv_dir);
             res_item["solver_name"] = solver_id.ToString();
-            res_item["algorithm"] = algo;
+            res_item["algorithm"]   = algo;
 
             if(solver_id.ToString() == "ConvBiasActivAsm1x1U" ||
                solver_id.ToString().find("Fused") != std::string::npos)
@@ -361,10 +361,10 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
         boost::filesystem::remove_all(miopen::GetCachePath(false));
         auto process_solver = [&]() -> bool {
             std::cerr << "Processing Solver: " << solver_id.ToString() << std::endl;
-            const auto& s         = solver_id.GetSolver();
-            const auto algo       = solver_id.GetAlgo(conv_dir);
+            const auto& s           = solver_id.GetSolver();
+            const auto algo         = solver_id.GetAlgo(conv_dir);
             res_item["solver_name"] = solver_id.ToString();
-            res_item["algorithm"] = algo;
+            res_item["algorithm"]   = algo;
 
             if(solver_id.ToString() == "ConvBiasActivAsm1x1U" ||
                solver_id.ToString().find("Fused") != std::string::npos)
@@ -392,7 +392,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
                 return false;
             }
 
-            res_item["params"] = s.GetPerfCfgParams(ctx, db);
+            res_item["params"]  = s.GetPerfCfgParams(ctx, db);
             res_item["tunable"] = false;
             if(s.IsTunable())
                 res_item["tunable"] = true;
@@ -409,8 +409,8 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
                           << solver_id.ToString() << e.what() << std::endl;
                 return false;
             }
-            res_item["reason"]    = "Success";
-            res_item["workspace"] = solution.workspace_sz;
+            res_item["reason"]         = "Success";
+            res_item["workspace"]      = solution.workspace_sz;
             res_item["kernel_objects"] = BuildJsonKernelList(handle, solution.construction_params);
             return true;
         };
@@ -513,7 +513,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
             }
 
             res_item["tunable"] = true;
-            //allowing non-tunable solvers to enter here for fdb generation
+            // allowing non-tunable solvers to enter here for fdb generation
             if(!s.IsTunable())
                 res_item["tunable"] = false;
 
@@ -549,10 +549,10 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                     try
                     {
                         std::cerr << "Make Program: " << kernel_file << "; args: " << comp_opts
-                                << std::endl;
+                                  << std::endl;
                         auto p = miopen::Program{kernel_file, hsaco};
                         std::cerr << "Add Program: " << kernel_file << "; args: " << comp_opts
-                                << std::endl;
+                                  << std::endl;
                         h.AddProgram(p, kernel_file, comp_opts);
                     }
                     catch(const std::exception& e)
@@ -692,7 +692,6 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                     throw std::runtime_error(ss.str());
                 }
 
-
                 res_item["params"]         = params;
                 res_item["time"]           = time;
                 res_item["layout"]         = ctx.in_layout;
@@ -806,7 +805,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
                 return false;
             }
 
-            res_item["params"] = s.GetPerfCfgParams(ctx, db);
+            res_item["params"]  = s.GetPerfCfgParams(ctx, db);
             res_item["tunable"] = false;
             if(s.IsTunable())
                 res_item["tunable"] = true;
