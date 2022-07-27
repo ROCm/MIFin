@@ -282,6 +282,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
             }
             std::ignore = miopen::solver::PrecompileKernels(handle, kernels);
 
+            res_item["reason"]         = "Success";
             res_item["kernel_objects"] = BuildJsonKernelList(handle, kernels);
             return true;
         };
@@ -704,7 +705,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
             }
             catch(const std::exception& e)
             {
-                res_item["reason"] = std::string("Invoker exeception: ") + e.what();
+                res_item["reason"] = std::string("Invoker exception: ") + e.what();
                 return false;
             }
 
