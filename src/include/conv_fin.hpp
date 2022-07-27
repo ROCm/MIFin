@@ -248,7 +248,6 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
                 std::cerr << "Skipping inapplicable solver: " << solver_id.ToString() << std::endl;
                 return false;
             }
-
             res_item["tunable"] = true;
             if(!s.IsTunable())
                 res_item["tunable"] = false;
@@ -558,7 +557,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                     }
                     catch(const std::exception& e)
                     {
-                        res_item["reason"] = std::string("Make Program exeception: ") + e.what();
+                        res_item["reason"] = std::string("Make Program exception: ") + e.what();
                         return false;
                     }
 
