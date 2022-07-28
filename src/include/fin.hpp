@@ -192,8 +192,14 @@ class BaseFin
             std::string kernel_file = kern.kernel_file;
             std::string comp_opts   = kern.comp_options;
 
-            // if file extention and comp_opts aren't appended HasProgram will fail
-            // file_name + ".o", comp_opts + " -mcpu="
+            if(!miopen::EndsWith(kernel_file, ".o"))
+            {
+                std::cerr << "with added extensions ";
+                if(!miopen::EndsWith(kernel_file, ".mlir"))
+                    comp_opts += " -mcpu=" + handle.GetDeviceName();
+                kernel_file += ".o";
+            }
+
             std::cerr << "checking binary : " << kernel_file << " : " << comp_opts << std::endl;
 
             if(!handle.HasProgram(kernel_file, comp_opts))

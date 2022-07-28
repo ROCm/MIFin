@@ -71,7 +71,7 @@
 #include <type_traits>
 #include <vector>
 
-#define MIOPEN_ALLSOLVER (MIOPEN_VERSION_MAJOR > 3)
+#define MIOPEN_ALLSOLVER 1
 
 namespace fin {
 
@@ -202,6 +202,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
     problem.Serialize(ss);
     output["db_key"] = ss.str();
 
+    auto db = GetDb(ctx);
     json perf_result;
     const auto& tgt_props  = handle.GetTargetProperties();
     const std::string arch = tgt_props.Name();
@@ -223,16 +224,18 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
         boost::filesystem::remove_all(miopen::GetCachePath(false));
         auto process_solver = [&]() -> bool {
             std::cerr << "Processing Solver: " << solver_id.ToString() << std::endl;
+            const auto& s           = solver_id.GetSolver();
+            const auto algo         = solver_id.GetAlgo(conv_dir);
             res_item["solver_name"] = solver_id.ToString();
+            res_item["algorithm"]   = algo;
+
             if(solver_id.ToString() == "ConvBiasActivAsm1x1U" ||
                solver_id.ToString().find("Fused") != std::string::npos)
             {
+                res_item["reason"] = "Skip Fused";
                 std::cerr << "Skipping fused solvers" << std::endl;
                 return false;
             }
-            const auto& s         = solver_id.GetSolver();
-            const auto algo       = solver_id.GetAlgo(conv_dir);
-            res_item["algorithm"] = algo;
             if(s.IsEmpty())
             {
                 res_item["reason"] = "Empty Solver";
@@ -249,7 +252,22 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
             if(!s.IsTunable())
                 res_item["tunable"] = false;
 
-            auto all_solutions = s.GetAllSolutions(ctx);
+            std::vector<miopen::solver::ConvSolution> all_solutions;
+            if(s.IsTunable())
+            {
+                try
+                {
+                    all_solutions = s.GetAllSolutions(ctx);
+                }
+                catch(const std::exception& e)
+                {
+                    res_item["reason"] = "Failed getting solutions";
+                    std::cerr << "Error getting solutions: " << e.what() << std::endl;
+                    return false;
+                }
+            }
+            else
+                all_solutions.push_back(s.FindSolution(ctx, db, {}));
 
             // PrecompileKernels call saves to binary_cache,
             // this needs to be escaped if KERN_CACHE is not on.
@@ -263,6 +281,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
             }
             std::ignore = miopen::solver::PrecompileKernels(handle, kernels);
 
+            res_item["reason"]         = "Success";
             res_item["kernel_objects"] = BuildJsonKernelList(handle, kernels);
             return true;
         };
@@ -342,16 +361,18 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
         boost::filesystem::remove_all(miopen::GetCachePath(false));
         auto process_solver = [&]() -> bool {
             std::cerr << "Processing Solver: " << solver_id.ToString() << std::endl;
+            const auto& s           = solver_id.GetSolver();
+            const auto algo         = solver_id.GetAlgo(conv_dir);
             res_item["solver_name"] = solver_id.ToString();
+            res_item["algorithm"]   = algo;
+
             if(solver_id.ToString() == "ConvBiasActivAsm1x1U" ||
                solver_id.ToString().find("Fused") != std::string::npos)
             {
+                res_item["reason"] = "Skip Fused";
                 std::cerr << "Skipping fused solvers" << std::endl;
                 return false;
             }
-            const auto& s         = solver_id.GetSolver();
-            const auto algo       = solver_id.GetAlgo(conv_dir);
-            res_item["algorithm"] = algo;
             if(s.IsEmpty())
             {
                 res_item["reason"] = "Empty Solver";
@@ -370,6 +391,12 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
                 std::cerr << "Skipping static solver: " << solver_id.ToString() << std::endl;
                 return false;
             }
+
+            res_item["params"]  = s.GetPerfCfgParams(ctx, db);
+            res_item["tunable"] = false;
+            if(s.IsTunable())
+                res_item["tunable"] = true;
+
             miopen::solver::ConvSolution solution;
             try
             {
@@ -380,11 +407,10 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
                 res_item["reason"] = std::string("Solver throws exception") + e.what();
                 std::cerr << "Exception during solution construction, solver_name: "
                           << solver_id.ToString() << e.what() << std::endl;
-                return true;
+                return false;
             }
-            res_item["reason"]    = "Success";
-            res_item["workspace"] = solution.workspace_sz;
-
+            res_item["reason"]         = "Success";
+            res_item["workspace"]      = solution.workspace_sz;
             res_item["kernel_objects"] = BuildJsonKernelList(handle, solution.construction_params);
             return true;
         };
@@ -458,8 +484,8 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
             std::cerr << "Processing solver: " << solver_name << std::endl;
             const auto solver_id    = miopen::solver::Id{solver_name};
             const auto& s           = solver_id.GetSolver();
-            res_item["solver_name"] = solver_name;
             const auto algo         = solver_id.GetAlgo(conv_dir);
+            res_item["solver_name"] = solver_name;
             res_item["algorithm"]   = algo;
             std::string params      = "";
             json kern_objs;
@@ -467,24 +493,36 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
             if(solver_id.ToString() == "ConvBiasActivAsm1x1U" ||
                solver_id.ToString().find("Fused") != std::string::npos)
             {
+                res_item["reason"] = "Skip Fused";
                 std::cerr << "Skipping fused solvers" << std::endl;
                 return false;
             }
             if(s.IsEmpty())
             {
+                res_item["reason"] = "Empty Solver";
                 std::cerr << "Skipping invalid solver: " << solver_id.ToString() << std::endl;
                 return false;
             }
             if(!s.IsApplicable(ctx))
             {
+                res_item["reason"] = "Not Applicable";
                 std::cerr << "Solver inapplicable: " << solver_name << std::endl;
                 throw std::runtime_error(
                     "InApplicable solver was sent to fin, check Tuna for errors");
                 return false;
             }
+
             res_item["tunable"] = true;
+            // allowing non-tunable solvers to enter here for fdb generation
             if(!s.IsTunable())
                 res_item["tunable"] = false;
+
+            // eg when ConvOclDirectFwd has no kernels FindSolution memory faults
+            if(s.IsTunable() and kinder["kernel_objects"].empty())
+            {
+                res_item["reason"] = "No Kernels";
+                return false;
+            }
 
             std::cerr << solver_name << " is applicable" << std::endl;
             // Get the binary
@@ -510,15 +548,17 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                 {
                     try
                     {
+                        std::cerr << "Make Program: " << kernel_file << "; args: " << comp_opts
+                                  << std::endl;
                         auto p = miopen::Program{kernel_file, hsaco};
                         std::cerr << "Add Program: " << kernel_file << "; args: " << comp_opts
                                   << std::endl;
                         h.AddProgram(p, kernel_file, comp_opts);
                     }
-                    catch(const miopen::Exception& ex)
+                    catch(const std::exception& e)
                     {
-                        std::cerr << "program build failed: " << ex.what() << std::endl;
-                        continue;
+                        res_item["reason"] = std::string("Make Program exception: ") + e.what();
+                        return false;
                     }
 
                     // SaveBinary adds ".o" to kernel_file
@@ -531,6 +571,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                 }
                 else
                 {
+                    res_item["reason"] = "Corrupt Binary";
                     std::cerr << "Corrupt Binary Object" << std::endl;
                     throw std::runtime_error("Corrupt binary object");
                     return false;
@@ -541,7 +582,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
             solution              = s.FindSolution(ctx, db, {}); // auto tune is not expected here
             res_item["workspace"] = solution.workspace_sz;
 
-            std::cerr << "Checking for workspace" << std::endl;
+            std::cerr << "Checking for workspace: " << solution.workspace_sz << std::endl;
             if(solution.workspace_sz > workspace.desc.GetNumBytes())
             {
                 std::cerr << "Allocating " << solution.workspace_sz << " bytes for workspace"
@@ -583,10 +624,10 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                                                        workspace.desc.GetNumBytes(),
                                                        convDesc.attribute.gfx90aFp16alt.GetFwd()};
 
+                    std::cerr << solver_name << " Begin Search FWD" << std::endl;
                     solution = s.FindSolution(ctx, db, invoke_ctx); // forcing search here
                     std::cerr << solver_name << " Finished Search FWD" << std::endl;
                     kern_objs = BuildJsonKernelList(h, solution.construction_params);
-                    UpdateSolutionOpts(h, solution);
                     SolutionHasProgram(h, solution);
                     params = s.GetPerfCfgParams(ctx, db);
 
@@ -611,7 +652,6 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                     solution = s.FindSolution(ctx, db, invoke_ctx); // forcing search here
                     std::cerr << solver_name << " Finished Search BWD" << std::endl;
                     kern_objs = BuildJsonKernelList(h, solution.construction_params);
-                    UpdateSolutionOpts(h, solution);
                     SolutionHasProgram(h, solution);
                     params = s.GetPerfCfgParams(ctx, db);
 
@@ -636,7 +676,6 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                     solution = s.FindSolution(ctx, db, invoke_ctx); // forcing search here
                     std::cerr << solver_name << " Finished Search WRW" << std::endl;
                     kern_objs = BuildJsonKernelList(h, solution.construction_params);
-                    UpdateSolutionOpts(h, solution);
                     SolutionHasProgram(h, solution);
                     params = s.GetPerfCfgParams(ctx, db);
 
@@ -664,7 +703,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
             }
             catch(const std::exception& e)
             {
-                res_item["reason"] = std::string("Invoker exeception: ") + e.what();
+                res_item["reason"] = std::string("Invoker exception: ") + e.what();
                 return false;
             }
 
@@ -743,16 +782,19 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
             std::cerr << "Processing solver: " << solver_name << std::endl;
             const auto solver_id    = miopen::solver::Id{solver_name};
             const auto& s           = solver_id.GetSolver();
-            res_item["solver_name"] = solver_name;
             const auto algo         = solver_id.GetAlgo(conv_dir);
+            res_item["solver_name"] = solver_name;
             res_item["algorithm"]   = algo;
+
             if(s.IsEmpty())
             {
+                res_item["reason"] = "Empty Solver";
                 std::cerr << "Skipping invalid solver: " << solver_id.ToString() << std::endl;
                 return false;
             }
             if(!s.IsApplicable(ctx))
             {
+                res_item["reason"] = "Not Applicable";
                 std::cerr << "Solver inapplicable: " << solver_name << std::endl;
                 throw std::runtime_error(
                     "InApplicable solver was sent to fin, check Tuna for errors");
@@ -764,9 +806,13 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
                 std::cerr << "Skipping static solver: " << solver_id.ToString() << std::endl;
                 return false;
             }
+
+            res_item["params"]  = s.GetPerfCfgParams(ctx, db);
+            res_item["tunable"] = false;
+            if(s.IsTunable())
+                res_item["tunable"] = true;
+
             std::cerr << solver_name << " is applicable" << std::endl;
-            auto solution         = s.FindSolution(ctx, db, {}); // auto tune is not expected here
-            res_item["workspace"] = solution.workspace_sz;
             // Get the binary
             std::cerr << "loading binaries from fin input" << std::endl;
             for(const auto& kernel_obj : kinder["kernel_objects"])
@@ -788,10 +834,20 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
 
                 if(miopen::md5(hsaco) == md5_sum)
                 {
-                    auto p = miopen::Program{kernel_file, hsaco};
-                    std::cerr << "Add Program: " << kernel_file << "; args: " << comp_opts
-                              << std::endl;
-                    h.AddProgram(p, kernel_file, comp_opts);
+                    try
+                    {
+                        std::cerr << "Make Program: " << kernel_file << "; args: " << comp_opts
+                                  << std::endl;
+                        auto p = miopen::Program{kernel_file, hsaco};
+                        std::cerr << "Add Program: " << kernel_file << "; args: " << comp_opts
+                                  << std::endl;
+                        h.AddProgram(p, kernel_file, comp_opts);
+                    }
+                    catch(const std::exception& e)
+                    {
+                        res_item["reason"] = std::string("Make Program exception: ") + e.what();
+                        return false;
+                    }
                 }
                 else
                 {
@@ -801,7 +857,8 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
                 }
             }
 
-            UpdateSolutionOpts(h, solution);
+            auto solution         = s.FindSolution(ctx, db, {}); // auto tune is not expected here
+            res_item["workspace"] = solution.workspace_sz;
             SolutionHasProgram(h, solution);
 
             std::cerr << "Checking for workspace" << std::endl;
