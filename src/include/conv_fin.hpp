@@ -71,7 +71,7 @@
 #include <type_traits>
 #include <vector>
 
-#define MIOPEN_ALLSOLVER 1 //(MIOPEN_VERSION_MAJOR > 3)
+#define MIOPEN_ALLSOLVER 1
 
 namespace fin {
 
