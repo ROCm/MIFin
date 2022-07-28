@@ -788,11 +788,13 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
 
             if(s.IsEmpty())
             {
+                res_item["reason"] = "Empty Solver";
                 std::cerr << "Skipping invalid solver: " << solver_id.ToString() << std::endl;
                 return false;
             }
             if(!s.IsApplicable(ctx))
             {
+                res_item["reason"] = "Not Applicable";
                 std::cerr << "Solver inapplicable: " << solver_name << std::endl;
                 throw std::runtime_error(
                     "InApplicable solver was sent to fin, check Tuna for errors");
@@ -832,12 +834,20 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
 
                 if(miopen::md5(hsaco) == md5_sum)
                 {
-                    std::cerr << "Make Program: " << kernel_file << "; args: " << comp_opts
-                              << std::endl;
-                    auto p = miopen::Program{kernel_file, hsaco};
-                    std::cerr << "Add Program: " << kernel_file << "; args: " << comp_opts
-                              << std::endl;
-                    h.AddProgram(p, kernel_file, comp_opts);
+                    try
+                    {
+                        std::cerr << "Make Program: " << kernel_file << "; args: " << comp_opts
+                                  << std::endl;
+                        auto p = miopen::Program{kernel_file, hsaco};
+                        std::cerr << "Add Program: " << kernel_file << "; args: " << comp_opts
+                                  << std::endl;
+                        h.AddProgram(p, kernel_file, comp_opts);
+                    }
+                    catch(const std::exception& e)
+                    {
+                        res_item["reason"] = std::string("Make Program exception: ") + e.what();
+                        return false;
+                    }
                 }
                 else
                 {
