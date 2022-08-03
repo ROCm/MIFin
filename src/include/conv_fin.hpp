@@ -96,9 +96,9 @@ class ConvFin : public BaseFin
         command         = job["config"];
         command["bias"] = 0;
         // timing is always enabled
-        is_fwd = (job["config"].get<std::string>().compare("F") == 0);
-        is_bwd = (job["config"].get<std::string>().compare("B") == 0);
-        is_wrw = (job["config"].get<std::string>().compare("W") == 0);
+        is_fwd = (job["config"]["direction"].get<std::string>().compare("F") == 0);
+        is_bwd = (job["config"]["direction"].get<std::string>().compare("B") == 0);
+        is_wrw = (job["config"]["direction"].get<std::string>().compare("W") == 0);
         SetConvDescriptor();
         // workspace_dev = nullptr; // TODO: replaced with a tensor class
         // the variable name is implementation dependent, checking size instead
