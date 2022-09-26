@@ -64,9 +64,8 @@ else()
             -Wuninitialized
             -Wunreachable-code
             -Wunused
-
+            -Wno-ignored-qualifiers
             -Wno-sign-compare
-            -Wno-extra-semi-stmt
         )
         if (CMAKE_${COMPILER}_COMPILER_ID MATCHES "Clang")
             list(APPEND CMAKE_COMPILER_WARNINGS
@@ -77,6 +76,7 @@ else()
                 -Wno-double-promotion
                 -Wno-exit-time-destructors
                 -Wno-extra-semi
+                -Wno-extra-semi-stmt
                 -Wno-float-conversion
                 -Wno-gnu-anonymous-struct
                 -Wno-gnu-zero-variadic-macro-arguments
