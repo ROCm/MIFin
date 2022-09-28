@@ -14,7 +14,7 @@ TEST(MemoryLayoutTest, BasicMemLayout)
     std::ifstream input_file(input_filename);
     if(!input_file)
     {
-	EXPECT_FALSE(true) << "ERROR: cannot open test file " << input_filename << std::endl;
+        EXPECT_FALSE(true) << "ERROR: cannot open test file " << input_filename << std::endl;
     }
 
     json j;
@@ -22,16 +22,18 @@ TEST(MemoryLayoutTest, BasicMemLayout)
     input_file.close();
     for(auto& it : j)
     {
-	auto command = it;
-	if(command["config"]["cmd"] == "conv")
-	{
-	    fin::ConvFin<float, float> tmp(command);
-	    ASSERT_TRUE(tmp.inputTensor.desc.GetLayout_t() ==  miopenTensorLayout_t::miopenTensorNCHW);
-	    // set the layout from json file
-	    tmp.GetandSetData();
-	    ASSERT_TRUE(tmp.inputTensor.desc.GetLayout_t() ==  miopenTensorLayout_t::miopenTensorNHWC);
-	    ASSERT_TRUE(tmp.inputTensor.desc.GetLayout_t() !=  miopenTensorLayout_t::miopenTensorNCHW);
-	}
+        auto command = it;
+        if(command["config"]["cmd"] == "conv")
+        {
+            fin::ConvFin<float, float> tmp(command);
+            ASSERT_TRUE(tmp.inputTensor.desc.GetLayout_t() ==
+                        miopenTensorLayout_t::miopenTensorNCHW);
+            // set the layout from json file
+            tmp.GetandSetData();
+            ASSERT_TRUE(tmp.inputTensor.desc.GetLayout_t() ==
+                        miopenTensorLayout_t::miopenTensorNHWC);
+            ASSERT_TRUE(tmp.inputTensor.desc.GetLayout_t() !=
+                        miopenTensorLayout_t::miopenTensorNCHW);
+        }
     }
 }
-
