@@ -126,7 +126,7 @@ int BNFin<Tgpu, Tref>::TestApplicability()
 
     auto& handle = GetHandle();
     // cppcheck-suppress unreadVariable
-    auto ctx     = miopen::ExecutionContext(&handle); 
+    auto ctx = miopen::ExecutionContext(&handle);
 #if MIOPEN_MODE_NOGPU
     BaseFin::InitNoGpuHandle(handle, job["arch"], job["num_cu"]);
 #else
@@ -392,7 +392,7 @@ int BNFin<Tgpu, Tref>::MIOpenFindCompile()
 #endif
     auto& handle = GetHandle();
     // cppcheck-suppress unreadVariable
-    auto ctx     = miopen::ExecutionContext(&handle);
+    auto ctx = miopen::ExecutionContext(&handle);
     GetHandle().EnableProfiling(true);
 #if MIOPEN_MODE_NOGPU
     BaseFin::InitNoGpuHandle(handle, job["arch"], job["num_cu"]);
