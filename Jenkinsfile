@@ -127,10 +127,10 @@ pipeline {
                                 -o -iname \'*.cl\' \
                                 | grep -v 'build/' \
                                 | grep -v 'base64' \
-                                | xargs -n 1 -P 1 -I{} -t sh -c \'clang-format-3.9 -style=file {} | diff - {}\'"
+                                | xargs -n 1 -P 1 -I{} -t sh -c \'clang-format -style=file {} | diff - {}\'"
                     }
                     steps{
-                        buildJob('clang++-3.9', '-DCMAKE_BUILD_TYPE=release', image, "", cmd)
+                        buildJob('clang++', '-DCMAKE_BUILD_TYPE=release', image, "", cmd)
                     }
                 }
 
