@@ -1963,7 +1963,7 @@ miopen::ConvolutionContext ConvFin<Tgpu, Tref>::BuildContext(miopen::SQLite& sql
     command["batchsize"]     = stmt.ColumnInt64(21);
     command["group_count"]   = stmt.ColumnInt64(22);
     command["bias"]          = stmt.ColumnInt64(23);
-    command["mode"]     = "conv";
+    command["mode"]          = "conv";
 
     // command["layout"] = stmt.ColumnText(16);
     // command["data_type"] = stmt.ColumnText(17);
