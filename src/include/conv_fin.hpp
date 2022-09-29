@@ -185,7 +185,9 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
     const miopen::ProblemDescription problem(
         inputTensor.desc, weightTensor.desc, outputTensor.desc, convDesc, conv_dir);
     GetHandle().EnableProfiling(true);
-    auto ctx    = miopen::ConvolutionContext{problem};
+    // cppcheck-suppress unreadVariable
+    auto ctx = miopen::ConvolutionContext{problem};
+    // cppcheck-suppress unreadVariable
     auto handle = miopen::Handle{};
 #if MIOPEN_MODE_NOGPU
     BaseFin::InitNoGpuHandle(handle, job["arch"], job["num_cu"]);
@@ -215,7 +217,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
 
     std::vector<miopen::solver::Id> solver_list;
     if(job.contains("solvers"))
-        for(std::string solver_str : job["solvers"])
+        for(std::string solver_str : job["solvers"]) // cppcheck-suppress useStlAlgorithm
             solver_list.push_back(miopen::solver::Id(solver_str));
     else
         solver_list = miopen::solver::GetSolversByPrimitive(miopen::solver::Primitive::Convolution);
@@ -276,12 +278,9 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
             // this needs to be escaped if KERN_CACHE is not on.
             std::vector<miopen::solver::KernelInfo> kernels;
             for(const auto& current_solution : all_solutions)
-            {
-                for(auto&& kernel : current_solution.construction_params)
-                {
+                for(auto&& kernel :
+                    current_solution.construction_params) // cppcheck-suppress useStlAlgorithm
                     kernels.push_back(kernel);
-                }
-            }
             std::ignore = miopen::solver::PrecompileKernels(handle, kernels);
 
             res_item["reason"]         = "Success";
@@ -318,7 +317,9 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
     const miopen::ProblemDescription problem(
         inputTensor.desc, weightTensor.desc, outputTensor.desc, convDesc, conv_dir);
     GetHandle().EnableProfiling(true);
-    auto ctx    = miopen::ConvolutionContext{problem};
+    // cppcheck-suppress unreadVariable
+    auto ctx = miopen::ConvolutionContext{problem};
+    // cppcheck-suppress unreadVariable
     auto handle = miopen::Handle{};
 #if MIOPEN_MODE_NOGPU
     BaseFin::InitNoGpuHandle(handle, job["arch"], job["num_cu"]);
@@ -351,7 +352,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
 
     std::vector<miopen::solver::Id> solver_list;
     if(job.contains("solvers"))
-        for(std::string solver_str : job["solvers"])
+        for(std::string solver_str : job["solvers"]) // cppcheck-suppress useStlAlgorithm
             solver_list.push_back(miopen::solver::Id(solver_str));
     else
         solver_list = miopen::solver::GetSolversByPrimitive(miopen::solver::Primitive::Convolution);
@@ -1153,7 +1154,9 @@ int ConvFin<Tgpu, Tref>::TestApplicability()
     const auto conv_dir = GetDirection();
     const miopen::ProblemDescription problem(
         inputTensor.desc, weightTensor.desc, outputTensor.desc, convDesc, conv_dir);
-    auto ctx    = miopen::ConvolutionContext{problem};
+    // cppcheck-suppress unreadVariable
+    auto ctx = miopen::ConvolutionContext{problem};
+    // cppcheck-suppress unreadVariable
     auto handle = miopen::Handle{};
 #if MIOPEN_MODE_NOGPU
     BaseFin::InitNoGpuHandle(handle, job["arch"], job["num_cu"]);
@@ -1404,6 +1407,7 @@ template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::SearchPreCompiledKernels()
 {
     json find_result;
+    // cppcheck-suppress unreadVariable
     auto handle = miopen::Handle{};
 
 #if MIOPEN_MODE_NOGPU
@@ -1455,7 +1459,7 @@ int ConvFin<Tgpu, Tref>::SearchPreCompiledKernels()
         ctx.DetectRocm();
         ctx.SetupFloats();
 
-        const auto network_config = ctx.problem.BuildConfKey();
+        // const auto network_config = ctx.problem.BuildConfKey();
         std::ostringstream ss;
         problem.Serialize(ss);
 
@@ -1704,6 +1708,9 @@ std::vector<int> ConvFin<Tgpu, Tref>::GetInputTensorLengths()
     {
         FIN_THROW("unsupported convolution dimension");
     }
+    std::ignore = in_spatial_lens[0]; // ignore clang warning
+    std::ignore = in_spatial_lens[1]; // ignore clang warning
+    std::ignore = in_spatial_lens[2]; // ignore clang warning
 
     return in_lens;
 }
@@ -1738,6 +1745,9 @@ std::vector<int> ConvFin<Tgpu, Tref>::GetWeightTensorLengths()
     {
         FIN_THROW("unsupported convolution dimension");
     }
+    std::ignore = wei_spatial_lens[0]; // ignore clang warning
+    std::ignore = wei_spatial_lens[1]; // ignore clang warning
+    std::ignore = wei_spatial_lens[2]; // ignore clang warning
 
     if(group_count > 1)
     {
