@@ -100,6 +100,7 @@ RUN cmake -P install_deps.cmake --minimum
 ARG TUNA_USER=miopenpdb
 ARG BACKEND=HIP
 # Build MIOpen
+WORKDIR $MIOPEN_DIR/build
 ARG MIOPEN_CACHE_DIR=/tmp/${TUNA_USER}/cache
 ARG MIOPEN_USER_DB_PATH=/tmp/$TUNA_USER/config/miopen
 ARG MIOPEN_USE_MLIR=On
