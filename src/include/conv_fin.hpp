@@ -1757,9 +1757,6 @@ std::vector<int> ConvFin<Tgpu, Tref>::GetWeightTensorLengths()
     {
         FIN_THROW("unsupported convolution dimension");
     }
-    std::ignore = wei_spatial_lens[0]; // ignore clang warning
-    std::ignore = wei_spatial_lens[1]; // ignore clang warning
-    std::ignore = wei_spatial_lens[2]; // ignore clang warning
 
     if(group_count > 1)
     {
