@@ -1695,13 +1695,18 @@ std::vector<int> ConvFin<Tgpu, Tref>::GetInputTensorLengths()
 
     if(spatial_dim == 2)
     {
+        // cppcheck-suppress unreadVariable
         in_spatial_lens[0] = command["in_h"];
+        // cppcheck-suppress unreadVariable
         in_spatial_lens[1] = command["in_w"];
     }
     else if(spatial_dim == 3)
     {
+        // cppcheck-suppress unreadVariable
         in_spatial_lens[0] = command["in_d"];
+        // cppcheck-suppress unreadVariable
         in_spatial_lens[1] = command["in_h"];
+        // cppcheck-suppress unreadVariable
         in_spatial_lens[2] = command["in_w"];
     }
     else
@@ -1732,13 +1737,18 @@ std::vector<int> ConvFin<Tgpu, Tref>::GetWeightTensorLengths()
 
     if(spatial_dim == 2)
     {
+        // cppcheck-suppress unreadVariable
         wei_spatial_lens[0] = command["fil_h"];
+        // cppcheck-suppress unreadVariable
         wei_spatial_lens[1] = command["fil_w"];
     }
     else if(spatial_dim == 3)
     {
+        // cppcheck-suppress unreadVariable
         wei_spatial_lens[0] = command["fil_d"];
+        // cppcheck-suppress unreadVariable
         wei_spatial_lens[1] = command["fil_h"];
+        // cppcheck-suppress unreadVariable
         wei_spatial_lens[2] = command["fil_w"];
     }
     else
