@@ -109,8 +109,7 @@ class ConvFin : public BaseFin
     std::vector<int> GetWeightTensorLengths();
     std::vector<int> GetBiasTensorLengths();
     int SetConvDescriptor();
-    miopen::ConvolutionContext
-    BuildContext(miopen::SQLite& sql, std::string config_id, miopen::ConvolutionContext& ctx);
+    int BuildContext(miopen::SQLite& sql, std::string config_id, miopen::ConvolutionContext& ctx);
 
     std::vector<size_t> GetOutputTensorLengths() const;
     miopenDataType_t GetOutputType() const
@@ -129,6 +128,15 @@ class ConvFin : public BaseFin
     int CopyFromDevice();
     int RunGPU();
     int TestApplicability();
+
+    int TestPerfDbEntries(
+        const std::string config_id,
+        const miopen::ConvolutionContext &ctx,
+        std::map<std::string, std::unordered_map<std::string, std::string>> &perf_ids,
+        std::unordered_map<std::string, miopen::DbRecord> &records,
+        std::vector<std::map<std::string, std::string>> &err_list,
+        std::vector<std::string> &pdb_id);
+
     int TestPerfDbValid();
     int GetandSetData();
     int MIOpenFind();
@@ -1215,6 +1223,64 @@ class ParamString
     }
 };
 
+
+template <typename Tgpu, typename Tref>
+int ConvFin<Tgpu, Tref>::TestPerfDbEntries(
+        const std::string config_id,
+        const miopen::ConvolutionContext &ctx,
+        std::map<std::string, std::unordered_map<std::string, std::string>> &perf_ids,
+        std::unordered_map<std::string, miopen::DbRecord> &records,
+        std::vector<std::map<std::string, std::string>> &err_list,
+        std::vector<std::string> &pdb_id)
+{
+    bool ret            = true;
+	
+    // iterate over pdb entries
+    for(auto pdb_it = perf_ids.begin(); pdb_it != perf_ids.end(); pdb_it++)
+    {
+	auto perf_id   = pdb_it->first;
+	auto solver_nm = pdb_it->second["solver"];
+	auto params    = pdb_it->second["params"];
+	auto record    = records[perf_id];
+
+	auto slv_id = miopen::solver::Id(solver_nm);
+	auto solver = slv_id.GetSolver();
+	std::stringstream stat_str;
+	stat_str << "config_id: " << config_id << ", solver_nm " << solver_nm
+		 << ", key: " << ctx.problem;
+
+	// check if valid pdb parameters
+	std::map<std::string, std::string> err;
+	bool success = false;
+	try
+	{
+	    success = solver.TestSysDbRecord(ctx, record);
+	}
+	catch(const std::exception& e)
+	{
+	    err["reason"] = e.what();
+	    std::cerr << "Error in db test: " << e.what() << std::endl;
+	}
+	if(!success)
+	{
+	    err["perfdb_id"] = perf_id;
+	    err["config"]    = config_id;
+	    err["solver"]    = solver_nm;
+	    err["params"]    = params;
+	    err_list.push_back(err);
+	    ret = false;
+	    pdb_id.push_back(perf_id);
+
+	    std::cerr << stat_str.str() << ", failed" << std::endl;
+	}
+	else
+	    std::cerr << stat_str.str() << ", passed" << std::endl;
+    }
+
+    return ret;
+}
+
+
 template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::TestPerfDbValid()
 {
@@ -1327,54 +1393,19 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
             miopen::ConvolutionContext ctx;
             auto handle = miopen::Handle{};
 
-            BuildContext(sql, config_id, ctx);
+            bool good_ctx = BuildContext(sql, config_id, ctx);
+            if(not good_ctx)
+                continue;
             // set handle to type of db under test
             BaseFin::InitNoGpuHandle(handle, db_arch, db_num_cu);
             ctx.SetStream(&handle);
             ctx.DetectRocm();
             ctx.SetupFloats();
 
-            // iterate over pdb entries
-            for(auto pdb_it = cfg_it->second.begin(); pdb_it != cfg_it->second.end(); pdb_it++)
-            {
-                auto perf_id   = pdb_it->first;
-                auto solver_nm = pdb_it->second["solver"];
-                auto params    = pdb_it->second["params"];
-                auto record    = records[perf_id];
-
-                auto slv_id = miopen::solver::Id(solver_nm);
-                auto solver = slv_id.GetSolver();
-                std::stringstream stat_str;
-                stat_str << "config_id: " << config_id << ", solver_nm " << solver_nm
-                         << ", key: " << ctx.problem;
-
-                // check if valid pdb parameters
-                std::map<std::string, std::string> err;
-                bool success = false;
-                try
-                {
-                    success = solver.TestSysDbRecord(ctx, record);
-                }
-                catch(const std::exception& e)
-                {
-                    err["reason"] = e.what();
-                    std::cerr << "Error in db test: " << e.what() << std::endl;
-                }
-                if(!success)
-                {
-                    err["perfdb_id"] = perf_id;
-                    err["config"]    = config_id;
-                    err["solver"]    = solver_nm;
-                    err["params"]    = params;
-                    err_list.push_back(err);
-                    ret = false;
-                    pdb_id.push_back(perf_id);
-
-                    std::cerr << stat_str.str() << ", failed" << std::endl;
-                }
-                else
-                    std::cerr << stat_str.str() << ", passed" << std::endl;
-            }
+            bool success = true;
+            success = TestPerfDbEntries(config_id, ctx, cfg_it->second, records, err_list, pdb_id);
+            if(not success)
+                ret = false;
         }
         output[filestr]["errors"] = err_list;
 
@@ -1929,9 +1960,9 @@ int ConvFin<Tgpu, Tref>::SetConvDescriptor()
 }
 
 template <typename Tgpu, typename Tref>
-miopen::ConvolutionContext ConvFin<Tgpu, Tref>::BuildContext(miopen::SQLite& sql,
-                                                             std::string config_id,
-                                                             miopen::ConvolutionContext& ctx)
+int ConvFin<Tgpu, Tref>::BuildContext(miopen::SQLite& sql,
+                                         std::string config_id,
+                                         miopen::ConvolutionContext& ctx)
 {
     std::ostringstream ss;
     ss << "SELECT in_d, in_h, in_w, fil_d, fil_h, fil_w, pad_d, pad_h, pad_w, "
@@ -1969,8 +2000,29 @@ miopen::ConvolutionContext ConvFin<Tgpu, Tref>::BuildContext(miopen::SQLite& sql
     command["bias"]          = stmt.ColumnInt64(23);
     command["conv_mode"]     = "conv";
 
-    // command["layout"] = stmt.ColumnText(16);
-    // command["data_type"] = stmt.ColumnText(17);
+    //command["layout"]        = stmt.ColumnText(16);
+    std::string data_type    = stmt.ColumnText(17);
+
+    if(data_type == "FP32")
+    {
+        if(typeid(Tgpu) != typeid(float))
+            return false;
+    }
+    else if(data_type == "FP16")
+    {
+        if(typeid(Tgpu) != typeid(float16))
+            return false;
+    }
+    else if(data_type == "BF16")
+    {
+        if(typeid(Tgpu) != typeid(bfloat16))
+            return false;
+    }
+    else if(data_type == "INT8")
+    {
+        if(typeid(Tgpu) != typeid(int8_t))
+            return false;
+    }
 
     // prepare convolution
     is_fwd = (command["direction"].get<std::string>().compare("F") == 0);
@@ -1987,7 +2039,7 @@ miopen::ConvolutionContext ConvFin<Tgpu, Tref>::BuildContext(miopen::SQLite& sql
         inputTensor.desc, weightTensor.desc, outputTensor.desc, convDesc, conv_dir);
     ctx = miopen::ConvolutionContext{problem};
 
-    return ctx;
+    return true;
 }
 
 template <typename Tgpu, typename Tref>
