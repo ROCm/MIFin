@@ -131,13 +131,13 @@ class ConvFin : public BaseFin
     int RunGPU();
     int TestApplicability();
 
-    int
-    TestPerfDbEntries(const std::string config_id,
-                      const miopen::ConvolutionContext& ctx,
-                      const std::map<std::string, std::unordered_map<std::string, std::string>>& perf_ids,
-                      const std::unordered_map<std::string, miopen::DbRecord>& records,
-                      std::vector<std::map<std::string, std::string>>& err_list,
-                      std::vector<std::string>& pdb_id);
+    int TestPerfDbEntries(
+        const std::string config_id,
+        const miopen::ConvolutionContext& ctx,
+        const std::map<std::string, std::unordered_map<std::string, std::string>>& perf_ids,
+        const std::unordered_map<std::string, miopen::DbRecord>& records,
+        std::vector<std::map<std::string, std::string>>& err_list,
+        std::vector<std::string>& pdb_id);
 
     int TestPerfDbValid();
     int GetandSetData();
