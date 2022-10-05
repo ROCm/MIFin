@@ -134,8 +134,8 @@ class ConvFin : public BaseFin
     int
     TestPerfDbEntries(const std::string config_id,
                       const miopen::ConvolutionContext& ctx,
-                      std::map<std::string, std::unordered_map<std::string, std::string>>& perf_ids,
-                      std::unordered_map<std::string, miopen::DbRecord>& records,
+                      const std::map<std::string, std::unordered_map<std::string, std::string>>& perf_ids,
+                      const std::unordered_map<std::string, miopen::DbRecord>& records,
                       std::vector<std::map<std::string, std::string>>& err_list,
                       std::vector<std::string>& pdb_id);
 
@@ -1229,8 +1229,8 @@ template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::TestPerfDbEntries(
     const std::string config_id,
     const miopen::ConvolutionContext& ctx,
-    std::map<std::string, std::unordered_map<std::string, std::string>>& perf_ids,
-    std::unordered_map<std::string, miopen::DbRecord>& records,
+    const std::map<std::string, std::unordered_map<std::string, std::string>>& perf_ids,
+    const std::unordered_map<std::string, miopen::DbRecord>& records,
     std::vector<std::map<std::string, std::string>>& err_list,
     std::vector<std::string>& pdb_id)
 {
@@ -1240,9 +1240,9 @@ int ConvFin<Tgpu, Tref>::TestPerfDbEntries(
     for(auto pdb_it = perf_ids.begin(); pdb_it != perf_ids.end(); pdb_it++)
     {
         auto perf_id   = pdb_it->first;
-        auto solver_nm = pdb_it->second["solver"];
-        auto params    = pdb_it->second["params"];
-        auto record    = records[perf_id];
+        auto solver_nm = pdb_it->second.find("solver")->second;
+        auto params    = pdb_it->second.find("params")->second;
+        auto record    = records.find(perf_id)->second;
 
         auto slv_id = miopen::solver::Id(solver_nm);
         auto solver = slv_id.GetSolver();
