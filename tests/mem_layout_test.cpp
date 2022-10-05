@@ -37,3 +37,22 @@ TEST(MemoryLayoutTest, BasicMemLayout)
         }
     }
 }
+
+TEST(MemoryLayoutTest, TestGetMemLayout)
+{
+    miopenTensorLayout_t nchw_layout = fin::GetMemLayout("NCHW");
+    ASSERT_TRUE(nchw_layout == miopenTensorLayout_t::miopenTensorNCHW);
+
+    miopenTensorLayout_t nhwc_layout = fin::GetMemLayout("NHWC");
+    ASSERT_TRUE(nhwc_layout == miopenTensorLayout_t::miopenTensorNHWC);
+
+    std::string unknown_layout = "UNKNOWN";
+    try
+    {
+        fin::GetMemLayout(unknown_layout);
+    }
+    catch(const std::exception& err)
+    {
+        EXPECT_EQ(err.what(), std::string("Unknown memory layout : " + unknown_layout));
+    }
+}

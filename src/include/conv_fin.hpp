@@ -1651,14 +1651,14 @@ int ConvFin<Tgpu, Tref>::GetandSetData()
     inputTensor = {GetHandle().GetStream(), in_len, (is_fwd || is_wrw), is_bwd};
     miopenSetNdTensorDescriptorWithLayout(&inputTensor.desc,
                                           inputTensor.desc.GetType(),
-                                          GetMemLayout(job["config"]["in_layout"]),
+                                          GetMemLayout(command["in_layout"]),
                                           in_len.data(),
                                           in_len.size());
 
     weightTensor = {GetHandle().GetStream(), wei_len, (is_fwd || is_bwd), is_wrw};
     miopenSetNdTensorDescriptorWithLayout(&weightTensor.desc,
                                           weightTensor.desc.GetType(),
-                                          GetMemLayout(job["config"]["wei_layout"]),
+                                          GetMemLayout(command["wei_layout"]),
                                           wei_len.data(),
                                           wei_len.size());
     // conv, input and weight tensor descriptors need to be set before we can know the
@@ -1668,7 +1668,7 @@ int ConvFin<Tgpu, Tref>::GetandSetData()
     std::vector<int> int_out_len(out_len.begin(), out_len.end());
     miopenSetNdTensorDescriptorWithLayout(&outputTensor.desc,
                                           outputTensor.desc.GetType(),
-                                          GetMemLayout(job["config"]["out_layout"]),
+                                          GetMemLayout(command["out_layout"]),
                                           int_out_len.data(),
                                           int_out_len.size());
 

@@ -55,7 +55,7 @@ using status_t = cl_int;
 using status_t = int;
 #endif
 
-inline miopenTensorLayout_t StrToLayout(const std::string& s)
+inline miopenTensorLayout_t GetMemLayout(const std::string& s)
 {
 
     if(s == "NCHW")
@@ -77,22 +77,7 @@ inline miopenTensorLayout_t StrToLayout(const std::string& s)
     if(s == "NDHWC")
         return miopenTensorLayout_t::miopenTensorNDHWC;
 
-    MIOPEN_THROW(std::string("Unknown memory layout : " + s));
-}
-
-inline miopenTensorLayout_t GetMemLayout(const std::string& s)
-{
-
-    miopenTensorLayout_t curr_layout = miopenTensorLayout_t::miopenTensorNCHW;
-    try
-    {
-        curr_layout = StrToLayout(s);
-    }
-    catch(const std::exception& e)
-    {
-        std::cerr << "Error : " << e.what() << ". Defaulting to NCHW." << std::endl;
-    }
-    return curr_layout;
+    throw std::runtime_error("Unknown memory layout : " + s);
 }
 
 template <typename Tgpu, typename Tcpu>
