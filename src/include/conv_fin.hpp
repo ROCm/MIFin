@@ -96,9 +96,9 @@ class ConvFin : public BaseFin
         command         = job["config"];
         command["bias"] = 0;
         // timing is always enabled
-        is_fwd = (job["config"]["direction"].get<std::string>().compare("F") == 0);
-        is_bwd = (job["config"]["direction"].get<std::string>().compare("B") == 0);
-        is_wrw = (job["config"]["direction"].get<std::string>().compare("W") == 0);
+        is_fwd = (command["direction"].get<std::string>().compare("F") == 0);
+        is_bwd = (command["direction"].get<std::string>().compare("B") == 0);
+        is_wrw = (command["direction"].get<std::string>().compare("W") == 0);
         SetConvDescriptor();
         // workspace_dev = nullptr; // TODO: replaced with a tensor class
         // the variable name is implementation dependent, checking size instead
@@ -109,7 +109,10 @@ class ConvFin : public BaseFin
     std::vector<int> GetWeightTensorLengths();
     std::vector<int> GetBiasTensorLengths();
     int SetConvDescriptor();
-    int BuildContext(miopen::SQLite& sql, std::string config_id, miopen::ConvolutionContext& ctx);
+
+    miopen::ConvolutionContext GetCmdConvContext(json _command);
+    miopen::ConvolutionContext BuildContext(miopen::SQLite& sql, 
+                    std::string config_id);
 
     std::vector<size_t> GetOutputTensorLengths() const;
     miopenDataType_t GetOutputType() const
@@ -1281,6 +1284,7 @@ int ConvFin<Tgpu, Tref>::TestPerfDbEntries(
 }
 
 
+
 template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::TestPerfDbValid()
 {
@@ -1343,6 +1347,10 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
         // setting system to false allows writing the db
         auto sql = miopen::SQLite{pathstr, false};
 
+        // set handle to type of db under test
+        auto handle = miopen::Handle{};
+        BaseFin::InitNoGpuHandle(handle, db_arch, db_num_cu);
+
         // cfg -> pdb_id -> values_dict
         std::map<std::string, std::map<std::string, std::unordered_map<std::string, std::string>>>
             perfdb_entries;
@@ -1391,19 +1399,20 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
         {
             auto config_id = cfg_it->first;
             miopen::ConvolutionContext ctx;
-            auto handle = miopen::Handle{};
 
-            bool good_ctx = BuildContext(sql, config_id, ctx);
-            if(not good_ctx)
-                continue;
-            // set handle to type of db under test
-            BaseFin::InitNoGpuHandle(handle, db_arch, db_num_cu);
+            std::cerr << "building context" << std::endl;
+            ctx = BuildContext(sql, config_id);
             ctx.SetStream(&handle);
             ctx.DetectRocm();
             ctx.SetupFloats();
 
+            std::cerr << "test pdb" << std::endl;
             bool success = true;
-            success = TestPerfDbEntries(config_id, ctx, cfg_it->second, records, err_list, pdb_id);
+            success = TestPerfDbEntries(config_id, 
+                    ctx, 
+                    cfg_it->second, 
+                    records, 
+                    err_list, pdb_id);
             if(not success)
                 ret = false;
         }
@@ -1960,9 +1969,36 @@ int ConvFin<Tgpu, Tref>::SetConvDescriptor()
 }
 
 template <typename Tgpu, typename Tref>
-int ConvFin<Tgpu, Tref>::BuildContext(miopen::SQLite& sql,
-                                         std::string config_id,
-                                         miopen::ConvolutionContext& ctx)
+miopen::ConvolutionContext ConvFin<Tgpu, Tref>::GetCmdConvContext(json _command)
+{
+    std::cerr << "build command context " << std::endl;
+    command = _command;
+    command["bias"] = 0;
+    // timing is always enabled
+    is_fwd = (command["direction"].get<std::string>().compare("F") == 0);
+    is_bwd = (command["direction"].get<std::string>().compare("B") == 0);
+    is_wrw = (command["direction"].get<std::string>().compare("W") == 0);
+    SetConvDescriptor();
+
+    // set tensors with command data
+    GetandSetData();
+
+    // initialize context
+    const auto conv_dir = GetDirection();
+    std::cerr << "build problem desc " << std::endl;
+    const miopen::ProblemDescription problem(
+        inputTensor.desc, weightTensor.desc, outputTensor.desc, convDesc, conv_dir);
+    auto ctx = miopen::ConvolutionContext{problem};
+
+    std::cerr << "known: " << ctx.problem.direction.IsKnown() << ", forward: " << ctx.problem.direction.IsForward() << std::endl;
+
+
+    return ctx;
+}
+
+template <typename Tgpu, typename Tref>
+miopen::ConvolutionContext ConvFin<Tgpu, Tref>::BuildContext(miopen::SQLite& sql,
+                                         std::string config_id)
 {
     std::ostringstream ss;
     ss << "SELECT in_d, in_h, in_w, fil_d, fil_h, fil_w, pad_d, pad_h, pad_w, "
@@ -2000,46 +2036,36 @@ int ConvFin<Tgpu, Tref>::BuildContext(miopen::SQLite& sql,
     command["bias"]          = stmt.ColumnInt64(23);
     command["conv_mode"]     = "conv";
 
-    //command["layout"]        = stmt.ColumnText(16);
+    command["in_layout"]     = stmt.ColumnText(16);
+    command["wei_layout"]    = stmt.ColumnText(16);
+    command["out_layout"]    = stmt.ColumnText(16);
     std::string data_type    = stmt.ColumnText(17);
 
+    std::cerr << "finished command query " << std::endl;
+
+    miopen::ConvolutionContext ctx;
     if(data_type == "FP32")
     {
-        if(typeid(Tgpu) != typeid(float))
-            return false;
+        ctx = fin::ConvFin<float, float>().GetCmdConvContext(command); 
     }
     else if(data_type == "FP16")
     {
-        if(typeid(Tgpu) != typeid(float16))
-            return false;
+        ctx = fin::ConvFin<float16, float>().GetCmdConvContext(command); 
     }
     else if(data_type == "BF16")
     {
-        if(typeid(Tgpu) != typeid(bfloat16))
-            return false;
+        ctx = fin::ConvFin<bfloat16, float>().GetCmdConvContext(command); 
     }
     else if(data_type == "INT8")
     {
-        if(typeid(Tgpu) != typeid(int8_t))
-            return false;
+        ctx = fin::ConvFin<int8_t, float>().GetCmdConvContext(command); 
+    }
+    else
+    {
+        std::cerr << "other type: " << data_type << std::endl;
     }
 
-    // prepare convolution
-    is_fwd = (command["direction"].get<std::string>().compare("F") == 0);
-    is_bwd = (command["direction"].get<std::string>().compare("B") == 0);
-    is_wrw = (command["direction"].get<std::string>().compare("W") == 0);
-    SetConvDescriptor();
-
-    // set tensors with command data
-    GetandSetData();
-
-    // initialize context
-    const auto conv_dir = GetDirection();
-    const miopen::ProblemDescription problem(
-        inputTensor.desc, weightTensor.desc, outputTensor.desc, convDesc, conv_dir);
-    ctx = miopen::ConvolutionContext{problem};
-
-    return true;
+    return ctx;
 }
 
 template <typename Tgpu, typename Tref>
