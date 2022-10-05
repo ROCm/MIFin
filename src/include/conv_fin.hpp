@@ -1971,7 +1971,6 @@ int ConvFin<Tgpu, Tref>::SetConvDescriptor()
 template <typename Tgpu, typename Tref>
 miopen::ConvolutionContext ConvFin<Tgpu, Tref>::GetCmdConvContext(json _command)
 {
-    std::cerr << "build command context " << std::endl;
     command = _command;
     command["bias"] = 0;
     // timing is always enabled
@@ -1985,13 +1984,9 @@ miopen::ConvolutionContext ConvFin<Tgpu, Tref>::GetCmdConvContext(json _command)
 
     // initialize context
     const auto conv_dir = GetDirection();
-    std::cerr << "build problem desc " << std::endl;
     const miopen::ProblemDescription problem(
         inputTensor.desc, weightTensor.desc, outputTensor.desc, convDesc, conv_dir);
     auto ctx = miopen::ConvolutionContext{problem};
-
-    std::cerr << "known: " << ctx.problem.direction.IsKnown() << ", forward: " << ctx.problem.direction.IsForward() << std::endl;
-
 
     return ctx;
 }
@@ -2040,8 +2035,6 @@ miopen::ConvolutionContext ConvFin<Tgpu, Tref>::BuildContext(miopen::SQLite& sql
     command["wei_layout"]    = stmt.ColumnText(16);
     command["out_layout"]    = stmt.ColumnText(16);
     std::string data_type    = stmt.ColumnText(17);
-
-    std::cerr << "finished command query " << std::endl;
 
     miopen::ConvolutionContext ctx;
     if(data_type == "FP32")
