@@ -1747,8 +1747,6 @@ std::vector<int> ConvFin<Tgpu, Tref>::GetInputTensorLengths()
         in_spatial_lens[0] = command["in_h"];
         // cppcheck-suppress unreadVariable
         in_spatial_lens[1] = command["in_w"];
-        std::ignore        = in_spatial_lens[0]; // ignore clang warning
-        std::ignore        = in_spatial_lens[1]; // ignore clang warning
     }
     else if(spatial_dim == 3)
     {
@@ -1758,9 +1756,6 @@ std::vector<int> ConvFin<Tgpu, Tref>::GetInputTensorLengths()
         in_spatial_lens[1] = command["in_h"];
         // cppcheck-suppress unreadVariable
         in_spatial_lens[2] = command["in_w"];
-        std::ignore        = in_spatial_lens[0]; // ignore clang warning
-        std::ignore        = in_spatial_lens[1]; // ignore clang warning
-        std::ignore        = in_spatial_lens[2]; // ignore clang warning
     }
     else
     {
