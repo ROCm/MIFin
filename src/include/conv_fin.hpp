@@ -1811,11 +1811,11 @@ std::vector<int> ConvFin<Tgpu, Tref>::GetWeightTensorLengths()
     }
 
     miopenConvolutionMode_t mode;
-    if((command["conv_mode"]) == "conv")
+    if((command["mode"]) == "conv")
     {
         mode = miopenConvolution;
     }
-    else if((command["conv_mode"]) == "trans")
+    else if((command["mode"]) == "trans")
     {
         mode = miopenTranspose;
     }
@@ -1918,11 +1918,11 @@ int ConvFin<Tgpu, Tref>::SetConvDescriptor()
     }
 
     miopenConvolutionMode_t c_mode;
-    if((command["conv_mode"]) == "conv")
+    if((command["mode"]) == "conv")
     {
         c_mode = miopenConvolution;
     }
-    else if((command["conv_mode"]) == "trans")
+    else if((command["mode"]) == "trans")
     {
         c_mode = miopenTranspose;
     }
@@ -2037,7 +2037,7 @@ miopen::ConvolutionContext ConvFin<Tgpu, Tref>::BuildContext(miopen::SQLite& sql
     command["batchsize"]     = stmt.ColumnInt64(21);
     command["group_count"]   = stmt.ColumnInt64(22);
     command["bias"]          = stmt.ColumnInt64(23);
-    command["conv_mode"]     = "conv";
+    command["mode"]          = "conv";
 
     command["in_layout"]  = stmt.ColumnText(16);
     command["wei_layout"] = stmt.ColumnText(16);
