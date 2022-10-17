@@ -199,9 +199,9 @@ int BNFin<Tgpu, Tref>::GetandSetData()
     if(GetMemLayout(command["in_layout"]) != miopenTensorLayout_t::miopenTensorNCHW)
         throw std::runtime_error("Provided memory layout is :" + std::string(command["in_layout"]) +
                                  ". Batch norm only support default NCHW");
-    if(GetMemLayout(command["out_layout"]) != miopenTensorLayout_t::miopenTensorNCHW)
+    if(GetMemLayout(command["in_layout"]) != miopenTensorLayout_t::miopenTensorNCHW)
         throw std::runtime_error(
-            "Provided memory layout is : " + std::string(command["out_layout"]) +
+            "Provided memory layout is : " + std::string(command["in_layout"]) +
             ". Batch norm only support default NCHW");
 
     inputTensor  = {GetHandle().GetStream(), in_len, true, false};
