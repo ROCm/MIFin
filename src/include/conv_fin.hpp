@@ -299,11 +299,8 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
         };
 
         auto res = process_solver();
-        if(res)
-        {
-            res_item["perf_compiled"] = res;
-            perf_result.push_back(res_item);
-        }
+        res_item["perf_compiled"] = res;
+        perf_result.push_back(res_item);
     }
     output["miopen_perf_compile_result"] = perf_result;
 #else
@@ -430,11 +427,8 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
         };
 
         auto res = process_solver();
-        if(res)
-        {
-            res_item["find_compiled"] = res;
-            find_result.push_back(res_item);
-        }
+        res_item["find_compiled"] = res;
+        find_result.push_back(res_item);
     }
     output["miopen_find_compile_result"] = find_result;
     return 1;
