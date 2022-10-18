@@ -299,6 +299,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
         };
 
         auto res = process_solver();
+
         res_item["perf_compiled"] = res;
         perf_result.push_back(res_item);
     }
@@ -427,6 +428,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
         };
 
         auto res = process_solver();
+
         res_item["find_compiled"] = res;
         find_result.push_back(res_item);
     }
