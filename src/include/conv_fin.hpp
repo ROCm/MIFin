@@ -276,7 +276,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
                 }
                 catch(const std::exception& e)
                 {
-                    res_item["reason"] = "Failed getting solutions";
+                    res_item["reason"] = std::string("No solutions: ") + e.what();
                     std::cerr << "Error getting solutions: " << e.what() << std::endl;
                     return false;
                 }
