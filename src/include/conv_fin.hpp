@@ -725,7 +725,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                 res_item["direction"]      = conv_dir;
                 res_item["bias"]           = ctx.problem.bias;
                 res_item["kernel_objects"] = kern_objs;
-                res_item["reason"] = "Success";
+                res_item["reason"]         = "Success";
 
                 if(s.IsTunable())
                 {
