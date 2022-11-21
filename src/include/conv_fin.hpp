@@ -1385,8 +1385,7 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
             ctx.SetupFloats();
 
             std::cerr << "test pdb" << std::endl;
-            bool success = true;
-            success = TestPerfDbEntries(config_id, ctx, cfg_it->second, err_list, pdb_id);
+            bool success = TestPerfDbEntries(config_id, ctx, cfg_it->second, err_list, pdb_id);
             if(not success)
                 ret = false;
         }
