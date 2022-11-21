@@ -75,22 +75,6 @@
 
 namespace fin {
 
-class ParamString
-{
-    std::string values;
-
-    public:
-    ParamString() {}
-    ParamString(std::string in_val) : values(in_val) {}
-
-    void Serialize(std::ostream& stream) const { stream << values; }
-    bool Deserialize(const std::string& s)
-    {
-        values = s;
-        return true;
-    }
-};
-
 const int INVOKE_LIMIT = 2;
 using json             = nlohmann::json;
 // TODO: Create a config class to encapsulate config
@@ -151,7 +135,6 @@ class ConvFin : public BaseFin
         const std::string config_id,
         const miopen::ConvolutionContext& ctx,
         const std::map<std::string, std::unordered_map<std::string, std::string>>& perf_ids,
-        const std::unordered_map<std::string, miopen::DbRecord>& records,
         std::vector<std::map<std::string, std::string>>& err_list,
         std::vector<std::string>& pdb_id);
 
@@ -729,9 +712,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
 
                 if(s.IsTunable())
                 {
-                    miopen::DbRecord record;
-                    record.SetValues(solver_name, ParamString(params));
-                    if(!s.TestSysDbRecord(ctx, record))
+                    if(!s.TestPerfCfgParams(ctx, params))
                     {
                         res_item["reason"] = "Tuning returned invalid params";
                         return false;
@@ -1237,7 +1218,6 @@ int ConvFin<Tgpu, Tref>::TestPerfDbEntries(
     const std::string config_id,
     const miopen::ConvolutionContext& ctx,
     const std::map<std::string, std::unordered_map<std::string, std::string>>& perf_ids,
-    const std::unordered_map<std::string, miopen::DbRecord>& records,
     std::vector<std::map<std::string, std::string>>& err_list,
     std::vector<std::string>& pdb_id)
 {
@@ -1249,7 +1229,6 @@ int ConvFin<Tgpu, Tref>::TestPerfDbEntries(
         auto perf_id   = pdb_it->first;
         auto solver_nm = pdb_it->second.find("solver")->second;
         auto params    = pdb_it->second.find("params")->second;
-        auto record    = records.find(perf_id)->second;
 
         auto slv_id = miopen::solver::Id(solver_nm);
         auto solver = slv_id.GetSolver();
@@ -1262,7 +1241,7 @@ int ConvFin<Tgpu, Tref>::TestPerfDbEntries(
         bool success = false;
         try
         {
-            success = solver.TestSysDbRecord(ctx, record);
+            success = solver.TestPerfCfgParams(ctx, params);
         }
         catch(const std::exception& e)
         {
@@ -1291,7 +1270,6 @@ int ConvFin<Tgpu, Tref>::TestPerfDbEntries(
 template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::TestPerfDbValid()
 {
-
     bool ret            = true;
     namespace fs        = boost::filesystem;
     bool spec_arch      = (job["arch"].size() > 0 and job["num_cu"].size() > 0);
@@ -1357,8 +1335,6 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
         // cfg -> pdb_id -> values_dict
         std::map<std::string, std::map<std::string, std::unordered_map<std::string, std::string>>>
             perfdb_entries;
-        // pdb_id -> record
-        std::unordered_map<std::string, miopen::DbRecord> records;
         std::vector<std::map<std::string, std::string>> err_list;
         std::vector<std::string> pdb_id;
         auto select_query = "SELECT config, solver, params, id FROM perf_db;";
@@ -1387,7 +1363,6 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
                     continue;
                 }
 
-                records[perf_id].SetValues(solver_nm, ParamString(params));
                 perfdb_entries[config_id][perf_id]["solver"] = solver_nm;
                 perfdb_entries[config_id][perf_id]["params"] = params;
             }
@@ -1411,7 +1386,7 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
 
             std::cerr << "test pdb" << std::endl;
             bool success = true;
-            success = TestPerfDbEntries(config_id, ctx, cfg_it->second, records, err_list, pdb_id);
+            success = TestPerfDbEntries(config_id, ctx, cfg_it->second, err_list, pdb_id);
             if(not success)
                 ret = false;
         }
