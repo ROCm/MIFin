@@ -629,14 +629,21 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                     std::cerr << solver_name << " Begin Search FWD" << std::endl;
                     solution = s.FindSolution(ctx, db, invoke_ctx); // forcing search here
                     std::cerr << solver_name << " Finished Search FWD" << std::endl;
-                    kern_objs = BuildJsonKernelList(h, solution.construction_params);
-                    SolutionHasProgram(h, solution);
-                    params = s.GetPerfCfgParams(ctx, db);
 
+                    //check if binaries were added, prep invoker for gathering timing
+                    SolutionHasProgram(h, solution);
                     const auto invoker =
                         h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
-                    invoker(h, invoke_ctx);
-                    time = h.GetKernelTime();
+                    int lim = 1;
+                    for(int i=0; i < lim; i++)
+                    {
+                        invoker(h, invoke_ctx);
+                        time = h.GetKernelTime();
+                        //extra runs for kernels under 5s
+                        if(i == 0 and time < 5)
+                            lim = 10;
+                        std::cerr << "Kernel Time: " << time << std::endl;
+                    }
                 }
                 else if(conv_dir == miopen::conv::Direction::BackwardData)
                 {
@@ -651,16 +658,24 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                                                        workspace.desc.GetNumBytes(),
                                                        convDesc.attribute.gfx90aFp16alt.GetBwd()};
 
+                    std::cerr << solver_name << " Begin Search BWD" << std::endl;
                     solution = s.FindSolution(ctx, db, invoke_ctx); // forcing search here
                     std::cerr << solver_name << " Finished Search BWD" << std::endl;
-                    kern_objs = BuildJsonKernelList(h, solution.construction_params);
-                    SolutionHasProgram(h, solution);
-                    params = s.GetPerfCfgParams(ctx, db);
 
+                    //check if binaries were added, prep invoker for gathering timing
+                    SolutionHasProgram(h, solution);
                     const auto invoker =
                         h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
-                    invoker(h, invoke_ctx);
-                    time = h.GetKernelTime();
+                    int lim = 1;
+                    for(int i=0; i < lim; i++)
+                    {
+                        invoker(h, invoke_ctx);
+                        time = h.GetKernelTime();
+                        //extra runs for kernels under 5s
+                        if(i == 0 and time < 5)
+                            lim = 10;
+                        std::cerr << "Kernel Time: " << time << std::endl;
+                    }
                 }
                 else if(conv_dir == miopen::conv::Direction::BackwardWeights)
                 {
@@ -675,16 +690,24 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                                                       workspace.desc.GetNumBytes(),
                                                       convDesc.attribute.gfx90aFp16alt.GetWrW()};
 
+                    std::cerr << solver_name << " Begin Search WRW" << std::endl;
                     solution = s.FindSolution(ctx, db, invoke_ctx); // forcing search here
                     std::cerr << solver_name << " Finished Search WRW" << std::endl;
-                    kern_objs = BuildJsonKernelList(h, solution.construction_params);
-                    SolutionHasProgram(h, solution);
-                    params = s.GetPerfCfgParams(ctx, db);
 
+                    //check if binaries were added, prep invoker for gathering timing
+                    SolutionHasProgram(h, solution);
                     const auto invoker =
                         h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
-                    invoker(h, invoke_ctx);
-                    time = h.GetKernelTime();
+                    int lim = 1;
+                    for(int i=0; i < lim; i++)
+                    {
+                        invoker(h, invoke_ctx);
+                        time = h.GetKernelTime();
+                        //extra runs for kernels under 5s
+                        if(i == 0 and time < 5)
+                            lim = 10;
+                        std::cerr << "Kernel Time: " << time << std::endl;
+                    }
                 }
                 else
                 {
@@ -693,6 +716,9 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                        << static_cast<int>(conv_dir);
                     throw std::runtime_error(ss.str());
                 }
+
+                params = s.GetPerfCfgParams(ctx, db);
+                kern_objs = BuildJsonKernelList(h, solution.construction_params);
 
                 res_item["params"]         = params;
                 res_item["time"]           = time;
