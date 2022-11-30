@@ -634,16 +634,9 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                     SolutionHasProgram(h, solution);
                     const auto invoker =
                         h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
-                    int lim = 1;
-                    for(int i=0; i < lim; i++)
-                    {
-                        invoker(h, invoke_ctx);
-                        time = h.GetKernelTime();
-                        //extra runs for kernels under 5s
-                        if(i == 0 and time < 5)
-                            lim = 10;
-                        std::cerr << "Kernel Time: " << time << std::endl;
-                    }
+                    invoker(h, invoke_ctx);
+                    time = h.GetKernelTime();
+                    std::cerr << "Kernel Time: " << time << std::endl;
                 }
                 else if(conv_dir == miopen::conv::Direction::BackwardData)
                 {
@@ -666,16 +659,9 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                     SolutionHasProgram(h, solution);
                     const auto invoker =
                         h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
-                    int lim = 1;
-                    for(int i=0; i < lim; i++)
-                    {
-                        invoker(h, invoke_ctx);
-                        time = h.GetKernelTime();
-                        //extra runs for kernels under 5s
-                        if(i == 0 and time < 5)
-                            lim = 10;
-                        std::cerr << "Kernel Time: " << time << std::endl;
-                    }
+                    invoker(h, invoke_ctx);
+                    time = h.GetKernelTime();
+                    std::cerr << "Kernel Time: " << time << std::endl;
                 }
                 else if(conv_dir == miopen::conv::Direction::BackwardWeights)
                 {
@@ -698,16 +684,9 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                     SolutionHasProgram(h, solution);
                     const auto invoker =
                         h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
-                    int lim = 1;
-                    for(int i=0; i < lim; i++)
-                    {
-                        invoker(h, invoke_ctx);
-                        time = h.GetKernelTime();
-                        //extra runs for kernels under 5s
-                        if(i == 0 and time < 5)
-                            lim = 10;
-                        std::cerr << "Kernel Time: " << time << std::endl;
-                    }
+                    invoker(h, invoke_ctx);
+                    time = h.GetKernelTime();
+                    std::cerr << "Kernel Time: " << time << std::endl;
                 }
                 else
                 {
