@@ -610,6 +610,10 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                 ctx.do_search = true;
                 ctx.db_update = true;
 
+                //vars for timing accuracy
+                float eval_time = 0.0f;
+                bool end = false;
+
                 // This is required because DataInvokeParams switches tensor order due to
                 // direction and it does not have a
                 // copy constructor or a default constructor
@@ -634,9 +638,14 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                     SolutionHasProgram(h, solution);
                     const auto invoker =
                         h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
-                    invoker(h, invoke_ctx);
-                    time = h.GetKernelTime();
-                    std::cerr << "Kernel Time: " << time << std::endl;
+                    while(!end)
+                    {
+                        end = eval_time > 10;
+                        invoker(h, invoke_ctx);
+                        time = h.GetKernelTime();
+                        eval_time += time;
+                        std::cerr << "Kernel Time: " << time << std::endl;
+                    }
                 }
                 else if(conv_dir == miopen::conv::Direction::BackwardData)
                 {
@@ -659,9 +668,14 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                     SolutionHasProgram(h, solution);
                     const auto invoker =
                         h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
-                    invoker(h, invoke_ctx);
-                    time = h.GetKernelTime();
-                    std::cerr << "Kernel Time: " << time << std::endl;
+                    while(!end)
+                    {
+                        end = eval_time > 10;
+                        invoker(h, invoke_ctx);
+                        time = h.GetKernelTime();
+                        eval_time += time;
+                        std::cerr << "Kernel Time: " << time << std::endl;
+                    }
                 }
                 else if(conv_dir == miopen::conv::Direction::BackwardWeights)
                 {
@@ -684,9 +698,14 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                     SolutionHasProgram(h, solution);
                     const auto invoker =
                         h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
-                    invoker(h, invoke_ctx);
-                    time = h.GetKernelTime();
-                    std::cerr << "Kernel Time: " << time << std::endl;
+                    while(!end)
+                    {
+                        end = eval_time > 10;
+                        invoker(h, invoke_ctx);
+                        time = h.GetKernelTime();
+                        eval_time += time;
+                        std::cerr << "Kernel Time: " << time << std::endl;
+                    }
                 }
                 else
                 {
@@ -1328,7 +1347,12 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
 
         // set handle to type of db under test
         auto handle = miopen::Handle{};
+#if MIOPEN_MODE_NOGPU
         BaseFin::InitNoGpuHandle(handle, db_arch, db_num_cu);
+#else
+        throw std::runtime_error("MIOpen needs to be compiled with the NOGPU backend "
+                             "for TestPerfDbValid");
+#endif
 
         // cfg -> pdb_id -> values_dict
         std::map<std::string, std::map<std::string, std::unordered_map<std::string, std::string>>>
