@@ -543,13 +543,6 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
             if(!s.IsTunable())
                 res_item["tunable"] = false;
 
-            // eg when ConvOclDirectFwd has no kernels FindSolution memory faults
-            if(s.IsTunable() and kinder["kernel_objects"].empty())
-            {
-                res_item["reason"] = "No Kernels";
-                return false;
-            }
-
             std::cerr << solver_name << " is applicable" << std::endl;
             // Get the binary
             std::cerr << "loading binaries from fin input" << std::endl;
