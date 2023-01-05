@@ -1330,7 +1330,12 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
 
         // set handle to type of db under test
         auto handle = miopen::Handle{};
+#if MIOPEN_MODE_NOGPU
         BaseFin::InitNoGpuHandle(handle, db_arch, db_num_cu);
+#else
+        throw std::runtime_error("MIOpen needs to be compiled with the NOGPU backend "
+                             "for TestPerfDbValid");
+#endif
 
         // cfg -> pdb_id -> values_dict
         std::map<std::string, std::map<std::string, std::unordered_map<std::string, std::string>>>
