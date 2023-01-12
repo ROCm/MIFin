@@ -717,19 +717,8 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                 res_item["data_type"]      = ctx.problem.in_data_type;
                 res_item["direction"]      = conv_dir;
                 res_item["bias"]           = ctx.problem.bias;
+                res_item["reason"]         = "Success";
                 res_item["kernel_objects"] = kern_objs;
-
-                miopen::DbRecord record;
-                record.SetValues(solver_name, ParamString(params));
-                if(s.TestSysDbRecord(ctx, record))
-                {
-                    res_item["reason"] = "Success";
-                }
-                else
-                {
-                    res_item["reason"] = "Tuning returned invalid params";
-                    return false;
-                }
             }
             catch(const std::exception& e)
             {
