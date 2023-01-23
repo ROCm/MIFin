@@ -638,7 +638,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                     SolutionHasProgram(h, solution);
                     const auto invoker =
                         h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
-                    while(!end)
+                    //while(!end)
                     {
                         end = eval_time > 10;
                         invoker(h, invoke_ctx);
@@ -668,7 +668,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                     SolutionHasProgram(h, solution);
                     const auto invoker =
                         h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
-                    while(!end)
+                    //while(!end)
                     {
                         end = eval_time > 10;
                         invoker(h, invoke_ctx);
@@ -698,7 +698,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                     SolutionHasProgram(h, solution);
                     const auto invoker =
                         h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
-                    while(!end)
+                    //while(!end)
                     {
                         end = eval_time > 10;
                         invoker(h, invoke_ctx);
