@@ -550,15 +550,13 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                 {
                     try
                     {
-                        std::cerr << "Make Program: " << kernel_file << "; args: " << comp_opts
-                                  << std::endl;
                         auto p = miopen::Program{kernel_file, hsaco};
-                        std::cerr << "Add Program: " << kernel_file << "; args: " << comp_opts
-                                  << std::endl;
                         h.AddProgram(p, kernel_file, comp_opts);
                     }
                     catch(const std::exception& e)
                     {
+                        std::cerr << "Error Adding Program: (" << kernel_file << ", " << comp_opts
+                            << ") :" << e.what() << std::endl;
                         res_item["reason"] = std::string("Make Program exception: ") + e.what();
                         return false;
                     }
@@ -871,15 +869,13 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
                 {
                     try
                     {
-                        std::cerr << "Make Program: " << kernel_file << "; args: " << comp_opts
-                                  << std::endl;
                         auto p = miopen::Program{kernel_file, hsaco};
-                        std::cerr << "Add Program: " << kernel_file << "; args: " << comp_opts
-                                  << std::endl;
                         h.AddProgram(p, kernel_file, comp_opts);
                     }
                     catch(const std::exception& e)
                     {
+                        std::cerr << "Error Adding Program: (" << kernel_file << ", " << comp_opts
+                            << ") :" << e.what() << std::endl;
                         res_item["reason"] = std::string("Make Program exception: ") + e.what();
                         return false;
                     }
