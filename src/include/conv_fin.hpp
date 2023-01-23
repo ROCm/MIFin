@@ -526,13 +526,6 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
             if(!s.IsTunable())
                 res_item["tunable"] = false;
 
-            // eg when ConvOclDirectFwd has no kernels FindSolution memory faults
-            if(s.IsTunable() and kinder["kernel_objects"].empty())
-            {
-                res_item["reason"] = "No Kernels";
-                return false;
-            }
-
             std::cerr << solver_name << " is applicable" << std::endl;
             // Get the binary
             std::cerr << "loading binaries from fin input" << std::endl;
@@ -557,15 +550,13 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                 {
                     try
                     {
-                        std::cerr << "Make Program: " << kernel_file << "; args: " << comp_opts
-                                  << std::endl;
                         auto p = miopen::Program{kernel_file, hsaco};
-                        std::cerr << "Add Program: " << kernel_file << "; args: " << comp_opts
-                                  << std::endl;
                         h.AddProgram(p, kernel_file, comp_opts);
                     }
                     catch(const std::exception& e)
                     {
+                        std::cerr << "Error Adding Program: (" << kernel_file << ", " << comp_opts
+                            << ") :" << e.what() << std::endl;
                         res_item["reason"] = std::string("Make Program exception: ") + e.what();
                         return false;
                     }
@@ -617,6 +608,10 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                 ctx.do_search = true;
                 ctx.db_update = true;
 
+                //vars for timing accuracy
+                float eval_time = 0.0f;
+                bool end = false;
+
                 // This is required because DataInvokeParams switches tensor order due to
                 // direction and it does not have a
                 // copy constructor or a default constructor
@@ -636,14 +631,19 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                     std::cerr << solver_name << " Begin Search FWD" << std::endl;
                     solution = s.FindSolution(ctx, db, invoke_ctx); // forcing search here
                     std::cerr << solver_name << " Finished Search FWD" << std::endl;
-                    kern_objs = BuildJsonKernelList(h, solution.construction_params);
-                    SolutionHasProgram(h, solution);
-                    params = s.GetPerfCfgParams(ctx, db);
 
+                    //check if binaries were added, prep invoker for gathering timing
+                    SolutionHasProgram(h, solution);
                     const auto invoker =
                         h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
-                    invoker(h, invoke_ctx);
-                    time = h.GetKernelTime();
+                    //while(!end)
+                    {
+                        end = eval_time > 10;
+                        invoker(h, invoke_ctx);
+                        time = h.GetKernelTime();
+                        eval_time += time;
+                        std::cerr << "Kernel Time: " << time << std::endl;
+                    }
                 }
                 else if(conv_dir == miopen::conv::Direction::BackwardData)
                 {
@@ -658,16 +658,22 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                                                        workspace.desc.GetNumBytes(),
                                                        convDesc.attribute.gfx90aFp16alt.GetBwd()};
 
+                    std::cerr << solver_name << " Begin Search BWD" << std::endl;
                     solution = s.FindSolution(ctx, db, invoke_ctx); // forcing search here
                     std::cerr << solver_name << " Finished Search BWD" << std::endl;
-                    kern_objs = BuildJsonKernelList(h, solution.construction_params);
-                    SolutionHasProgram(h, solution);
-                    params = s.GetPerfCfgParams(ctx, db);
 
+                    //check if binaries were added, prep invoker for gathering timing
+                    SolutionHasProgram(h, solution);
                     const auto invoker =
                         h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
-                    invoker(h, invoke_ctx);
-                    time = h.GetKernelTime();
+                    //while(!end)
+                    {
+                        end = eval_time > 10;
+                        invoker(h, invoke_ctx);
+                        time = h.GetKernelTime();
+                        eval_time += time;
+                        std::cerr << "Kernel Time: " << time << std::endl;
+                    }
                 }
                 else if(conv_dir == miopen::conv::Direction::BackwardWeights)
                 {
@@ -682,16 +688,22 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                                                       workspace.desc.GetNumBytes(),
                                                       convDesc.attribute.gfx90aFp16alt.GetWrW()};
 
+                    std::cerr << solver_name << " Begin Search WRW" << std::endl;
                     solution = s.FindSolution(ctx, db, invoke_ctx); // forcing search here
                     std::cerr << solver_name << " Finished Search WRW" << std::endl;
-                    kern_objs = BuildJsonKernelList(h, solution.construction_params);
-                    SolutionHasProgram(h, solution);
-                    params = s.GetPerfCfgParams(ctx, db);
 
+                    //check if binaries were added, prep invoker for gathering timing
+                    SolutionHasProgram(h, solution);
                     const auto invoker =
                         h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
-                    invoker(h, invoke_ctx);
-                    time = h.GetKernelTime();
+                    //while(!end)
+                    {
+                        end = eval_time > 10;
+                        invoker(h, invoke_ctx);
+                        time = h.GetKernelTime();
+                        eval_time += time;
+                        std::cerr << "Kernel Time: " << time << std::endl;
+                    }
                 }
                 else
                 {
@@ -700,6 +712,9 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                        << static_cast<int>(conv_dir);
                     throw std::runtime_error(ss.str());
                 }
+
+                params = s.GetPerfCfgParams(ctx, db);
+                kern_objs = BuildJsonKernelList(h, solution.construction_params);
 
                 res_item["params"]         = params;
                 res_item["time"]           = time;
@@ -854,15 +869,13 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
                 {
                     try
                     {
-                        std::cerr << "Make Program: " << kernel_file << "; args: " << comp_opts
-                                  << std::endl;
                         auto p = miopen::Program{kernel_file, hsaco};
-                        std::cerr << "Add Program: " << kernel_file << "; args: " << comp_opts
-                                  << std::endl;
                         h.AddProgram(p, kernel_file, comp_opts);
                     }
                     catch(const std::exception& e)
                     {
+                        std::cerr << "Error Adding Program: (" << kernel_file << ", " << comp_opts
+                            << ") :" << e.what() << std::endl;
                         res_item["reason"] = std::string("Make Program exception: ") + e.what();
                         return false;
                     }
