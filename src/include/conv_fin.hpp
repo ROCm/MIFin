@@ -722,8 +722,8 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                 res_item["data_type"]      = ctx.problem.in_data_type;
                 res_item["direction"]      = conv_dir;
                 res_item["bias"]           = ctx.problem.bias;
-                res_item["reason"]         = "Success";
                 res_item["kernel_objects"] = kern_objs;
+                res_item["reason"]         = "Success";
             }
             catch(const std::exception& e)
             {
