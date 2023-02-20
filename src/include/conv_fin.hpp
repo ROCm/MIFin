@@ -609,8 +609,8 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                 ctx.db_update = true;
 
                 // vars for timing accuracy
-                float eval_time = 0.0f;
-                bool end        = false;
+                // float eval_time = 0.0f;
+                // bool end        = false;
 
                 // This is required because DataInvokeParams switches tensor order due to
                 // direction and it does not have a
@@ -638,10 +638,10 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                         h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
                     // while(!end)
                     {
-                        end = eval_time > 10;
+                        // end = eval_time > 10;
                         invoker(h, invoke_ctx);
                         time = h.GetKernelTime();
-                        eval_time += time;
+                        // eval_time += time;
                         std::cerr << "Kernel Time: " << time << std::endl;
                     }
                 }
@@ -668,10 +668,10 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                         h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
                     // while(!end)
                     {
-                        end = eval_time > 10;
+                        // end = eval_time > 10;
                         invoker(h, invoke_ctx);
                         time = h.GetKernelTime();
-                        eval_time += time;
+                        // eval_time += time;
                         std::cerr << "Kernel Time: " << time << std::endl;
                     }
                 }
@@ -698,10 +698,10 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                         h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
                     // while(!end)
                     {
-                        end = eval_time > 10;
+                        // end = eval_time > 10;
                         invoker(h, invoke_ctx);
                         time = h.GetKernelTime();
-                        eval_time += time;
+                        // eval_time += time;
                         std::cerr << "Kernel Time: " << time << std::endl;
                     }
                 }
@@ -1329,12 +1329,13 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
 
         std::cerr << "processing: " << pathstr << std::endl;
 
+#if MIOPEN_MODE_NOGPU
         // setting system to false allows writing the db
         auto sql = miopen::SQLite{pathstr, false};
 
         // set handle to type of db under test
         auto handle = miopen::Handle{};
-#if MIOPEN_MODE_NOGPU
+
         BaseFin::InitNoGpuHandle(handle, db_arch, db_num_cu);
 #else
         throw std::runtime_error("MIOpen needs to be compiled with the NOGPU backend "
