@@ -7,7 +7,7 @@ RUN dpkg --add-architecture i386
 
 
 #install rocm
-ARG ROCMVERSION=5.1
+ARG ROCMVERSION=5.5
 ARG OSDB_BKC_VERSION
 ARG DEB_ROCM_REPO=http://repo.radeon.com/rocm/apt/.apt_$ROCMVERSION/
 # Add rocm repository
