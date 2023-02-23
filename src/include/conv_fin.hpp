@@ -75,22 +75,6 @@
 
 namespace fin {
 
-class ParamString
-{
-    std::string values;
-
-    public:
-    ParamString() {}
-    ParamString(std::string in_val) : values(in_val) {}
-
-    void Serialize(std::ostream& stream) const { stream << values; }
-    bool Deserialize(const std::string& s)
-    {
-        values = s;
-        return true;
-    }
-};
-
 const int INVOKE_LIMIT = 2;
 using json             = nlohmann::json;
 // TODO: Create a config class to encapsulate config
@@ -151,7 +135,6 @@ class ConvFin : public BaseFin
         const std::string config_id,
         const miopen::ConvolutionContext& ctx,
         const std::map<std::string, std::unordered_map<std::string, std::string>>& perf_ids,
-        const std::unordered_map<std::string, miopen::DbRecord>& records,
         std::vector<std::map<std::string, std::string>>& err_list,
         std::vector<std::string>& pdb_id);
 
@@ -567,15 +550,13 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                 {
                     try
                     {
-                        std::cerr << "Make Program: " << kernel_file << "; args: " << comp_opts
-                                  << std::endl;
                         auto p = miopen::Program{kernel_file, hsaco};
-                        std::cerr << "Add Program: " << kernel_file << "; args: " << comp_opts
-                                  << std::endl;
                         h.AddProgram(p, kernel_file, comp_opts);
                     }
                     catch(const std::exception& e)
                     {
+                        std::cerr << "Error Adding Program: (" << kernel_file << ", " << comp_opts
+                            << ") :" << e.what() << std::endl;
                         res_item["reason"] = std::string("Make Program exception: ") + e.what();
                         return false;
                     }
@@ -627,6 +608,10 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                 ctx.do_search = true;
                 ctx.db_update = true;
 
+                //vars for timing accuracy
+                float eval_time = 0.0f;
+                bool end = false;
+
                 // This is required because DataInvokeParams switches tensor order due to
                 // direction and it does not have a
                 // copy constructor or a default constructor
@@ -646,14 +631,19 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                     std::cerr << solver_name << " Begin Search FWD" << std::endl;
                     solution = s.FindSolution(ctx, db, invoke_ctx); // forcing search here
                     std::cerr << solver_name << " Finished Search FWD" << std::endl;
-                    kern_objs = BuildJsonKernelList(h, solution.construction_params);
-                    SolutionHasProgram(h, solution);
-                    params = s.GetPerfCfgParams(ctx, db);
 
+                    //check if binaries were added, prep invoker for gathering timing
+                    SolutionHasProgram(h, solution);
                     const auto invoker =
                         h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
-                    invoker(h, invoke_ctx);
-                    time = h.GetKernelTime();
+                    //while(!end)
+                    {
+                        end = eval_time > 10;
+                        invoker(h, invoke_ctx);
+                        time = h.GetKernelTime();
+                        eval_time += time;
+                        std::cerr << "Kernel Time: " << time << std::endl;
+                    }
                 }
                 else if(conv_dir == miopen::conv::Direction::BackwardData)
                 {
@@ -668,16 +658,22 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                                                        workspace.desc.GetNumBytes(),
                                                        convDesc.attribute.gfx90aFp16alt.GetBwd()};
 
+                    std::cerr << solver_name << " Begin Search BWD" << std::endl;
                     solution = s.FindSolution(ctx, db, invoke_ctx); // forcing search here
                     std::cerr << solver_name << " Finished Search BWD" << std::endl;
-                    kern_objs = BuildJsonKernelList(h, solution.construction_params);
-                    SolutionHasProgram(h, solution);
-                    params = s.GetPerfCfgParams(ctx, db);
 
+                    //check if binaries were added, prep invoker for gathering timing
+                    SolutionHasProgram(h, solution);
                     const auto invoker =
                         h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
-                    invoker(h, invoke_ctx);
-                    time = h.GetKernelTime();
+                    //while(!end)
+                    {
+                        end = eval_time > 10;
+                        invoker(h, invoke_ctx);
+                        time = h.GetKernelTime();
+                        eval_time += time;
+                        std::cerr << "Kernel Time: " << time << std::endl;
+                    }
                 }
                 else if(conv_dir == miopen::conv::Direction::BackwardWeights)
                 {
@@ -692,16 +688,22 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                                                       workspace.desc.GetNumBytes(),
                                                       convDesc.attribute.gfx90aFp16alt.GetWrW()};
 
+                    std::cerr << solver_name << " Begin Search WRW" << std::endl;
                     solution = s.FindSolution(ctx, db, invoke_ctx); // forcing search here
                     std::cerr << solver_name << " Finished Search WRW" << std::endl;
-                    kern_objs = BuildJsonKernelList(h, solution.construction_params);
-                    SolutionHasProgram(h, solution);
-                    params = s.GetPerfCfgParams(ctx, db);
 
+                    //check if binaries were added, prep invoker for gathering timing
+                    SolutionHasProgram(h, solution);
                     const auto invoker =
                         h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
-                    invoker(h, invoke_ctx);
-                    time = h.GetKernelTime();
+                    //while(!end)
+                    {
+                        end = eval_time > 10;
+                        invoker(h, invoke_ctx);
+                        time = h.GetKernelTime();
+                        eval_time += time;
+                        std::cerr << "Kernel Time: " << time << std::endl;
+                    }
                 }
                 else
                 {
@@ -711,6 +713,9 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                     throw std::runtime_error(ss.str());
                 }
 
+                params = s.GetPerfCfgParams(ctx, db);
+                kern_objs = BuildJsonKernelList(h, solution.construction_params);
+
                 res_item["params"]         = params;
                 res_item["time"]           = time;
                 res_item["layout"]         = ctx.problem.in_layout;
@@ -718,17 +723,15 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                 res_item["direction"]      = conv_dir;
                 res_item["bias"]           = ctx.problem.bias;
                 res_item["kernel_objects"] = kern_objs;
+                res_item["reason"]         = "Success";
 
-                miopen::DbRecord record;
-                record.SetValues(solver_name, ParamString(params));
-                if(s.TestSysDbRecord(ctx, record))
+                if(s.IsTunable())
                 {
-                    res_item["reason"] = "Success";
-                }
-                else
-                {
-                    res_item["reason"] = "Tuning returned invalid params";
-                    return false;
+                    if(!s.TestPerfCfgParams(ctx, params))
+                    {
+                        res_item["reason"] = "Tuning returned invalid params";
+                        return false;
+                    }
                 }
             }
             catch(const std::exception& e)
@@ -866,15 +869,13 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
                 {
                     try
                     {
-                        std::cerr << "Make Program: " << kernel_file << "; args: " << comp_opts
-                                  << std::endl;
                         auto p = miopen::Program{kernel_file, hsaco};
-                        std::cerr << "Add Program: " << kernel_file << "; args: " << comp_opts
-                                  << std::endl;
                         h.AddProgram(p, kernel_file, comp_opts);
                     }
                     catch(const std::exception& e)
                     {
+                        std::cerr << "Error Adding Program: (" << kernel_file << ", " << comp_opts
+                            << ") :" << e.what() << std::endl;
                         res_item["reason"] = std::string("Make Program exception: ") + e.what();
                         return false;
                     }
@@ -1230,7 +1231,6 @@ int ConvFin<Tgpu, Tref>::TestPerfDbEntries(
     const std::string config_id,
     const miopen::ConvolutionContext& ctx,
     const std::map<std::string, std::unordered_map<std::string, std::string>>& perf_ids,
-    const std::unordered_map<std::string, miopen::DbRecord>& records,
     std::vector<std::map<std::string, std::string>>& err_list,
     std::vector<std::string>& pdb_id)
 {
@@ -1242,7 +1242,6 @@ int ConvFin<Tgpu, Tref>::TestPerfDbEntries(
         auto perf_id   = pdb_it->first;
         auto solver_nm = pdb_it->second.find("solver")->second;
         auto params    = pdb_it->second.find("params")->second;
-        auto record    = records.find(perf_id)->second;
 
         auto slv_id = miopen::solver::Id(solver_nm);
         auto solver = slv_id.GetSolver();
@@ -1255,7 +1254,7 @@ int ConvFin<Tgpu, Tref>::TestPerfDbEntries(
         bool success = false;
         try
         {
-            success = solver.TestSysDbRecord(ctx, record);
+            success = solver.TestPerfCfgParams(ctx, params);
         }
         catch(const std::exception& e)
         {
@@ -1284,7 +1283,6 @@ int ConvFin<Tgpu, Tref>::TestPerfDbEntries(
 template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::TestPerfDbValid()
 {
-
     bool ret            = true;
     namespace fs        = boost::filesystem;
     bool spec_arch      = (job["arch"].size() > 0 and job["num_cu"].size() > 0);
@@ -1345,13 +1343,16 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
 
         // set handle to type of db under test
         auto handle = miopen::Handle{};
+#if MIOPEN_MODE_NOGPU
         BaseFin::InitNoGpuHandle(handle, db_arch, db_num_cu);
+#else
+        throw std::runtime_error("MIOpen needs to be compiled with the NOGPU backend "
+                             "for TestPerfDbValid");
+#endif
 
         // cfg -> pdb_id -> values_dict
         std::map<std::string, std::map<std::string, std::unordered_map<std::string, std::string>>>
             perfdb_entries;
-        // pdb_id -> record
-        std::unordered_map<std::string, miopen::DbRecord> records;
         std::vector<std::map<std::string, std::string>> err_list;
         std::vector<std::string> pdb_id;
         auto select_query = "SELECT config, solver, params, id FROM perf_db;";
@@ -1380,7 +1381,6 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
                     continue;
                 }
 
-                records[perf_id].SetValues(solver_nm, ParamString(params));
                 perfdb_entries[config_id][perf_id]["solver"] = solver_nm;
                 perfdb_entries[config_id][perf_id]["params"] = params;
             }
@@ -1403,8 +1403,7 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
             ctx.SetupFloats();
 
             std::cerr << "test pdb" << std::endl;
-            bool success = true;
-            success = TestPerfDbEntries(config_id, ctx, cfg_it->second, records, err_list, pdb_id);
+            bool success = TestPerfDbEntries(config_id, ctx, cfg_it->second, err_list, pdb_id);
             if(not success)
                 ret = false;
         }
