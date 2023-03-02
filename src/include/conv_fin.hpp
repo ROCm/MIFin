@@ -1425,7 +1425,7 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
                     auto params    = pdb_it->second.find("params")->second;
 
                     std::map<std::string, std::string> err;
-                    err["reason"] = e.what();
+                    err["reason"]    = e.what();
                     err["perfdb_id"] = perf_id;
                     err["config"]    = config_id;
                     err["solver"]    = solver_nm;
