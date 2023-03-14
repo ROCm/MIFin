@@ -7,8 +7,8 @@ RUN dpkg --add-architecture i386
 
 
 #install rocm
-ARG ROCMVERSION=5.1
-ARG OSDB_BKC_VERSION
+ARG ROCMVERSION=
+ARG OSDB_BKC_VERSION=11650
 ARG DEB_ROCM_REPO=http://repo.radeon.com/rocm/apt/.apt_$ROCMVERSION/
 # Add rocm repository
 RUN apt-get update
@@ -88,7 +88,7 @@ ARG MIOPEN_DIR=/root/dMIOpen
 #Clone MIOpen
 RUN git clone https://github.com/ROCmSoftwarePlatform/MIOpen.git $MIOPEN_DIR
 WORKDIR $MIOPEN_DIR
-ARG MIOPEN_BRANCH=develop
+ARG MIOPEN_BRANCH=282d383b519620deb11c0b3d4c6db6aec652370f
 RUN git pull && git checkout $MIOPEN_BRANCH
 
 # Install dependencies
