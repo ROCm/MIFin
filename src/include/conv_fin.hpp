@@ -1336,14 +1336,9 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
 
         std::cerr << "processing: " << pathstr << std::endl;
 
-#if MIOPEN_MODE_NOGPU
         // set handle to type of db under test
         auto handle = miopen::Handle{};
         BaseFin::InitNoGpuHandle(handle, db_arch, db_num_cu);
-#else
-        throw std::runtime_error("MIOpen needs to be compiled with the NOGPU backend "
-                                 "for TestPerfDbValid");
-#endif
 
         // setting system to false allows writing the db
         auto sql = miopen::SQLite{pathstr, false};
