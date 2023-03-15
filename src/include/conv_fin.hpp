@@ -1232,8 +1232,8 @@ int ConvFin<Tgpu, Tref>::TestPerfDbEntries(
         auto perf_id   = pdb_it->first;
         auto solver_nm = pdb_it->second.find("solver")->second;
         auto params    = pdb_it->second.find("params")->second;
-        auto slv_id = miopen::solver::Id(solver_nm);
-        auto solver = slv_id.GetSolver();
+        auto slv_id    = miopen::solver::Id(solver_nm);
+        auto solver    = slv_id.GetSolver();
 
         std::stringstream stat_str;
         stat_str << "config_id: " << config_id << ", solver_id: " << slv_id.Value() << ", solver_nm: " << solver_nm
@@ -1336,12 +1336,17 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
 
         std::cerr << "processing: " << pathstr << std::endl;
 
-        // setting system to false allows writing the db
-        auto sql = miopen::SQLite{pathstr, false};
-
+#if MIOPEN_MODE_NOGPU
         // set handle to type of db under test
         auto handle = miopen::Handle{};
         BaseFin::InitNoGpuHandle(handle, db_arch, db_num_cu);
+#else
+        throw std::runtime_error("MIOpen needs to be compiled with the NOGPU backend "
+                                 "for TestPerfDbValid");
+#endif
+
+        // setting system to false allows writing the db
+        auto sql = miopen::SQLite{pathstr, false};
 
         // cfg -> pdb_id -> values_dict
         std::map<std::string, std::map<std::string, std::unordered_map<std::string, std::string>>>
@@ -1699,11 +1704,10 @@ int ConvFin<Tgpu, Tref>::ProcessStep(const std::string& step_name)
     return 0;
 }
 
-
 template <typename T>
-void PrintVec(std::vector<T> vec)
+void PrintVec(const std::vector<T>& vec)
 {
-    for(auto val: vec)
+    for(const auto& val : vec)
         std::cout << val << ' ';
     std::cout << std::endl;
 }
@@ -1714,7 +1718,6 @@ int ConvFin<Tgpu, Tref>::GetandSetData()
     auto in_len  = GetInputTensorLengths();
     auto wei_len = GetWeightTensorLengths();
 
-    // auto y_type = GetOutputType();
     inputTensor = {GetHandle().GetStream(), in_len, (is_fwd || is_wrw), is_bwd};
     SetTensorNd(&inputTensor.desc, in_len, command["in_layout"], inputTensor.desc.GetType());
 
@@ -1726,7 +1729,8 @@ int ConvFin<Tgpu, Tref>::GetandSetData()
     auto out_len = GetOutputTensorLengths();
     outputTensor = {GetHandle().GetStream(), out_len, (is_bwd || is_wrw), is_fwd};
     std::vector<int> int_out_len(out_len.begin(), out_len.end());
-    SetTensorNd(&outputTensor.desc, int_out_len, command["out_layout"], outputTensor.desc.GetType());
+    SetTensorNd(
+        &outputTensor.desc, int_out_len, command["out_layout"], outputTensor.desc.GetType());
 
     std::cout << "InputTensorLengths: ";
     PrintVec(in_len);
@@ -1738,12 +1742,18 @@ int ConvFin<Tgpu, Tref>::GetandSetData()
     std::cout << "weightTensor Strides: ";
     PrintVec(weightTensor.desc.GetStrides());
 
-    const std::string in_layout = inputTensor.desc.GetLayout(inputTensor.desc.GetLayout_str());
-    const std::string wt_layout = weightTensor.desc.GetLayout(weightTensor.desc.GetLayout_str());
+    const std::string in_layout  = inputTensor.desc.GetLayout(inputTensor.desc.GetLayout_str());
+    const std::string wt_layout  = weightTensor.desc.GetLayout(weightTensor.desc.GetLayout_str());
     const std::string out_layout = outputTensor.desc.GetLayout(outputTensor.desc.GetLayout_str());
-    std::cout << "inputTensor layout: " << in_layout << ", possible: " << inputTensor.desc.IsPossibleLayout("NCHW", in_layout) << std::endl;
-    std::cout << "weightTensor layout: " << wt_layout << ", possible: " << weightTensor.desc.IsPossibleLayout("NCHW", wt_layout) << std::endl;
-    std::cout << "outputTensor layout: " << out_layout << ", possible: " << outputTensor.desc.IsPossibleLayout("NCHW", out_layout) << std::endl;
+    std::cout << "inputTensor layout: " << in_layout
+              << ", possible: " << inputTensor.desc.IsPossibleLayout("NCHW", in_layout)
+              << std::endl;
+    std::cout << "weightTensor layout: " << wt_layout
+              << ", possible: " << weightTensor.desc.IsPossibleLayout("NCHW", wt_layout)
+              << std::endl;
+    std::cout << "outputTensor layout: " << out_layout
+              << ", possible: " << outputTensor.desc.IsPossibleLayout("NCHW", out_layout)
+              << std::endl;
 
     if(IsInputTensorTransform())
     {
