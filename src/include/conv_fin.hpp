@@ -554,7 +554,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                     catch(const std::exception& e)
                     {
                         std::cerr << "Error Adding Program: (" << kernel_file << ", " << comp_opts
-                            << ") :" << e.what() << std::endl;
+                                  << ") :" << e.what() << std::endl;
                         res_item["reason"] = std::string("Make Program exception: ") + e.what();
                         return false;
                     }
@@ -606,9 +606,9 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                 ctx.do_search = true;
                 ctx.db_update = true;
 
-                //vars for timing accuracy
+                // vars for timing accuracy
                 float eval_time = 0.0f;
-                bool end = false;
+                bool end        = false;
 
                 // This is required because DataInvokeParams switches tensor order due to
                 // direction and it does not have a
@@ -630,11 +630,11 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                     solution = s.FindSolution(ctx, db, invoke_ctx); // forcing search here
                     std::cerr << solver_name << " Finished Search FWD" << std::endl;
 
-                    //check if binaries were added, prep invoker for gathering timing
+                    // check if binaries were added, prep invoker for gathering timing
                     SolutionHasProgram(h, solution);
                     const auto invoker =
                         h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
-                    //while(!end)
+                    // while(!end)
                     {
                         end = eval_time > 10;
                         invoker(h, invoke_ctx);
@@ -660,11 +660,11 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                     solution = s.FindSolution(ctx, db, invoke_ctx); // forcing search here
                     std::cerr << solver_name << " Finished Search BWD" << std::endl;
 
-                    //check if binaries were added, prep invoker for gathering timing
+                    // check if binaries were added, prep invoker for gathering timing
                     SolutionHasProgram(h, solution);
                     const auto invoker =
                         h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
-                    //while(!end)
+                    // while(!end)
                     {
                         end = eval_time > 10;
                         invoker(h, invoke_ctx);
@@ -690,11 +690,11 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                     solution = s.FindSolution(ctx, db, invoke_ctx); // forcing search here
                     std::cerr << solver_name << " Finished Search WRW" << std::endl;
 
-                    //check if binaries were added, prep invoker for gathering timing
+                    // check if binaries were added, prep invoker for gathering timing
                     SolutionHasProgram(h, solution);
                     const auto invoker =
                         h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
-                    //while(!end)
+                    // while(!end)
                     {
                         end = eval_time > 10;
                         invoker(h, invoke_ctx);
@@ -711,7 +711,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                     throw std::runtime_error(ss.str());
                 }
 
-                params = s.GetPerfCfgParams(ctx, db);
+                params    = s.GetPerfCfgParams(ctx, db);
                 kern_objs = BuildJsonKernelList(h, solution.construction_params);
 
                 res_item["params"]         = params;
@@ -871,7 +871,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
                     catch(const std::exception& e)
                     {
                         std::cerr << "Error Adding Program: (" << kernel_file << ", " << comp_opts
-                            << ") :" << e.what() << std::endl;
+                                  << ") :" << e.what() << std::endl;
                         res_item["reason"] = std::string("Make Program exception: ") + e.what();
                         return false;
                     }
@@ -1238,8 +1238,8 @@ int ConvFin<Tgpu, Tref>::TestPerfDbEntries(
         auto perf_id   = pdb_it->first;
         auto solver_nm = pdb_it->second.find("solver")->second;
         auto params    = pdb_it->second.find("params")->second;
-        auto slv_id = miopen::solver::Id(solver_nm);
-        auto solver = slv_id.GetSolver();
+        auto slv_id    = miopen::solver::Id(solver_nm);
+        auto solver    = slv_id.GetSolver();
 
         std::stringstream stat_str;
         stat_str << "config_id: " << config_id << ", solver_nm " << solver_nm
@@ -1343,7 +1343,7 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
         BaseFin::InitNoGpuHandle(handle, db_arch, db_num_cu);
 #else
         throw std::runtime_error("MIOpen needs to be compiled with the NOGPU backend "
-                             "for TestPerfDbValid");
+                                 "for TestPerfDbValid");
 #endif
 
         // cfg -> pdb_id -> values_dict
@@ -1667,11 +1667,10 @@ int ConvFin<Tgpu, Tref>::ProcessStep(const std::string& step_name)
     return 0;
 }
 
-
 template <typename T>
 void PrintVec(std::vector<T> vec)
 {
-    for(auto val: vec)
+    for(auto val : vec)
         std::cout << val << ' ';
     std::cout << std::endl;
 }
@@ -1693,7 +1692,8 @@ int ConvFin<Tgpu, Tref>::GetandSetData()
     auto out_len = GetOutputTensorLengths();
     outputTensor = {GetHandle().GetStream(), out_len, (is_bwd || is_wrw), is_fwd};
     std::vector<int> int_out_len(out_len.begin(), out_len.end());
-    SetTensorNd(&outputTensor.desc, int_out_len, command["out_layout"], outputTensor.desc.GetType());
+    SetTensorNd(
+        &outputTensor.desc, int_out_len, command["out_layout"], outputTensor.desc.GetType());
 
     std::cout << "InputTensorLengths: ";
     PrintVec(in_len);
@@ -1705,12 +1705,18 @@ int ConvFin<Tgpu, Tref>::GetandSetData()
     std::cout << "weightTensor Strides: ";
     PrintVec(weightTensor.desc.GetStrides());
 
-    const std::string in_layout = inputTensor.desc.GetLayout(inputTensor.desc.GetLayout_str());
-    const std::string wt_layout = weightTensor.desc.GetLayout(weightTensor.desc.GetLayout_str());
+    const std::string in_layout  = inputTensor.desc.GetLayout(inputTensor.desc.GetLayout_str());
+    const std::string wt_layout  = weightTensor.desc.GetLayout(weightTensor.desc.GetLayout_str());
     const std::string out_layout = outputTensor.desc.GetLayout(outputTensor.desc.GetLayout_str());
-    std::cout << "inputTensor layout: " << in_layout << ", possible: " << inputTensor.desc.IsPossibleLayout("NCHW", in_layout) << std::endl;
-    std::cout << "weightTensor layout: " << wt_layout << ", possible: " << weightTensor.desc.IsPossibleLayout("NCHW", wt_layout) << std::endl;
-    std::cout << "outputTensor layout: " << out_layout << ", possible: " << outputTensor.desc.IsPossibleLayout("NCHW", out_layout) << std::endl;
+    std::cout << "inputTensor layout: " << in_layout
+              << ", possible: " << inputTensor.desc.IsPossibleLayout("NCHW", in_layout)
+              << std::endl;
+    std::cout << "weightTensor layout: " << wt_layout
+              << ", possible: " << weightTensor.desc.IsPossibleLayout("NCHW", wt_layout)
+              << std::endl;
+    std::cout << "outputTensor layout: " << out_layout
+              << ", possible: " << outputTensor.desc.IsPossibleLayout("NCHW", out_layout)
+              << std::endl;
 
     if(IsInputTensorTransform())
     {

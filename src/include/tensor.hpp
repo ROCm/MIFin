@@ -164,7 +164,6 @@ inline int SetTensorNd(miopenTensorDescriptor_t t,
     return SetTensorNd(t, len, strides, data_type);
 }
 
-
 template <typename Tgpu, typename Tcpu>
 struct tensor
 {
