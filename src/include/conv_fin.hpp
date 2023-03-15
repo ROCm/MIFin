@@ -580,7 +580,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
             }
 
             miopen::solver::ConvSolution solution;
-            solution              = s.FindSolution(ctx, problem, db, {}); // auto tune is not expected here
+            solution = s.FindSolution(ctx, problem, db, {}); // auto tune is not expected here
             res_item["workspace"] = solution.workspace_sz;
 
             std::cerr << "Checking for workspace: " << solution.workspace_sz << std::endl;
@@ -880,7 +880,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
                 }
             }
 
-            auto solution         = s.FindSolution(ctx, problem, db, {}); // auto tune is not expected here
+            auto solution = s.FindSolution(ctx, problem, db, {}); // auto tune is not expected here
             res_item["workspace"] = solution.workspace_sz;
             SolutionHasProgram(h, solution);
 
@@ -1034,7 +1034,8 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
                 res_item["reason"] = "Not Applicable";
                 return false;
             }
-            const auto solution   = s.FindSolution(ctx, problem, db, {}); // auto tune is not expected here
+            const auto solution =
+                s.FindSolution(ctx, problem, db, {}); // auto tune is not expected here
             res_item["workspace"] = solution.workspace_sz;
             // Get the binary
             miopen::solver::PrecompileKernels(h, solution.construction_params);
@@ -1390,13 +1391,14 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
 
             std::cerr << "building context and problem" << std::endl;
             const auto problem = BuildConvProblem(sql, config_id);
-            auto ctx = miopen::ConvolutionContext{};
+            auto ctx           = miopen::ConvolutionContext{};
             ctx.SetStream(&handle);
             ctx.DetectRocm();
             ctx.SetupFloats(problem);
 
             std::cerr << "test pdb" << std::endl;
-            bool success = TestPerfDbEntries(config_id, ctx, problem, cfg_it->second, err_list, pdb_id);
+            bool success =
+                TestPerfDbEntries(config_id, ctx, problem, cfg_it->second, err_list, pdb_id);
             if(not success)
                 ret = false;
         }
