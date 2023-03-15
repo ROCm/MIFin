@@ -88,7 +88,7 @@ ARG MIOPEN_DIR=/root/dMIOpen
 #Clone MIOpen
 RUN git clone https://github.com/ROCmSoftwarePlatform/MIOpen.git $MIOPEN_DIR
 WORKDIR $MIOPEN_DIR
-ARG MIOPEN_BRANCH=develop
+ARG MIOPEN_BRANCH=b4e0a67333ee4bbcbbec1203a0260feff2882cfb
 RUN git pull && git checkout $MIOPEN_BRANCH
 
 # Install dependencies
