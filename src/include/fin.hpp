@@ -179,7 +179,7 @@ class BaseFin
                 kernel["blob"]              = "";
             }
             kernel_list.push_back(kernel);
-            //std::cerr << "Successfully added new kernel to json output" << std::endl;
+            // std::cerr << "Successfully added new kernel to json output" << std::endl;
         }
         return kernel_list;
     }
