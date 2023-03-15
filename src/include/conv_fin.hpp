@@ -1669,9 +1669,9 @@ int ConvFin<Tgpu, Tref>::ProcessStep(const std::string& step_name)
 }
 
 template <typename T>
-void PrintVec(std::vector<T> vec)
+void PrintVec(const std::vector<T>& vec)
 {
-    for(auto val : vec)
+    for(const auto& val : vec)
         std::cout << val << ' ';
     std::cout << std::endl;
 }
