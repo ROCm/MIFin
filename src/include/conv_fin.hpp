@@ -1371,11 +1371,12 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
             auto config_id = cfg_it->first;
             auto perf_ids = cfg_it->second;
             miopen::ConvolutionContext ctx = miopen::ConvolutionContext{};
+            miopen::ProblemDescription problem;
 
             std::cerr << "building problem" << std::endl;
             try
             {
-                const auto problem = BuildConvProblem(sql, config_id);
+                problem = BuildConvProblem(sql, config_id);
             }
             catch(const std::exception& e)
             {
