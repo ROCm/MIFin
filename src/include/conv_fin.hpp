@@ -906,8 +906,6 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
                 }
                 else if(conv_dir == miopen::conv::Direction::BackwardWeights)
                 {
-                    for(auto idx = 0; idx < 4; idx++)
-                    {
                     const auto invoke_ctx =
                         miopen::conv::WrWInvokeParams{{outputTensor.desc,
                                                        outputTensor.gpuData.buf.get(),
@@ -919,7 +917,6 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
                                                       workspace.desc.GetNumBytes(),
                                                       convDesc.attribute.gfx90aFp16alt.GetWrW()};
                     kernel_time = BenchmarkInvoker(invoker, h, invoke_ctx);
-                    }
                 }
                 else
                 {
