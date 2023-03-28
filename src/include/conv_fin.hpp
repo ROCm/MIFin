@@ -1236,8 +1236,8 @@ int ConvFin<Tgpu, Tref>::TestPerfDbEntries(
         auto solver    = slv_id.GetSolver();
 
         std::stringstream stat_str;
-        stat_str << "config_id: " << config_id << ", solver_id: " << slv_id.Value() << ", solver_nm: " << solver_nm
-                 << ", key: " << problem;
+        stat_str << "config_id: " << config_id << ", solver_id: " << slv_id.Value()
+                 << ", solver_nm: " << solver_nm << ", key: " << problem;
 
         // check if valid pdb parameters
         std::map<std::string, std::string> err;
@@ -1359,7 +1359,7 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
                 const auto solver_nm = stmt.ColumnText(1);
                 const auto params    = stmt.ColumnText(2);
                 const auto perf_id   = stmt.ColumnText(3);
-                auto slv_id = miopen::solver::Id(solver_nm);
+                auto slv_id          = miopen::solver::Id(solver_nm);
 
                 if(!slv_id.IsValid())
                 {
@@ -1394,8 +1394,8 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
         // iterate through each config
         for(auto cfg_it = perfdb_entries.begin(); cfg_it != perfdb_entries.end(); cfg_it++)
         {
-            auto config_id = cfg_it->first;
-            auto perf_ids = cfg_it->second;
+            auto config_id                 = cfg_it->first;
+            auto perf_ids                  = cfg_it->second;
             miopen::ConvolutionContext ctx = miopen::ConvolutionContext{};
             miopen::ProblemDescription problem;
 
@@ -1446,7 +1446,9 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
                     id_str << ",";
                 id_str << *it;
             }
-            del_query << "DELETE from perf_db where id in (" << id_str.str() << "); DELETE from config where not id in (select distinct config from perf_db); VACUUM;";
+            del_query << "DELETE from perf_db where id in (" << id_str.str()
+                      << "); DELETE from config where not id in (select distinct config from "
+                         "perf_db); VACUUM;";
             stmt    = miopen::SQLite::Statement{sql, del_query.str()};
             auto rc = stmt.Step(sql);
             std::cerr << "delete status: " << rc << std::endl;
