@@ -41,7 +41,7 @@ TEST(MemoryLayoutTest, BasicMemLayoutConv)
 
 TEST(MemoryLayoutTest, BasicMemLayoutBatchNorm)
 {
-    std::string input_filename = TEST_RESOURCE_DIR "fin_input_find_compile2.json";
+    std::string input_filename = TEST_RESOURCE_DIR "fin_input_find_compile.json";
     std::ifstream input_file(input_filename);
     if(!input_file)
     {
