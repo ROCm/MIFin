@@ -207,7 +207,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
 #endif
     ctx.SetStream(&handle);
     ctx.DetectRocm();
-    ctx.SetupFloats(problem);
+    problem.conv_problem.SetupFloats(ctx);
 
     const auto network_config   = problem.BuildConfKey();
     const bool is_winograd_only = convDesc.IsWinograd3x3SupportedAndFast(ctx, problem);
@@ -337,7 +337,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
 #endif
     ctx.SetStream(&handle);
     ctx.DetectRocm();
-    ctx.SetupFloats(problem);
+    problem.conv_problem.SetupFloats(ctx);
 
     const auto network_config   = problem.BuildConfKey();
     const bool is_winograd_only = convDesc.IsWinograd3x3SupportedAndFast(ctx, problem);
@@ -458,7 +458,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
     auto& h  = GetHandle();
     ctx.SetStream(&(h));
     ctx.DetectRocm();
-    ctx.SetupFloats(problem);
+    problem.conv_problem.SetupFloats(ctx);
 
     const auto network_config   = problem.BuildConfKey();
     const bool is_winograd_only = convDesc.IsWinograd3x3SupportedAndFast(ctx, problem);
@@ -777,7 +777,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
     auto& h  = GetHandle();
     ctx.SetStream(&(h));
     ctx.DetectRocm();
-    ctx.SetupFloats(problem);
+    problem.conv_problem.SetupFloats(ctx);
 
     const auto network_config   = problem.BuildConfKey();
     const bool is_winograd_only = convDesc.IsWinograd3x3SupportedAndFast(ctx, problem);
@@ -1006,7 +1006,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
     auto& h  = GetHandle();
     ctx.SetStream(&(h));
     ctx.DetectRocm();
-    ctx.SetupFloats(problem);
+    problem.conv_problem.SetupFloats(ctx);
 
     const auto network_config   = problem.BuildConfKey();
     const bool is_winograd_only = convDesc.IsWinograd3x3SupportedAndFast(ctx, problem);
@@ -1195,7 +1195,7 @@ int ConvFin<Tgpu, Tref>::TestApplicability()
 
     ctx.SetStream(&handle);
     ctx.DetectRocm();
-    ctx.SetupFloats(problem);
+    problem.conv_problem.SetupFloats(ctx);
     const auto network_config = problem.BuildConfKey();
     std::vector<std::string> app_solvers;
     for(const auto& id :
@@ -1402,7 +1402,7 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
             auto ctx = miopen::ConvolutionContext{};
             ctx.SetStream(&handle);
             ctx.DetectRocm();
-            ctx.SetupFloats(problem);
+            problem.conv_problem.SetupFloats(ctx);
 
             std::cerr << "test pdb" << std::endl;
             bool success = TestPerfDbEntries(config_id, ctx, problem, cfg_it->second, err_list, pdb_id);
@@ -1490,7 +1490,7 @@ int ConvFin<Tgpu, Tref>::SearchPreCompiledKernels()
 
         ctx.SetStream(&handle);
         ctx.DetectRocm();
-        ctx.SetupFloats(problem);
+        problem.conv_problem.SetupFloats(ctx);
 
         // const auto network_config = problem.BuildConfKey();
         std::ostringstream ss;
