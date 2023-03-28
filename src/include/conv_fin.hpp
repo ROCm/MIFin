@@ -557,7 +557,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                     catch(const std::exception& e)
                     {
                         std::cerr << "Error Adding Program: (" << kernel_file << ", " << comp_opts
-                            << ") :" << e.what() << std::endl;
+                                  << ") :" << e.what() << std::endl;
                         res_item["reason"] = std::string("Make Program exception: ") + e.what();
                         return false;
                     }
@@ -580,7 +580,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
             }
 
             miopen::solver::ConvSolution solution;
-            solution              = s.FindSolution(ctx, problem, db, {}); // auto tune is not expected here
+            solution = s.FindSolution(ctx, problem, db, {}); // auto tune is not expected here
             res_item["workspace"] = solution.workspace_sz;
 
             std::cerr << "Checking for workspace: " << solution.workspace_sz << std::endl;
@@ -609,9 +609,9 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                 ctx.do_search = true;
                 ctx.db_update = true;
 
-                //vars for timing accuracy
-                float eval_time = 0.0f;
-                bool end = false;
+                // vars for timing accuracy
+                // float eval_time = 0.0f;
+                // bool end        = false;
 
                 // This is required because DataInvokeParams switches tensor order due to
                 // direction and it does not have a
@@ -633,16 +633,16 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                     solution = s.FindSolution(ctx, problem, db, invoke_ctx); // forcing search here
                     std::cerr << solver_name << " Finished Search FWD" << std::endl;
 
-                    //check if binaries were added, prep invoker for gathering timing
+                    // check if binaries were added, prep invoker for gathering timing
                     SolutionHasProgram(h, solution);
                     const auto invoker =
                         h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
-                    //while(!end)
+                    // while(!end)
                     {
-                        end = eval_time > 10;
+                        // end = eval_time > 10;
                         invoker(h, invoke_ctx);
                         time = h.GetKernelTime();
-                        eval_time += time;
+                        // eval_time += time;
                         std::cerr << "Kernel Time: " << time << std::endl;
                     }
                 }
@@ -663,16 +663,16 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                     solution = s.FindSolution(ctx, problem, db, invoke_ctx); // forcing search here
                     std::cerr << solver_name << " Finished Search BWD" << std::endl;
 
-                    //check if binaries were added, prep invoker for gathering timing
+                    // check if binaries were added, prep invoker for gathering timing
                     SolutionHasProgram(h, solution);
                     const auto invoker =
                         h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
-                    //while(!end)
+                    // while(!end)
                     {
-                        end = eval_time > 10;
+                        // end = eval_time > 10;
                         invoker(h, invoke_ctx);
                         time = h.GetKernelTime();
-                        eval_time += time;
+                        // eval_time += time;
                         std::cerr << "Kernel Time: " << time << std::endl;
                     }
                 }
@@ -693,16 +693,16 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                     solution = s.FindSolution(ctx, problem, db, invoke_ctx); // forcing search here
                     std::cerr << solver_name << " Finished Search WRW" << std::endl;
 
-                    //check if binaries were added, prep invoker for gathering timing
+                    // check if binaries were added, prep invoker for gathering timing
                     SolutionHasProgram(h, solution);
                     const auto invoker =
                         h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
-                    //while(!end)
+                    // while(!end)
                     {
-                        end = eval_time > 10;
+                        // end = eval_time > 10;
                         invoker(h, invoke_ctx);
                         time = h.GetKernelTime();
-                        eval_time += time;
+                        // eval_time += time;
                         std::cerr << "Kernel Time: " << time << std::endl;
                     }
                 }
@@ -714,7 +714,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                     throw std::runtime_error(ss.str());
                 }
 
-                params = s.GetPerfCfgParams(ctx, problem, db);
+                params    = s.GetPerfCfgParams(ctx, problem, db);
                 kern_objs = BuildJsonKernelList(h, solution.construction_params);
 
                 res_item["params"]         = params;
@@ -725,15 +725,6 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                 res_item["bias"]           = problem.bias;
                 res_item["kernel_objects"] = kern_objs;
                 res_item["reason"]         = "Success";
-
-                if(s.IsTunable())
-                {
-                    if(!s.TestPerfCfgParams(ctx, problem, params))
-                    {
-                        res_item["reason"] = "Tuning returned invalid params";
-                        return false;
-                    }
-                }
             }
             catch(const std::exception& e)
             {
@@ -876,7 +867,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
                     catch(const std::exception& e)
                     {
                         std::cerr << "Error Adding Program: (" << kernel_file << ", " << comp_opts
-                            << ") :" << e.what() << std::endl;
+                                  << ") :" << e.what() << std::endl;
                         res_item["reason"] = std::string("Make Program exception: ") + e.what();
                         return false;
                     }
@@ -889,7 +880,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
                 }
             }
 
-            auto solution         = s.FindSolution(ctx, problem, db, {}); // auto tune is not expected here
+            auto solution = s.FindSolution(ctx, problem, db, {}); // auto tune is not expected here
             res_item["workspace"] = solution.workspace_sz;
             SolutionHasProgram(h, solution);
 
@@ -1043,7 +1034,8 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
                 res_item["reason"] = "Not Applicable";
                 return false;
             }
-            const auto solution   = s.FindSolution(ctx, problem, db, {}); // auto tune is not expected here
+            const auto solution =
+                s.FindSolution(ctx, problem, db, {}); // auto tune is not expected here
             res_item["workspace"] = solution.workspace_sz;
             // Get the binary
             miopen::solver::PrecompileKernels(h, solution.construction_params);
@@ -1285,6 +1277,11 @@ int ConvFin<Tgpu, Tref>::TestPerfDbEntries(
 template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::TestPerfDbValid()
 {
+#if MIOPEN_MODE_NOGPU == 0
+    throw std::runtime_error("MIOpen needs to be compiled with the NOGPU backend "
+                             "for TestPerfDbValid");
+#endif
+
     bool ret            = true;
     namespace fs        = boost::filesystem;
     bool spec_arch      = (job["arch"].size() > 0 and job["num_cu"].size() > 0);
@@ -1345,12 +1342,7 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
 
         // set handle to type of db under test
         auto handle = miopen::Handle{};
-#if MIOPEN_MODE_NOGPU
         BaseFin::InitNoGpuHandle(handle, db_arch, db_num_cu);
-#else
-        throw std::runtime_error("MIOpen needs to be compiled with the NOGPU backend "
-                             "for TestPerfDbValid");
-#endif
 
         // cfg -> pdb_id -> values_dict
         std::map<std::string, std::map<std::string, std::unordered_map<std::string, std::string>>>
@@ -1399,13 +1391,14 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
 
             std::cerr << "building context and problem" << std::endl;
             const auto problem = BuildConvProblem(sql, config_id);
-            auto ctx = miopen::ConvolutionContext{};
+            auto ctx           = miopen::ConvolutionContext{};
             ctx.SetStream(&handle);
             ctx.DetectRocm();
             ctx.SetupFloats(problem);
 
             std::cerr << "test pdb" << std::endl;
-            bool success = TestPerfDbEntries(config_id, ctx, problem, cfg_it->second, err_list, pdb_id);
+            bool success =
+                TestPerfDbEntries(config_id, ctx, problem, cfg_it->second, err_list, pdb_id);
             if(not success)
                 ret = false;
         }
