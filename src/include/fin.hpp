@@ -45,6 +45,8 @@
 #include <miopen/md5.hpp>
 #include <miopen/bz2.hpp>
 #include <miopen/binary_cache.hpp>
+#include <miopen/conv/data_invoke_params.hpp>
+#include <miopen/conv/wrw_invoke_params.hpp>
 #include <miopen/load_file.hpp>
 #include <numeric>
 #include <vector>
@@ -62,6 +64,8 @@ using json = nlohmann::json;
 #endif
 
 namespace fin {
+
+const int INVOKE_LIMIT = 4;
 
 class BaseFin
 {
@@ -222,6 +226,38 @@ class BaseFin
 
             kern.kernel_file += ".o";
         }
+    }
+
+    float BenchmarkInvoker(const miopen::Invoker &invoker, const miopen::Handle &h, const miopen::conv::DataInvokeParams &invoke_ctx)
+    {
+        float kernel_time = 0;
+        //warmup run
+        invoker(h, invoke_ctx);
+        for(auto idx = 0; idx < INVOKE_LIMIT; idx++)
+        {
+            invoker(h, invoke_ctx);
+            kernel_time += h.GetKernelTime();
+            std::cerr << "kernel_time : " << h.GetKernelTime() << std::endl;
+        }
+        kernel_time /= INVOKE_LIMIT;
+        std::cerr << "kernel_time avg : " << kernel_time << std::endl;
+        return kernel_time;
+    }
+
+    float BenchmarkInvoker(const miopen::Invoker &invoker, const miopen::Handle &h, const miopen::conv::WrWInvokeParams &invoke_ctx)
+    {
+        float kernel_time = 0;
+        //warmup run
+        invoker(h, invoke_ctx);
+        for(auto idx = 0; idx < INVOKE_LIMIT; idx++)
+        {
+            invoker(h, invoke_ctx);
+            kernel_time += h.GetKernelTime();
+            std::cerr << "kernel_time : " << h.GetKernelTime() << std::endl;
+        }
+        kernel_time /= INVOKE_LIMIT;
+        std::cerr << "kernel_time avg : " << kernel_time << std::endl;
+        return kernel_time;
     }
 
     protected:
