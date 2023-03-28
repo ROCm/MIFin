@@ -228,10 +228,12 @@ class BaseFin
         }
     }
 
-    float BenchmarkInvoker(const miopen::Invoker &invoker, const miopen::Handle &h, const miopen::conv::DataInvokeParams &invoke_ctx)
+    float BenchmarkInvoker(const miopen::Invoker& invoker,
+                           const miopen::Handle& h,
+                           const miopen::conv::DataInvokeParams& invoke_ctx)
     {
         float kernel_time = 0;
-        //warmup run
+        // warmup run
         invoker(h, invoke_ctx);
         for(auto idx = 0; idx < INVOKE_LIMIT; idx++)
         {
@@ -244,10 +246,12 @@ class BaseFin
         return kernel_time;
     }
 
-    float BenchmarkInvoker(const miopen::Invoker &invoker, const miopen::Handle &h, const miopen::conv::WrWInvokeParams &invoke_ctx)
+    float BenchmarkInvoker(const miopen::Invoker& invoker,
+                           const miopen::Handle& h,
+                           const miopen::conv::WrWInvokeParams& invoke_ctx)
     {
         float kernel_time = 0;
-        //warmup run
+        // warmup run
         invoker(h, invoke_ctx);
         for(auto idx = 0; idx < INVOKE_LIMIT; idx++)
         {

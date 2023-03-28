@@ -73,7 +73,7 @@
 
 namespace fin {
 
-using json             = nlohmann::json;
+using json = nlohmann::json;
 // TODO: Create a config class to encapsulate config
 // related code, such as checking direction etc
 template <typename Tgpu, typename Tcpu>
