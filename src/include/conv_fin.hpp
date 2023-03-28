@@ -608,8 +608,8 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                 ctx.db_update = true;
 
                 // vars for timing accuracy
-                float eval_time = 0.0f;
-                bool end        = false;
+                // float eval_time = 0.0f;
+                // bool end        = false;
 
                 // This is required because DataInvokeParams switches tensor order due to
                 // direction and it does not have a
@@ -637,10 +637,10 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                         h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
                     // while(!end)
                     {
-                        end = eval_time > 10;
+                        // end = eval_time > 10;
                         invoker(h, invoke_ctx);
                         time = h.GetKernelTime();
-                        eval_time += time;
+                        // eval_time += time;
                         std::cerr << "Kernel Time: " << time << std::endl;
                     }
                 }
@@ -667,10 +667,10 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                         h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
                     // while(!end)
                     {
-                        end = eval_time > 10;
+                        // end = eval_time > 10;
                         invoker(h, invoke_ctx);
                         time = h.GetKernelTime();
-                        eval_time += time;
+                        // eval_time += time;
                         std::cerr << "Kernel Time: " << time << std::endl;
                     }
                 }
@@ -697,10 +697,10 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                         h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
                     // while(!end)
                     {
-                        end = eval_time > 10;
+                        // end = eval_time > 10;
                         invoker(h, invoke_ctx);
                         time = h.GetKernelTime();
-                        eval_time += time;
+                        // eval_time += time;
                         std::cerr << "Kernel Time: " << time << std::endl;
                     }
                 }
@@ -723,15 +723,6 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                 res_item["bias"]           = problem.bias;
                 res_item["kernel_objects"] = kern_objs;
                 res_item["reason"]         = "Success";
-
-                if(s.IsTunable())
-                {
-                    if(!s.TestPerfCfgParams(ctx, problem, params))
-                    {
-                        res_item["reason"] = "Tuning returned invalid params";
-                        return false;
-                    }
-                }
             }
             catch(const std::exception& e)
             {
