@@ -32,6 +32,7 @@
 
 #include <gpu_mem.hpp>
 #include <miopen/tensor.hpp>
+#include <miopen/tensor_layout.hpp>
 
 namespace fin {
 
@@ -80,6 +81,87 @@ inline miopenTensorLayout_t GetMemLayout(const std::string& s)
         return miopenTensorLayout_t::miopenTensorNDHWC;
 
     throw std::runtime_error("Unknown memory layout : " + s);
+}
+
+inline void LengthReorder(std::vector<int>& lens, const std::initializer_list<int>& indices)
+{
+    std::vector<int> out_lens;
+    out_lens.reserve(indices.size());
+    for(int index : indices)
+    {
+        assert(0 <= index && index < lens.size());
+        out_lens.push_back(std::move(lens[index]));
+    }
+    lens = std::move(out_lens);
+}
+
+inline int SetTensorNdVector(miopenTensorDescriptor_t t,
+                             std::vector<int>& len,
+                             miopenTensorLayout_t layout,
+                             miopenDataType_t data_type = miopenFloat)
+{
+    if(layout == miopenTensorNCHWc4 || layout == miopenTensorNCHWc8)
+    {
+        // Do nothing, MIOpen implicit logic that lens are in NCHW order.
+    }
+    else if(layout == miopenTensorCHWNc4 || layout == miopenTensorCHWNc8)
+    {
+        LengthReorder(len, {1, 2, 3, 0});
+    }
+    else
+    {
+        MIOPEN_THROW("We only support NCHWc4, NCHWc8, CHWNc4, CHWNc8 vectorized tensor layout.");
+        return -1;
+    }
+    return miopenSetNdTensorDescriptorWithLayout(t, data_type, layout, len.data(), len.size());
+}
+
+inline int SetTensorNd(miopenTensorDescriptor_t t,
+                       std::vector<int>& len,
+                       miopenDataType_t data_type = miopenFloat)
+{
+    return miopenSetTensorDescriptor(t, data_type, len.size(), len.data(), nullptr);
+}
+
+inline int SetTensorNd(miopenTensorDescriptor_t t,
+                       std::vector<int>& len,
+                       std::vector<int>& strides,
+                       miopenDataType_t data_type = miopenFloat)
+{
+    return miopenSetTensorDescriptor(t, data_type, len.size(), len.data(), strides.data());
+}
+
+inline int SetTensorNd(miopenTensorDescriptor_t t,
+                       std::vector<int>& len,
+                       const std::string& layout,
+                       miopenDataType_t data_type = miopenFloat)
+{
+    if(layout.empty())
+    {
+        return SetTensorNd(t, len, data_type);
+    }
+
+    if(layout.size() != len.size() && layout.find("c") == std::string::npos)
+    {
+        MIOPEN_THROW("unmatched layout and dimension size");
+    }
+
+    if(layout.find("c") != std::string::npos)
+    {
+        return SetTensorNdVector(t, len, GetMemLayout(layout), data_type);
+    }
+
+    // Dimension lengths vector 'len' comes with a default layout.
+    std::string len_layout = miopen::tensor_layout_get_default(layout.size());
+    if(len_layout.empty())
+    {
+        return SetTensorNd(t, len, data_type);
+    }
+
+    std::vector<int> strides;
+    miopen::tensor_layout_to_strides(len, len_layout, layout, strides);
+
+    return SetTensorNd(t, len, strides, data_type);
 }
 
 template <typename Tgpu, typename Tcpu>
