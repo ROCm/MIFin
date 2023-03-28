@@ -110,8 +110,8 @@ class ConvFin : public BaseFin
     std::vector<int> GetBiasTensorLengths();
     int SetConvDescriptor();
 
-    miopen::ConvolutionContext GetCmdConvContext(json _command);
-    miopen::ConvolutionContext BuildContext(miopen::SQLite& sql, std::string config_id);
+    miopen::ProblemDescription GetCmdConvProblem(json _command);
+    miopen::ProblemDescription BuildConvProblem(miopen::SQLite& sql, std::string config_id);
 
     std::vector<size_t> GetOutputTensorLengths() const;
     miopenDataType_t GetOutputType() const
@@ -134,6 +134,7 @@ class ConvFin : public BaseFin
     int TestPerfDbEntries(
         const std::string config_id,
         const miopen::ConvolutionContext& ctx,
+        const miopen::ProblemDescription& problem,
         const std::map<std::string, std::unordered_map<std::string, std::string>>& perf_ids,
         std::vector<std::map<std::string, std::string>>& err_list,
         std::vector<std::string>& pdb_id);
@@ -195,7 +196,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
         inputTensor.desc, weightTensor.desc, outputTensor.desc, convDesc, conv_dir);
     GetHandle().EnableProfiling(true);
     // cppcheck-suppress unreadVariable
-    auto ctx = miopen::ConvolutionContext{problem};
+    auto ctx = miopen::ConvolutionContext{};
     // cppcheck-suppress unreadVariable
     auto handle = miopen::Handle{};
 #if MIOPEN_MODE_NOGPU
@@ -206,10 +207,10 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
 #endif
     ctx.SetStream(&handle);
     ctx.DetectRocm();
-    ctx.SetupFloats();
+    ctx.SetupFloats(problem);
 
-    const auto network_config   = ctx.problem.BuildConfKey();
-    const bool is_winograd_only = convDesc.IsWinograd3x3SupportedAndFast(ctx);
+    const auto network_config   = problem.BuildConfKey();
+    const bool is_winograd_only = convDesc.IsWinograd3x3SupportedAndFast(ctx, problem);
     output["is_winograd_only"]  = is_winograd_only;
     output["network_config"]    = network_config;
     std::ostringstream ss;
@@ -256,7 +257,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
                 std::cerr << "Skipping invalid solver: " << solver_id.ToString() << std::endl;
                 return false;
             }
-            if(!s.IsApplicable(ctx))
+            if(!s.IsApplicable(ctx, problem))
             {
                 res_item["reason"] = "Not Applicable";
                 std::cerr << "Skipping inapplicable solver: " << solver_id.ToString() << std::endl;
@@ -271,7 +272,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
             {
                 try
                 {
-                    all_solutions = s.GetAllSolutions(ctx);
+                    all_solutions = s.GetAllSolutions(ctx, problem);
                 }
                 catch(const std::exception& e)
                 {
@@ -281,7 +282,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
                 }
             }
             else
-                all_solutions.push_back(s.FindSolution(ctx, db, {}));
+                all_solutions.push_back(s.FindSolution(ctx, problem, db, {}));
 
             // PrecompileKernels call saves to binary_cache,
             // this needs to be escaped if KERN_CACHE is not on.
@@ -325,7 +326,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
         inputTensor.desc, weightTensor.desc, outputTensor.desc, convDesc, conv_dir);
     GetHandle().EnableProfiling(true);
     // cppcheck-suppress unreadVariable
-    auto ctx = miopen::ConvolutionContext{problem};
+    auto ctx = miopen::ConvolutionContext{};
     // cppcheck-suppress unreadVariable
     auto handle = miopen::Handle{};
 #if MIOPEN_MODE_NOGPU
@@ -336,10 +337,10 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
 #endif
     ctx.SetStream(&handle);
     ctx.DetectRocm();
-    ctx.SetupFloats();
+    ctx.SetupFloats(problem);
 
-    const auto network_config   = ctx.problem.BuildConfKey();
-    const bool is_winograd_only = convDesc.IsWinograd3x3SupportedAndFast(ctx);
+    const auto network_config   = problem.BuildConfKey();
+    const bool is_winograd_only = convDesc.IsWinograd3x3SupportedAndFast(ctx, problem);
     output["is_winograd_only"]  = is_winograd_only;
     output["network_config"]    = network_config;
     std::ostringstream ss;
@@ -390,7 +391,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
                 std::cerr << "Skipping invalid solver: " << solver_id.ToString() << std::endl;
                 return false;
             }
-            if(!s.IsApplicable(ctx))
+            if(!s.IsApplicable(ctx, problem))
             {
                 res_item["reason"] = "Not Applicable";
                 std::cerr << "Skipping inapplicable solver: " << solver_id.ToString() << std::endl;
@@ -403,7 +404,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
                 return false;
             }
 
-            res_item["params"]  = s.GetPerfCfgParams(ctx, db);
+            res_item["params"]  = s.GetPerfCfgParams(ctx, problem, db);
             res_item["tunable"] = false;
             if(s.IsTunable())
                 res_item["tunable"] = true;
@@ -411,7 +412,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
             miopen::solver::ConvSolution solution;
             try
             {
-                solution = s.FindSolution(ctx, db, {}); // auto tune is not expected here
+                solution = s.FindSolution(ctx, problem, db, {}); // auto tune is not expected here
             }
             catch(const std::exception& e)
             {
@@ -453,14 +454,14 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
     const miopen::ProblemDescription problem(
         inputTensor.desc, weightTensor.desc, outputTensor.desc, convDesc, conv_dir);
     GetHandle().EnableProfiling(true);
-    auto ctx = miopen::ConvolutionContext{problem};
+    auto ctx = miopen::ConvolutionContext{};
     auto& h  = GetHandle();
     ctx.SetStream(&(h));
     ctx.DetectRocm();
-    ctx.SetupFloats();
+    ctx.SetupFloats(problem);
 
-    const auto network_config   = ctx.problem.BuildConfKey();
-    const bool is_winograd_only = convDesc.IsWinograd3x3SupportedAndFast(ctx);
+    const auto network_config   = problem.BuildConfKey();
+    const bool is_winograd_only = convDesc.IsWinograd3x3SupportedAndFast(ctx, problem);
     output["is_winograd_only"]  = is_winograd_only;
     output["network_config"]    = network_config;
     std::ostringstream ss;
@@ -512,7 +513,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                 std::cerr << "Skipping invalid solver: " << solver_id.ToString() << std::endl;
                 return false;
             }
-            if(!s.IsApplicable(ctx))
+            if(!s.IsApplicable(ctx, problem))
             {
                 res_item["reason"] = "Not Applicable";
                 std::cerr << "Solver inapplicable: " << solver_name << std::endl;
@@ -579,7 +580,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
             }
 
             miopen::solver::ConvSolution solution;
-            solution              = s.FindSolution(ctx, db, {}); // auto tune is not expected here
+            solution              = s.FindSolution(ctx, problem, db, {}); // auto tune is not expected here
             res_item["workspace"] = solution.workspace_sz;
 
             std::cerr << "Checking for workspace: " << solution.workspace_sz << std::endl;
@@ -629,7 +630,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                                                        convDesc.attribute.gfx90aFp16alt.GetFwd()};
 
                     std::cerr << solver_name << " Begin Search FWD" << std::endl;
-                    solution = s.FindSolution(ctx, db, invoke_ctx); // forcing search here
+                    solution = s.FindSolution(ctx, problem, db, invoke_ctx); // forcing search here
                     std::cerr << solver_name << " Finished Search FWD" << std::endl;
 
                     //check if binaries were added, prep invoker for gathering timing
@@ -659,7 +660,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                                                        convDesc.attribute.gfx90aFp16alt.GetBwd()};
 
                     std::cerr << solver_name << " Begin Search BWD" << std::endl;
-                    solution = s.FindSolution(ctx, db, invoke_ctx); // forcing search here
+                    solution = s.FindSolution(ctx, problem, db, invoke_ctx); // forcing search here
                     std::cerr << solver_name << " Finished Search BWD" << std::endl;
 
                     //check if binaries were added, prep invoker for gathering timing
@@ -689,7 +690,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                                                       convDesc.attribute.gfx90aFp16alt.GetWrW()};
 
                     std::cerr << solver_name << " Begin Search WRW" << std::endl;
-                    solution = s.FindSolution(ctx, db, invoke_ctx); // forcing search here
+                    solution = s.FindSolution(ctx, problem, db, invoke_ctx); // forcing search here
                     std::cerr << solver_name << " Finished Search WRW" << std::endl;
 
                     //check if binaries were added, prep invoker for gathering timing
@@ -713,21 +714,21 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                     throw std::runtime_error(ss.str());
                 }
 
-                params = s.GetPerfCfgParams(ctx, db);
+                params = s.GetPerfCfgParams(ctx, problem, db);
                 kern_objs = BuildJsonKernelList(h, solution.construction_params);
 
                 res_item["params"]         = params;
                 res_item["time"]           = time;
-                res_item["layout"]         = ctx.problem.in_layout;
-                res_item["data_type"]      = ctx.problem.in_data_type;
+                res_item["layout"]         = problem.in_layout;
+                res_item["data_type"]      = problem.in_data_type;
                 res_item["direction"]      = conv_dir;
-                res_item["bias"]           = ctx.problem.bias;
+                res_item["bias"]           = problem.bias;
                 res_item["kernel_objects"] = kern_objs;
                 res_item["reason"]         = "Success";
 
                 if(s.IsTunable())
                 {
-                    if(!s.TestPerfCfgParams(ctx, params))
+                    if(!s.TestPerfCfgParams(ctx, problem, params))
                     {
                         res_item["reason"] = "Tuning returned invalid params";
                         return false;
@@ -772,14 +773,14 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
     const miopen::ProblemDescription problem(
         inputTensor.desc, weightTensor.desc, outputTensor.desc, convDesc, conv_dir);
     GetHandle().EnableProfiling(true);
-    auto ctx = miopen::ConvolutionContext{problem};
+    auto ctx = miopen::ConvolutionContext{};
     auto& h  = GetHandle();
     ctx.SetStream(&(h));
     ctx.DetectRocm();
-    ctx.SetupFloats();
+    ctx.SetupFloats(problem);
 
-    const auto network_config   = ctx.problem.BuildConfKey();
-    const bool is_winograd_only = convDesc.IsWinograd3x3SupportedAndFast(ctx);
+    const auto network_config   = problem.BuildConfKey();
+    const bool is_winograd_only = convDesc.IsWinograd3x3SupportedAndFast(ctx, problem);
     output["is_winograd_only"]  = is_winograd_only;
     output["network_config"]    = network_config;
     std::ostringstream ss;
@@ -825,7 +826,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
                 std::cerr << "Skipping invalid solver: " << solver_id.ToString() << std::endl;
                 return false;
             }
-            if(!s.IsApplicable(ctx))
+            if(!s.IsApplicable(ctx, problem))
             {
                 res_item["reason"] = "Not Applicable";
                 std::cerr << "Solver inapplicable: " << solver_name << std::endl;
@@ -840,7 +841,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
                 return false;
             }
 
-            res_item["params"]  = s.GetPerfCfgParams(ctx, db);
+            res_item["params"]  = s.GetPerfCfgParams(ctx, problem, db);
             res_item["tunable"] = false;
             if(s.IsTunable())
                 res_item["tunable"] = true;
@@ -888,7 +889,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
                 }
             }
 
-            auto solution         = s.FindSolution(ctx, db, {}); // auto tune is not expected here
+            auto solution         = s.FindSolution(ctx, problem, db, {}); // auto tune is not expected here
             res_item["workspace"] = solution.workspace_sz;
             SolutionHasProgram(h, solution);
 
@@ -1001,14 +1002,14 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
     const miopen::ProblemDescription problem(
         inputTensor.desc, weightTensor.desc, outputTensor.desc, convDesc, conv_dir);
     GetHandle().EnableProfiling(true);
-    auto ctx = miopen::ConvolutionContext{problem};
+    auto ctx = miopen::ConvolutionContext{};
     auto& h  = GetHandle();
     ctx.SetStream(&(h));
     ctx.DetectRocm();
-    ctx.SetupFloats();
+    ctx.SetupFloats(problem);
 
-    const auto network_config   = ctx.problem.BuildConfKey();
-    const bool is_winograd_only = convDesc.IsWinograd3x3SupportedAndFast(ctx);
+    const auto network_config   = problem.BuildConfKey();
+    const bool is_winograd_only = convDesc.IsWinograd3x3SupportedAndFast(ctx, problem);
     output["is_winograd_only"]  = is_winograd_only;
     output["network_config"]    = network_config;
     std::ostringstream ss;
@@ -1037,12 +1038,12 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
                 std::cerr << "Skipping invalid solver: " << solver_id.ToString() << std::endl;
                 return false;
             }
-            if(!s.IsApplicable(ctx))
+            if(!s.IsApplicable(ctx, problem))
             {
                 res_item["reason"] = "Not Applicable";
                 return false;
             }
-            const auto solution   = s.FindSolution(ctx, db, {}); // auto tune is not expected here
+            const auto solution   = s.FindSolution(ctx, problem, db, {}); // auto tune is not expected here
             res_item["workspace"] = solution.workspace_sz;
             // Get the binary
             miopen::solver::PrecompileKernels(h, solution.construction_params);
@@ -1182,7 +1183,7 @@ int ConvFin<Tgpu, Tref>::TestApplicability()
     const miopen::ProblemDescription problem(
         inputTensor.desc, weightTensor.desc, outputTensor.desc, convDesc, conv_dir);
     // cppcheck-suppress unreadVariable
-    auto ctx = miopen::ConvolutionContext{problem};
+    auto ctx = miopen::ConvolutionContext{};
     // cppcheck-suppress unreadVariable
     auto handle = miopen::Handle{};
 #if MIOPEN_MODE_NOGPU
@@ -1194,8 +1195,8 @@ int ConvFin<Tgpu, Tref>::TestApplicability()
 
     ctx.SetStream(&handle);
     ctx.DetectRocm();
-    ctx.SetupFloats();
-    const auto network_config = ctx.problem.BuildConfKey();
+    ctx.SetupFloats(problem);
+    const auto network_config = problem.BuildConfKey();
     std::vector<std::string> app_solvers;
     for(const auto& id :
         miopen::solver::GetSolversByPrimitive(miopen::solver::Primitive::Convolution))
@@ -1206,7 +1207,7 @@ int ConvFin<Tgpu, Tref>::TestApplicability()
         {
             try
             {
-                if(solver.IsApplicable(ctx))
+                if(solver.IsApplicable(ctx, problem))
                     app_solvers.push_back(id.ToString());
             }
             catch(...)
@@ -1230,6 +1231,7 @@ template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::TestPerfDbEntries(
     const std::string config_id,
     const miopen::ConvolutionContext& ctx,
+    const miopen::ProblemDescription& problem,
     const std::map<std::string, std::unordered_map<std::string, std::string>>& perf_ids,
     std::vector<std::map<std::string, std::string>>& err_list,
     std::vector<std::string>& pdb_id)
@@ -1247,14 +1249,14 @@ int ConvFin<Tgpu, Tref>::TestPerfDbEntries(
         auto solver = slv_id.GetSolver();
         std::stringstream stat_str;
         stat_str << "config_id: " << config_id << ", solver_nm " << solver_nm
-                 << ", key: " << ctx.problem;
+                 << ", key: " << problem;
 
         // check if valid pdb parameters
         std::map<std::string, std::string> err;
         bool success = false;
         try
         {
-            success = solver.TestPerfCfgParams(ctx, params);
+            success = solver.TestPerfCfgParams(ctx, problem, params);
         }
         catch(const std::exception& e)
         {
@@ -1394,16 +1396,16 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
         for(auto cfg_it = perfdb_entries.begin(); cfg_it != perfdb_entries.end(); cfg_it++)
         {
             auto config_id = cfg_it->first;
-            miopen::ConvolutionContext ctx;
 
-            std::cerr << "building context" << std::endl;
-            ctx = BuildContext(sql, config_id);
+            std::cerr << "building context and problem" << std::endl;
+            const auto problem = BuildConvProblem(sql, config_id);
+            auto ctx = miopen::ConvolutionContext{};
             ctx.SetStream(&handle);
             ctx.DetectRocm();
-            ctx.SetupFloats();
+            ctx.SetupFloats(problem);
 
             std::cerr << "test pdb" << std::endl;
-            bool success = TestPerfDbEntries(config_id, ctx, cfg_it->second, err_list, pdb_id);
+            bool success = TestPerfDbEntries(config_id, ctx, problem, cfg_it->second, err_list, pdb_id);
             if(not success)
                 ret = false;
         }
@@ -1484,13 +1486,13 @@ int ConvFin<Tgpu, Tref>::SearchPreCompiledKernels()
         const auto conv_dir = GetDirection();
         const miopen::ProblemDescription problem(
             inputTensor.desc, weightTensor.desc, outputTensor.desc, convDesc, conv_dir);
-        auto ctx = miopen::ConvolutionContext{problem};
+        auto ctx = miopen::ConvolutionContext{};
 
         ctx.SetStream(&handle);
         ctx.DetectRocm();
-        ctx.SetupFloats();
+        ctx.SetupFloats(problem);
 
-        // const auto network_config = ctx.problem.BuildConfKey();
+        // const auto network_config = problem.BuildConfKey();
         std::ostringstream ss;
         problem.Serialize(ss);
 
@@ -1514,7 +1516,7 @@ int ConvFin<Tgpu, Tref>::SearchPreCompiledKernels()
                     std::cerr << "Skipping invalid solver: " << solver_id.ToString() << std::endl;
                     return false;
                 }
-                if(!s.IsApplicable(ctx))
+                if(!s.IsApplicable(ctx, problem))
                 {
                     res_item["reason"] = "Not Applicable";
                     return false;
@@ -1526,7 +1528,7 @@ int ConvFin<Tgpu, Tref>::SearchPreCompiledKernels()
                 ctx.disable_perfdb_access = false;
 
                 // find solution for solver id.
-                const auto default_solution = s.FindSolution(ctx, db_obj, {});
+                const auto default_solution = s.FindSolution(ctx, problem, db_obj, {});
 
                 if(default_solution.Succeeded() && default_solution.construction_params.empty())
                 {
@@ -1976,7 +1978,7 @@ int ConvFin<Tgpu, Tref>::SetConvDescriptor()
 }
 
 template <typename Tgpu, typename Tref>
-miopen::ConvolutionContext ConvFin<Tgpu, Tref>::GetCmdConvContext(json _command)
+miopen::ProblemDescription ConvFin<Tgpu, Tref>::GetCmdConvProblem(json _command)
 {
     command         = _command;
     command["bias"] = 0;
@@ -1989,18 +1991,17 @@ miopen::ConvolutionContext ConvFin<Tgpu, Tref>::GetCmdConvContext(json _command)
     // set tensors with command data
     GetandSetData();
 
-    // initialize context
+    // initialize problem
     const auto conv_dir = GetDirection();
-    const miopen::ProblemDescription problem(
+    miopen::ProblemDescription problem(
         inputTensor.desc, weightTensor.desc, outputTensor.desc, convDesc, conv_dir);
-    auto ctx = miopen::ConvolutionContext{problem};
 
-    return ctx;
+    return problem;
 }
 
 template <typename Tgpu, typename Tref>
-miopen::ConvolutionContext ConvFin<Tgpu, Tref>::BuildContext(miopen::SQLite& sql,
-                                                             std::string config_id)
+miopen::ProblemDescription ConvFin<Tgpu, Tref>::BuildConvProblem(miopen::SQLite& sql,
+                                                                 std::string config_id)
 {
     std::ostringstream ss;
     ss << "SELECT in_d, in_h, in_w, fil_d, fil_h, fil_w, pad_d, pad_h, pad_w, "
@@ -2043,29 +2044,29 @@ miopen::ConvolutionContext ConvFin<Tgpu, Tref>::BuildContext(miopen::SQLite& sql
     command["out_layout"] = stmt.ColumnText(16);
     std::string data_type = stmt.ColumnText(17);
 
-    miopen::ConvolutionContext ctx;
+    miopen::ProblemDescription problem;
     if(data_type == "FP32")
     {
-        ctx = fin::ConvFin<float, float>().GetCmdConvContext(command);
+        problem = fin::ConvFin<float, float>().GetCmdConvProblem(command);
     }
     else if(data_type == "FP16")
     {
-        ctx = fin::ConvFin<float16, float>().GetCmdConvContext(command);
+        problem = fin::ConvFin<float16, float>().GetCmdConvProblem(command);
     }
     else if(data_type == "BF16")
     {
-        ctx = fin::ConvFin<bfloat16, float>().GetCmdConvContext(command);
+        problem = fin::ConvFin<bfloat16, float>().GetCmdConvProblem(command);
     }
     else if(data_type == "INT8")
     {
-        ctx = fin::ConvFin<int8_t, float>().GetCmdConvContext(command);
+        problem = fin::ConvFin<int8_t, float>().GetCmdConvProblem(command);
     }
     else
     {
         std::cerr << "other type: " << data_type << std::endl;
     }
 
-    return ctx;
+    return problem;
 }
 
 template <typename Tgpu, typename Tref>
