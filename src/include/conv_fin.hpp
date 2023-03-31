@@ -1359,7 +1359,7 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
                 const auto solver_nm = stmt.ColumnText(1);
                 const auto params    = stmt.ColumnText(2);
                 const auto perf_id   = stmt.ColumnText(3);
-                auto slv_id          = miopen::solver::Id(solver_nm);
+                const auto slv_id    = miopen::solver::Id(solver_nm);
 
                 if(!slv_id.IsValid())
                 {
@@ -1394,8 +1394,8 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
         // iterate through each config
         for(auto cfg_it = perfdb_entries.begin(); cfg_it != perfdb_entries.end(); cfg_it++)
         {
-            auto config_id                 = cfg_it->first;
-            auto perf_ids                  = cfg_it->second;
+            const auto& config_id          = cfg_it->first;
+            const auto& perf_ids           = cfg_it->second;
             miopen::ConvolutionContext ctx = miopen::ConvolutionContext{};
             miopen::ProblemDescription problem;
 
@@ -1410,9 +1410,9 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
 
                 for(auto pdb_it = perf_ids.begin(); pdb_it != perf_ids.end(); pdb_it++)
                 {
-                    auto perf_id   = pdb_it->first;
-                    auto solver_nm = pdb_it->second.find("solver")->second;
-                    auto params    = pdb_it->second.find("params")->second;
+                    const auto& perf_id   = pdb_it->first;
+                    const auto& solver_nm = pdb_it->second.find("solver")->second;
+                    const auto& params    = pdb_it->second.find("params")->second;
 
                     std::map<std::string, std::string> err;
                     err["reason"]    = e.what();
