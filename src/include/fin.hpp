@@ -244,7 +244,7 @@ class BaseFin
             std::cerr << "kernel_time : " << kernel_time << std::endl;
         }
         sort(ktimes.begin(), ktimes.end());
-        kernel_time = ktimes[(ktimes.size()-1)/2];
+        kernel_time = ktimes[(ktimes.size() - 1) / 2];
         std::cerr << "kernel_time median : " << kernel_time << std::endl;
         return kernel_time;
     }
@@ -265,7 +265,7 @@ class BaseFin
             std::cerr << "kernel_time : " << kernel_time << std::endl;
         }
         sort(ktimes.begin(), ktimes.end());
-        kernel_time = ktimes[(ktimes.size()-1)/2];
+        kernel_time = ktimes[(ktimes.size() - 1) / 2];
         std::cerr << "kernel_time median : " << kernel_time << std::endl;
         return kernel_time;
     }

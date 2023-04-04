@@ -689,6 +689,8 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                 res_item["bias"]           = problem.bias;
                 res_item["kernel_objects"] = kern_objs;
                 res_item["reason"]         = "Success";
+                if(kernel_time == 0)
+                    res_item["reason"] = "Invoker returned time = 0";
             }
             catch(const std::exception& e)
             {
@@ -925,6 +927,8 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
 
                 res_item["time"]   = kernel_time;
                 res_item["reason"] = "Success";
+                if(kernel_time == 0)
+                    res_item["reason"] = "Invoker returned time = 0";
             }
             catch(const std::exception& e)
             {
@@ -1105,6 +1109,8 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
 
                 res_item["time"]   = kernel_time;
                 res_item["reason"] = "Success";
+                if(kernel_time == 0)
+                    res_item["reason"] = "Invoker returned time = 0";
             }
             catch(const std::exception& e)
             {
