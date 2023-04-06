@@ -228,35 +228,45 @@ class BaseFin
         }
     }
 
-    float BenchmarkInvoker(const miopen::Invoker &invoker, const miopen::Handle &h, const miopen::conv::DataInvokeParams &invoke_ctx)
+    float BenchmarkInvoker(const miopen::Invoker& invoker,
+                           const miopen::Handle& h,
+                           const miopen::conv::DataInvokeParams& invoke_ctx)
     {
-        float kernel_time = 0;
-        //warmup run
+        float kernel_time;
+        std::vector<float> ktimes;
+        // warmup run
         invoker(h, invoke_ctx);
         for(auto idx = 0; idx < INVOKE_LIMIT; idx++)
         {
             invoker(h, invoke_ctx);
-            kernel_time += h.GetKernelTime();
-            std::cerr << "kernel_time : " << h.GetKernelTime() << std::endl;
+            kernel_time = h.GetKernelTime();
+            ktimes.push_back(kernel_time);
+            std::cerr << "kernel_time : " << kernel_time << std::endl;
         }
-        kernel_time /= INVOKE_LIMIT;
-        std::cerr << "kernel_time avg : " << kernel_time << std::endl;
+        sort(ktimes.begin(), ktimes.end());
+        kernel_time = ktimes[(ktimes.size() - 1) / 2];
+        std::cerr << "kernel_time median : " << kernel_time << std::endl;
         return kernel_time;
     }
 
-    float BenchmarkInvoker(const miopen::Invoker &invoker, const miopen::Handle &h, const miopen::conv::WrWInvokeParams &invoke_ctx)
+    float BenchmarkInvoker(const miopen::Invoker& invoker,
+                           const miopen::Handle& h,
+                           const miopen::conv::WrWInvokeParams& invoke_ctx)
     {
-        float kernel_time = 0;
-        //warmup run
+        float kernel_time;
+        std::vector<float> ktimes;
+        // warmup run
         invoker(h, invoke_ctx);
         for(auto idx = 0; idx < INVOKE_LIMIT; idx++)
         {
             invoker(h, invoke_ctx);
-            kernel_time += h.GetKernelTime();
-            std::cerr << "kernel_time : " << h.GetKernelTime() << std::endl;
+            kernel_time = h.GetKernelTime();
+            ktimes.push_back(kernel_time);
+            std::cerr << "kernel_time : " << kernel_time << std::endl;
         }
-        kernel_time /= INVOKE_LIMIT;
-        std::cerr << "kernel_time avg : " << kernel_time << std::endl;
+        sort(ktimes.begin(), ktimes.end());
+        kernel_time = ktimes[(ktimes.size() - 1) / 2];
+        std::cerr << "kernel_time median : " << kernel_time << std::endl;
         return kernel_time;
     }
 
