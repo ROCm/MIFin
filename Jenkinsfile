@@ -1,15 +1,15 @@
 
 
 def rocmnode(name) {
-    def node_name = 'rocmtest'
+    def node_name = 'tunatest'
     if(name == 'fiji') {
-        node_name = 'rocmtest && fiji';
+        node_name = 'tunatest && fiji';
     } else if(name == 'vega') {
-        node_name = 'rocmtest && vega';
+        node_name = 'tunatest && vega';
     } else if(name == 'vega10') {
-        node_name = 'rocmtest && vega10';
+        node_name = 'tunatest && vega10';
     } else if(name == 'vega20') {
-        node_name = 'rocmtest && vega20';
+        node_name = 'tunatest && vega20';
     } else if(name == 'gfx908') {
         node_name = 'gfx908';
     } else {
@@ -116,7 +116,7 @@ pipeline {
         stage("Static checks"){
             parallel{
                 stage('Clang Format') {
-                    agent{ label rocmnode("rocmtest") }
+                    agent{ label rocmnode("tunatest") }
                     environment{
                         cmd = "cd src; find . -iname \'*.h\' \
                                 -o -iname \'*.hpp\' \
@@ -135,7 +135,7 @@ pipeline {
                 }
 
                 stage('Hip Tidy') {
-                    agent{ label rocmnode("rocmtest") }
+                    agent{ label rocmnode("tunatest") }
                     environment{
                         cmd = "rm -rf build; \
                                 mkdir build; \
@@ -148,7 +148,7 @@ pipeline {
                     }
                 }
                 stage('Build Fin') {
-                    agent{ label rocmnode("rocmtest") }
+                    agent{ label rocmnode("tunatest") }
                     environment{
                         cmd = "rm -rf build; \
                                 mkdir build; \
@@ -161,7 +161,7 @@ pipeline {
                     }
                 }
                 stage('Fin Tests') {
-                    agent{ label rocmnode("rocmtest") }
+                    agent{ label rocmnode("tunatest") }
                     environment{
                         cmd = "rm -rf build; \
                                 mkdir build; \

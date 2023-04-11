@@ -45,6 +45,8 @@
 #include <miopen/md5.hpp>
 #include <miopen/bz2.hpp>
 #include <miopen/binary_cache.hpp>
+#include <miopen/conv/data_invoke_params.hpp>
+#include <miopen/conv/wrw_invoke_params.hpp>
 #include <miopen/load_file.hpp>
 #include <numeric>
 #include <vector>
@@ -62,6 +64,8 @@ using json = nlohmann::json;
 #endif
 
 namespace fin {
+
+const int INVOKE_LIMIT = 4;
 
 class BaseFin
 {
@@ -179,7 +183,7 @@ class BaseFin
                 kernel["blob"]              = "";
             }
             kernel_list.push_back(kernel);
-            //std::cerr << "Successfully added new kernel to json output" << std::endl;
+            // std::cerr << "Successfully added new kernel to json output" << std::endl;
         }
         return kernel_list;
     }
@@ -222,6 +226,48 @@ class BaseFin
 
             kern.kernel_file += ".o";
         }
+    }
+
+    float BenchmarkInvoker(const miopen::Invoker& invoker,
+                           const miopen::Handle& h,
+                           const miopen::conv::DataInvokeParams& invoke_ctx)
+    {
+        float kernel_time;
+        std::vector<float> ktimes;
+        // warmup run
+        invoker(h, invoke_ctx);
+        for(auto idx = 0; idx < INVOKE_LIMIT; idx++)
+        {
+            invoker(h, invoke_ctx);
+            kernel_time = h.GetKernelTime();
+            ktimes.push_back(kernel_time);
+            std::cerr << "kernel_time : " << kernel_time << std::endl;
+        }
+        sort(ktimes.begin(), ktimes.end());
+        kernel_time = ktimes[(ktimes.size() - 1) / 2];
+        std::cerr << "kernel_time median : " << kernel_time << std::endl;
+        return kernel_time;
+    }
+
+    float BenchmarkInvoker(const miopen::Invoker& invoker,
+                           const miopen::Handle& h,
+                           const miopen::conv::WrWInvokeParams& invoke_ctx)
+    {
+        float kernel_time;
+        std::vector<float> ktimes;
+        // warmup run
+        invoker(h, invoke_ctx);
+        for(auto idx = 0; idx < INVOKE_LIMIT; idx++)
+        {
+            invoker(h, invoke_ctx);
+            kernel_time = h.GetKernelTime();
+            ktimes.push_back(kernel_time);
+            std::cerr << "kernel_time : " << kernel_time << std::endl;
+        }
+        sort(ktimes.begin(), ktimes.end());
+        kernel_time = ktimes[(ktimes.size() - 1) / 2];
+        std::cerr << "kernel_time median : " << kernel_time << std::endl;
+        return kernel_time;
     }
 
     protected:

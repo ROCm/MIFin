@@ -38,8 +38,6 @@
 #include <miopen/binary_cache.hpp>
 #include <miopen/bz2.hpp>
 #include <miopen/conv/context.hpp>
-#include <miopen/conv/data_invoke_params.hpp>
-#include <miopen/conv/wrw_invoke_params.hpp>
 #include <miopen/conv_solution.hpp>
 #include <miopen/convolution.hpp>
 #include <miopen/find_db.hpp>
@@ -75,8 +73,7 @@
 
 namespace fin {
 
-const int INVOKE_LIMIT = 2;
-using json             = nlohmann::json;
+using json = nlohmann::json;
 // TODO: Create a config class to encapsulate config
 // related code, such as checking direction etc
 template <typename Tgpu, typename Tcpu>
@@ -517,8 +514,6 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
             {
                 res_item["reason"] = "Not Applicable";
                 std::cerr << "Solver inapplicable: " << solver_name << std::endl;
-                throw std::runtime_error(
-                    "InApplicable solver was sent to fin, check Tuna for errors");
                 return false;
             }
 
@@ -557,7 +552,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                     catch(const std::exception& e)
                     {
                         std::cerr << "Error Adding Program: (" << kernel_file << ", " << comp_opts
-                            << ") :" << e.what() << std::endl;
+                                  << ") :" << e.what() << std::endl;
                         res_item["reason"] = std::string("Make Program exception: ") + e.what();
                         return false;
                     }
@@ -580,7 +575,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
             }
 
             miopen::solver::ConvSolution solution;
-            solution              = s.FindSolution(ctx, problem, db, {}); // auto tune is not expected here
+            solution = s.FindSolution(ctx, problem, db, {}); // auto tune is not expected here
             res_item["workspace"] = solution.workspace_sz;
 
             std::cerr << "Checking for workspace: " << solution.workspace_sz << std::endl;
@@ -602,20 +597,16 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                 return false;
             }
 
-            std::cerr << "Preparing invokers" << std::endl;
             try
             {
-                float time    = 0.0f;
-                ctx.do_search = true;
-                ctx.db_update = true;
-
-                //vars for timing accuracy
-                float eval_time = 0.0f;
-                bool end = false;
+                float kernel_time = -1;
+                ctx.do_search     = true;
+                ctx.db_update     = true;
 
                 // This is required because DataInvokeParams switches tensor order due to
                 // direction and it does not have a
                 // copy constructor or a default constructor
+                std::cerr << "Find Solution" << std::endl;
                 if(conv_dir == miopen::conv::Direction::Forward)
                 {
                     const auto invoke_ctx =
@@ -629,22 +620,13 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                                                        workspace.desc.GetNumBytes(),
                                                        convDesc.attribute.gfx90aFp16alt.GetFwd()};
 
-                    std::cerr << solver_name << " Begin Search FWD" << std::endl;
                     solution = s.FindSolution(ctx, problem, db, invoke_ctx); // forcing search here
-                    std::cerr << solver_name << " Finished Search FWD" << std::endl;
-
-                    //check if binaries were added, prep invoker for gathering timing
+                    // check if binaries were added, prep invoker for gathering timing
                     SolutionHasProgram(h, solution);
+
                     const auto invoker =
                         h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
-                    //while(!end)
-                    {
-                        end = eval_time > 10;
-                        invoker(h, invoke_ctx);
-                        time = h.GetKernelTime();
-                        eval_time += time;
-                        std::cerr << "Kernel Time: " << time << std::endl;
-                    }
+                    kernel_time = BenchmarkInvoker(invoker, h, invoke_ctx);
                 }
                 else if(conv_dir == miopen::conv::Direction::BackwardData)
                 {
@@ -659,22 +641,13 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                                                        workspace.desc.GetNumBytes(),
                                                        convDesc.attribute.gfx90aFp16alt.GetBwd()};
 
-                    std::cerr << solver_name << " Begin Search BWD" << std::endl;
                     solution = s.FindSolution(ctx, problem, db, invoke_ctx); // forcing search here
-                    std::cerr << solver_name << " Finished Search BWD" << std::endl;
-
-                    //check if binaries were added, prep invoker for gathering timing
+                    // check if binaries were added, prep invoker for gathering timing
                     SolutionHasProgram(h, solution);
+
                     const auto invoker =
                         h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
-                    //while(!end)
-                    {
-                        end = eval_time > 10;
-                        invoker(h, invoke_ctx);
-                        time = h.GetKernelTime();
-                        eval_time += time;
-                        std::cerr << "Kernel Time: " << time << std::endl;
-                    }
+                    kernel_time = BenchmarkInvoker(invoker, h, invoke_ctx);
                 }
                 else if(conv_dir == miopen::conv::Direction::BackwardWeights)
                 {
@@ -689,22 +662,13 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                                                       workspace.desc.GetNumBytes(),
                                                       convDesc.attribute.gfx90aFp16alt.GetWrW()};
 
-                    std::cerr << solver_name << " Begin Search WRW" << std::endl;
                     solution = s.FindSolution(ctx, problem, db, invoke_ctx); // forcing search here
-                    std::cerr << solver_name << " Finished Search WRW" << std::endl;
-
-                    //check if binaries were added, prep invoker for gathering timing
+                    // check if binaries were added, prep invoker for gathering timing
                     SolutionHasProgram(h, solution);
+
                     const auto invoker =
                         h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
-                    //while(!end)
-                    {
-                        end = eval_time > 10;
-                        invoker(h, invoke_ctx);
-                        time = h.GetKernelTime();
-                        eval_time += time;
-                        std::cerr << "Kernel Time: " << time << std::endl;
-                    }
+                    kernel_time = BenchmarkInvoker(invoker, h, invoke_ctx);
                 }
                 else
                 {
@@ -714,26 +678,19 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                     throw std::runtime_error(ss.str());
                 }
 
-                params = s.GetPerfCfgParams(ctx, problem, db);
+                params    = s.GetPerfCfgParams(ctx, problem, db);
                 kern_objs = BuildJsonKernelList(h, solution.construction_params);
 
                 res_item["params"]         = params;
-                res_item["time"]           = time;
+                res_item["time"]           = kernel_time;
                 res_item["layout"]         = problem.in_layout;
                 res_item["data_type"]      = problem.in_data_type;
                 res_item["direction"]      = conv_dir;
                 res_item["bias"]           = problem.bias;
                 res_item["kernel_objects"] = kern_objs;
                 res_item["reason"]         = "Success";
-
-                if(s.IsTunable())
-                {
-                    if(!s.TestPerfCfgParams(ctx, problem, params))
-                    {
-                        res_item["reason"] = "Tuning returned invalid params";
-                        return false;
-                    }
-                }
+                if(kernel_time == 0)
+                    res_item["reason"] = "Invoker returned time = 0";
             }
             catch(const std::exception& e)
             {
@@ -830,8 +787,6 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
             {
                 res_item["reason"] = "Not Applicable";
                 std::cerr << "Solver inapplicable: " << solver_name << std::endl;
-                throw std::runtime_error(
-                    "InApplicable solver was sent to fin, check Tuna for errors");
                 return false;
             }
             if(dynamic_only && !s.IsDynamic())
@@ -876,7 +831,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
                     catch(const std::exception& e)
                     {
                         std::cerr << "Error Adding Program: (" << kernel_file << ", " << comp_opts
-                            << ") :" << e.what() << std::endl;
+                                  << ") :" << e.what() << std::endl;
                         res_item["reason"] = std::string("Make Program exception: ") + e.what();
                         return false;
                     }
@@ -889,7 +844,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
                 }
             }
 
-            auto solution         = s.FindSolution(ctx, problem, db, {}); // auto tune is not expected here
+            auto solution = s.FindSolution(ctx, problem, db, {}); // auto tune is not expected here
             res_item["workspace"] = solution.workspace_sz;
             SolutionHasProgram(h, solution);
 
@@ -913,13 +868,16 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
             }
             try
             {
+                float kernel_time = -1;
+
                 std::cerr << "Preparing invokers" << std::endl;
                 const auto invoker =
                     h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
+                std::cerr << "Finished preparing invokers" << std::endl;
+
                 // This is required because DataInvokeParams switches tensor order due to
                 // direction and it does not have a
                 // copy constructor or a default constructor
-                std::cerr << "Finished preparing invokers" << std::endl;
                 if(conv_dir == miopen::conv::Direction::Forward)
                 {
                     const auto invoke_ctx =
@@ -932,8 +890,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
                                                        workspace.gpuData.buf.get(),
                                                        workspace.desc.GetNumBytes(),
                                                        convDesc.attribute.gfx90aFp16alt.GetFwd()};
-                    for(auto idx = 0; idx < INVOKE_LIMIT; idx++)
-                        invoker(h, invoke_ctx);
+                    kernel_time = BenchmarkInvoker(invoker, h, invoke_ctx);
                 }
                 else if(conv_dir == miopen::conv::Direction::BackwardData)
                 {
@@ -947,8 +904,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
                                                        workspace.gpuData.buf.get(),
                                                        workspace.desc.GetNumBytes(),
                                                        convDesc.attribute.gfx90aFp16alt.GetBwd()};
-                    for(auto idx = 0; idx < INVOKE_LIMIT; idx++)
-                        invoker(h, invoke_ctx);
+                    kernel_time = BenchmarkInvoker(invoker, h, invoke_ctx);
                 }
                 else if(conv_dir == miopen::conv::Direction::BackwardWeights)
                 {
@@ -962,22 +918,23 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
                                                       workspace.gpuData.buf.get(),
                                                       workspace.desc.GetNumBytes(),
                                                       convDesc.attribute.gfx90aFp16alt.GetWrW()};
-                    for(auto idx = 0; idx < INVOKE_LIMIT; idx++)
-                        invoker(h, invoke_ctx);
+                    kernel_time = BenchmarkInvoker(invoker, h, invoke_ctx);
                 }
                 else
                 {
                     throw std::runtime_error("Invalid Direction");
                 }
+
+                res_item["time"]   = kernel_time;
+                res_item["reason"] = "Success";
+                if(kernel_time == 0)
+                    res_item["reason"] = "Invoker returned time = 0";
             }
             catch(const std::exception& e)
             {
                 res_item["reason"] = std::string("Invoker exeception: ") + e.what();
                 return false;
             }
-            const auto time    = h.GetKernelTime();
-            res_item["time"]   = time;
-            res_item["reason"] = "Success";
 
             return true;
         };
@@ -1043,7 +1000,8 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
                 res_item["reason"] = "Not Applicable";
                 return false;
             }
-            const auto solution   = s.FindSolution(ctx, problem, db, {}); // auto tune is not expected here
+            const auto solution =
+                s.FindSolution(ctx, problem, db, {}); // auto tune is not expected here
             res_item["workspace"] = solution.workspace_sz;
             // Get the binary
             miopen::solver::PrecompileKernels(h, solution.construction_params);
@@ -1094,8 +1052,11 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
             }
             try
             {
+                float kernel_time = -1;
+
                 const auto invoker =
                     h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
+
                 // This required because DataInvokeParams switches tensor order
                 // due to direction and it does not have a
                 // copy constructor or a default constructor
@@ -1111,8 +1072,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
                                                        workspace.gpuData.buf.get(),
                                                        workspace.desc.GetNumBytes(),
                                                        convDesc.attribute.gfx90aFp16alt.GetFwd()};
-                    for(auto idx = 0; idx < INVOKE_LIMIT; idx++)
-                        invoker(h, invoke_ctx);
+                    kernel_time = BenchmarkInvoker(invoker, h, invoke_ctx);
                 }
                 else if(conv_dir == miopen::conv::Direction::BackwardData)
                 {
@@ -1126,8 +1086,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
                                                        workspace.gpuData.buf.get(),
                                                        workspace.desc.GetNumBytes(),
                                                        convDesc.attribute.gfx90aFp16alt.GetBwd()};
-                    for(auto idx = 0; idx < INVOKE_LIMIT; idx++)
-                        invoker(h, invoke_ctx);
+                    kernel_time = BenchmarkInvoker(invoker, h, invoke_ctx);
                 }
                 else if(conv_dir == miopen::conv::Direction::BackwardWeights)
                 {
@@ -1141,22 +1100,23 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
                                                       workspace.gpuData.buf.get(),
                                                       workspace.desc.GetNumBytes(),
                                                       convDesc.attribute.gfx90aFp16alt.GetWrW()};
-                    for(auto idx = 0; idx < INVOKE_LIMIT; idx++)
-                        invoker(h, invoke_ctx);
+                    kernel_time = BenchmarkInvoker(invoker, h, invoke_ctx);
                 }
                 else
                 {
                     throw std::runtime_error("Invalid Direction");
                 }
+
+                res_item["time"]   = kernel_time;
+                res_item["reason"] = "Success";
+                if(kernel_time == 0)
+                    res_item["reason"] = "Invoker returned time = 0";
             }
             catch(const std::exception& e)
             {
                 res_item["reason"] = std::string("Invoker exeception: ") + e.what();
                 return false;
             }
-            const auto time    = h.GetKernelTime();
-            res_item["time"]   = time;
-            res_item["reason"] = "Success";
 
             return true;
         };
@@ -1244,12 +1204,12 @@ int ConvFin<Tgpu, Tref>::TestPerfDbEntries(
         auto perf_id   = pdb_it->first;
         auto solver_nm = pdb_it->second.find("solver")->second;
         auto params    = pdb_it->second.find("params")->second;
+        auto slv_id    = miopen::solver::Id(solver_nm);
+        auto solver    = slv_id.GetSolver();
 
-        auto slv_id = miopen::solver::Id(solver_nm);
-        auto solver = slv_id.GetSolver();
         std::stringstream stat_str;
-        stat_str << "config_id: " << config_id << ", solver_nm " << solver_nm
-                 << ", key: " << problem;
+        stat_str << "config_id: " << config_id << ", solver_id: " << slv_id.Value()
+                 << ", solver_nm: " << solver_nm << ", key: " << problem;
 
         // check if valid pdb parameters
         std::map<std::string, std::string> err;
@@ -1257,11 +1217,14 @@ int ConvFin<Tgpu, Tref>::TestPerfDbEntries(
         try
         {
             success = solver.TestPerfCfgParams(ctx, problem, params);
+            if(!success)
+                err["reason"] = "invalid params";
         }
         catch(const std::exception& e)
         {
             err["reason"] = e.what();
             std::cerr << "Error in db test: " << e.what() << std::endl;
+            success = false;
         }
         if(!success)
         {
@@ -1285,6 +1248,11 @@ int ConvFin<Tgpu, Tref>::TestPerfDbEntries(
 template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::TestPerfDbValid()
 {
+#if MIOPEN_MODE_NOGPU == 0
+    throw std::runtime_error("MIOpen needs to be compiled with the NOGPU backend "
+                             "for TestPerfDbValid");
+#endif
+
     bool ret            = true;
     namespace fs        = boost::filesystem;
     bool spec_arch      = (job["arch"].size() > 0 and job["num_cu"].size() > 0);
@@ -1340,17 +1308,12 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
 
         std::cerr << "processing: " << pathstr << std::endl;
 
-        // setting system to false allows writing the db
-        auto sql = miopen::SQLite{pathstr, false};
-
         // set handle to type of db under test
         auto handle = miopen::Handle{};
-#if MIOPEN_MODE_NOGPU
         BaseFin::InitNoGpuHandle(handle, db_arch, db_num_cu);
-#else
-        throw std::runtime_error("MIOpen needs to be compiled with the NOGPU backend "
-                             "for TestPerfDbValid");
-#endif
+
+        // setting system to false allows writing the db
+        auto sql = miopen::SQLite{pathstr, false};
 
         // cfg -> pdb_id -> values_dict
         std::map<std::string, std::map<std::string, std::unordered_map<std::string, std::string>>>
@@ -1368,11 +1331,12 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
                 const auto solver_nm = stmt.ColumnText(1);
                 const auto params    = stmt.ColumnText(2);
                 const auto perf_id   = stmt.ColumnText(3);
+                const auto slv_id    = miopen::solver::Id(solver_nm);
 
-                auto slv_id = miopen::solver::Id(solver_nm);
                 if(!slv_id.IsValid())
                 {
                     std::map<std::string, std::string> err;
+                    err["reason"]    = "invalid solver";
                     err["perfdb_id"] = perf_id;
                     err["config"]    = config_id;
                     err["solver"]    = solver_nm;
@@ -1380,6 +1344,13 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
                     err_list.push_back(err);
                     ret = false;
                     pdb_id.push_back(perf_id);
+                    continue;
+                }
+
+                if(solver_nm == "ConvBiasActivAsm1x1U" ||
+                   solver_nm.find("Fused") != std::string::npos)
+                {
+                    std::cerr << "Skipping fused solver: " << solver_nm << std::endl;
                     continue;
                 }
 
@@ -1395,17 +1366,44 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
         // iterate through each config
         for(auto cfg_it = perfdb_entries.begin(); cfg_it != perfdb_entries.end(); cfg_it++)
         {
-            auto config_id = cfg_it->first;
+            const auto& config_id          = cfg_it->first;
+            const auto& perf_ids           = cfg_it->second;
+            miopen::ConvolutionContext ctx = miopen::ConvolutionContext{};
+            miopen::ProblemDescription problem;
 
-            std::cerr << "building context and problem" << std::endl;
-            const auto problem = BuildConvProblem(sql, config_id);
-            auto ctx = miopen::ConvolutionContext{};
+            std::cerr << "building problem" << std::endl;
+            try
+            {
+                problem = BuildConvProblem(sql, config_id);
+            }
+            catch(const std::exception& e)
+            {
+                std::cerr << "Error in BuildContext: " << e.what() << std::endl;
+
+                for(auto pdb_it = perf_ids.begin(); pdb_it != perf_ids.end(); pdb_it++)
+                {
+                    const auto& perf_id   = pdb_it->first;
+                    const auto& solver_nm = pdb_it->second.find("solver")->second;
+                    const auto& params    = pdb_it->second.find("params")->second;
+
+                    std::map<std::string, std::string> err;
+                    err["reason"]    = e.what();
+                    err["perfdb_id"] = perf_id;
+                    err["config"]    = config_id;
+                    err["solver"]    = solver_nm;
+                    err["params"]    = params;
+                    err_list.push_back(err);
+                    ret = false;
+                    pdb_id.push_back(perf_id);
+                }
+                continue;
+            }
             ctx.SetStream(&handle);
             ctx.DetectRocm();
             problem.conv_problem.SetupFloats(ctx);
 
             std::cerr << "test pdb" << std::endl;
-            bool success = TestPerfDbEntries(config_id, ctx, problem, cfg_it->second, err_list, pdb_id);
+            bool success = TestPerfDbEntries(config_id, ctx, problem, perf_ids, err_list, pdb_id);
             if(not success)
                 ret = false;
         }
@@ -1420,7 +1418,9 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
                     id_str << ",";
                 id_str << *it;
             }
-            del_query << "DELETE from perf_db where id in (" << id_str.str() << ");";
+            del_query << "DELETE from perf_db where id in (" << id_str.str()
+                      << "); DELETE from config where not id in (select distinct config from "
+                         "perf_db); VACUUM;";
             stmt    = miopen::SQLite::Statement{sql, del_query.str()};
             auto rc = stmt.Step(sql);
             std::cerr << "delete status: " << rc << std::endl;
@@ -1673,37 +1673,56 @@ int ConvFin<Tgpu, Tref>::ProcessStep(const std::string& step_name)
     return 0;
 }
 
+template <typename T>
+void PrintVec(const std::vector<T>& vec)
+{
+    for(const auto& val : vec)
+        std::cout << val << ' ';
+    std::cout << std::endl;
+}
+
 template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::GetandSetData()
 {
     auto in_len  = GetInputTensorLengths();
     auto wei_len = GetWeightTensorLengths();
 
-    // auto y_type = GetOutputType();
-
     inputTensor = {GetHandle().GetStream(), in_len, (is_fwd || is_wrw), is_bwd};
-    miopenSetNdTensorDescriptorWithLayout(&inputTensor.desc,
-                                          inputTensor.desc.GetType(),
-                                          GetMemLayout(command["in_layout"]),
-                                          in_len.data(),
-                                          in_len.size());
+    SetTensorNd(&inputTensor.desc, in_len, command["in_layout"], inputTensor.desc.GetType());
 
     weightTensor = {GetHandle().GetStream(), wei_len, (is_fwd || is_bwd), is_wrw};
-    miopenSetNdTensorDescriptorWithLayout(&weightTensor.desc,
-                                          weightTensor.desc.GetType(),
-                                          GetMemLayout(command["wei_layout"]),
-                                          wei_len.data(),
-                                          wei_len.size());
+    SetTensorNd(&weightTensor.desc, wei_len, command["wei_layout"], weightTensor.desc.GetType());
+
     // conv, input and weight tensor descriptors need to be set before we can know the
     // output lengths
     auto out_len = GetOutputTensorLengths();
     outputTensor = {GetHandle().GetStream(), out_len, (is_bwd || is_wrw), is_fwd};
     std::vector<int> int_out_len(out_len.begin(), out_len.end());
-    miopenSetNdTensorDescriptorWithLayout(&outputTensor.desc,
-                                          outputTensor.desc.GetType(),
-                                          GetMemLayout(command["out_layout"]),
-                                          int_out_len.data(),
-                                          int_out_len.size());
+    SetTensorNd(
+        &outputTensor.desc, int_out_len, command["out_layout"], outputTensor.desc.GetType());
+
+    std::cout << "InputTensorLengths: ";
+    PrintVec(in_len);
+    std::cout << "WeightTensorLengths: ";
+    PrintVec(wei_len);
+
+    std::cout << "inputTensor Strides: ";
+    PrintVec(inputTensor.desc.GetStrides());
+    std::cout << "weightTensor Strides: ";
+    PrintVec(weightTensor.desc.GetStrides());
+
+    const std::string in_layout  = inputTensor.desc.GetLayout(inputTensor.desc.GetLayout_str());
+    const std::string wt_layout  = weightTensor.desc.GetLayout(weightTensor.desc.GetLayout_str());
+    const std::string out_layout = outputTensor.desc.GetLayout(outputTensor.desc.GetLayout_str());
+    std::cout << "inputTensor layout: " << in_layout
+              << ", possible: " << inputTensor.desc.IsPossibleLayout("NCHW", in_layout)
+              << std::endl;
+    std::cout << "weightTensor layout: " << wt_layout
+              << ", possible: " << weightTensor.desc.IsPossibleLayout("NCHW", wt_layout)
+              << std::endl;
+    std::cout << "outputTensor layout: " << out_layout
+              << ", possible: " << outputTensor.desc.IsPossibleLayout("NCHW", out_layout)
+              << std::endl;
 
     if(IsInputTensorTransform())
     {
@@ -2044,6 +2063,7 @@ miopen::ProblemDescription ConvFin<Tgpu, Tref>::BuildConvProblem(miopen::SQLite&
     command["out_layout"] = stmt.ColumnText(16);
     std::string data_type = stmt.ColumnText(17);
 
+    std::cout << "json command: " << command.dump() << std::endl;
     miopen::ProblemDescription problem;
     if(data_type == "FP32")
     {
