@@ -689,7 +689,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                 res_item["bias"]           = problem.bias;
                 res_item["kernel_objects"] = kern_objs;
                 res_item["reason"]         = "Success";
-                if(kernel_time == 0)
+                if(kernel_time == 0.0)
                     res_item["reason"] = "Invoker returned time = 0";
             }
             catch(const std::exception& e)
@@ -927,7 +927,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
 
                 res_item["time"]   = kernel_time;
                 res_item["reason"] = "Success";
-                if(kernel_time == 0)
+                if(kernel_time == 0.0)
                     res_item["reason"] = "Invoker returned time = 0";
             }
             catch(const std::exception& e)
@@ -1109,7 +1109,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
 
                 res_item["time"]   = kernel_time;
                 res_item["reason"] = "Success";
-                if(kernel_time == 0)
+                if(kernel_time == 0.0)
                     res_item["reason"] = "Invoker returned time = 0";
             }
             catch(const std::exception& e)
@@ -1687,6 +1687,8 @@ int ConvFin<Tgpu, Tref>::GetandSetData()
     auto in_len  = GetInputTensorLengths();
     auto wei_len = GetWeightTensorLengths();
 
+    std::cout << "input layout str " << command["in_layout"] << " length " << in_len << std::endl;
+
     inputTensor = {GetHandle().GetStream(), in_len, (is_fwd || is_wrw), is_bwd};
     SetTensorNd(&inputTensor.desc, in_len, command["in_layout"], inputTensor.desc.GetType());
 
@@ -1710,6 +1712,13 @@ int ConvFin<Tgpu, Tref>::GetandSetData()
     PrintVec(inputTensor.desc.GetStrides());
     std::cout << "weightTensor Strides: ";
     PrintVec(weightTensor.desc.GetStrides());
+
+    if(inputTensor.desc.GetLayout_str().size() != inputTensor.desc.GetStrides().size())
+    {
+        std::cout << "FIN Invalid labels size. Layout labels size must be equavalent to stride size" << std::endl;
+        std::cout << inputTensor.desc.GetLayout_str() << std::endl;
+    }
+    std::cout << "Passed length test: " << inputTensor.desc.GetLayout_str() << std::endl;
 
     const std::string in_layout  = inputTensor.desc.GetLayout(inputTensor.desc.GetLayout_str());
     const std::string wt_layout  = weightTensor.desc.GetLayout(weightTensor.desc.GetLayout_str());
@@ -2058,12 +2067,13 @@ miopen::ProblemDescription ConvFin<Tgpu, Tref>::BuildConvProblem(miopen::SQLite&
     command["bias"]          = stmt.ColumnInt64(23);
     command["mode"]          = "conv";
 
-    command["in_layout"]  = stmt.ColumnText(16);
-    command["wei_layout"] = stmt.ColumnText(16);
-    command["out_layout"] = stmt.ColumnText(16);
+    auto layout = stmt.ColumnText(16);
+    command["in_layout"]  = layout;
+    command["wei_layout"] = layout;
+    command["out_layout"] = layout;
     std::string data_type = stmt.ColumnText(17);
 
-    std::cout << "json command: " << command.dump() << std::endl;
+    std::cout << "cfg (" << config_id << ") " << "json command: " << command.dump() << std::endl;
     miopen::ProblemDescription problem;
     if(data_type == "FP32")
     {
