@@ -187,7 +187,7 @@ struct tensor
     tensor() {}
     // cppcheck-suppress uninitMemberVar
     template <typename U>
-    tensor(accelerator_stream _q, std::vector<U>& _plens, bool _is_input, bool _is_output)
+    tensor(accelerator_stream _q, const std::vector<U>& _plens, bool _is_input, bool _is_output)
         : desc(GetDataType<Tgpu>(), _plens),
           gpuData(),
           q(_q),
@@ -200,8 +200,8 @@ struct tensor
     }
     template <typename U>
     tensor(accelerator_stream _q,
-           std::string layout,
-           std::vector<U>& _plens,
+           const std::string& layout,
+           const std::vector<U>& _plens,
            bool _is_input,
            bool _is_output)
         : desc(GetDataType<Tgpu>(), GetMemLayout(layout), _plens),
