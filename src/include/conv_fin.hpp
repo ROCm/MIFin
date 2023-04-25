@@ -1688,13 +1688,16 @@ int ConvFin<Tgpu, Tref>::GetandSetData()
     auto wei_len = GetWeightTensorLengths();
 
     std::cout << "input layout str " << command["in_layout"] << " length " << in_len << std::endl;
-    inputTensor = {GetHandle().GetStream(), command["in_layout"], in_len, (is_fwd || is_wrw), is_bwd};
-    weightTensor = {GetHandle().GetStream(), command["wei_layout"], wei_len, (is_fwd || is_bwd), is_wrw};
+    inputTensor = {
+        GetHandle().GetStream(), command["in_layout"], in_len, (is_fwd || is_wrw), is_bwd};
+    weightTensor = {
+        GetHandle().GetStream(), command["wei_layout"], wei_len, (is_fwd || is_bwd), is_wrw};
 
     // conv, input and weight tensor descriptors need to be set before we can know the
     // output lengths
     auto out_len = GetOutputTensorLengths();
-    outputTensor = {GetHandle().GetStream(), command["out_layout"], out_len, (is_bwd || is_wrw), is_fwd};
+    outputTensor = {
+        GetHandle().GetStream(), command["out_layout"], out_len, (is_bwd || is_wrw), is_fwd};
 
     std::cout << "InputTensorLengths: ";
     PrintVec(in_len);
@@ -2032,36 +2035,43 @@ miopen::ProblemDescription ConvFin<Tgpu, Tref>::BuildConvProblem(miopen::SQLite&
     command["dilation_w"]    = stmt.ColumnInt64(14);
     command["spatial_dim"]   = stmt.ColumnInt64(15);
 
-    command["direction"]     = stmt.ColumnText(18);
+    command["direction"] = stmt.ColumnText(18);
     if(command["direction"] == "F")
     {
-        command["out_channels"]  = stmt.ColumnInt64(19);
-        command["in_channels"]   = stmt.ColumnInt64(20);
-        command["in_d"]          = stmt.ColumnInt64(0);
-        command["in_h"]          = stmt.ColumnInt64(1);
-        command["in_w"]          = stmt.ColumnInt64(2);
+        command["out_channels"] = stmt.ColumnInt64(19);
+        command["in_channels"]  = stmt.ColumnInt64(20);
+        command["in_d"]         = stmt.ColumnInt64(0);
+        command["in_h"]         = stmt.ColumnInt64(1);
+        command["in_w"]         = stmt.ColumnInt64(2);
     }
     else
     {
-        command["out_channels"]  = stmt.ColumnInt64(20);
-        command["in_channels"]   = stmt.ColumnInt64(19);
-        command["in_d"] = (stmt.ColumnInt64(0) - 1) * static_cast<int>(command["conv_stride_d"]) + static_cast<int>(command["fil_d"]) - 2 * static_cast<int>(command["pad_d"]);
-        command["in_h"] = (stmt.ColumnInt64(1) - 1) * static_cast<int>(command["conv_stride_h"]) + static_cast<int>(command["fil_h"]) - 2 * static_cast<int>(command["pad_h"]);
-        command["in_w"] = (stmt.ColumnInt64(2) - 1) * static_cast<int>(command["conv_stride_w"]) + static_cast<int>(command["fil_w"]) - 2 * static_cast<int>(command["pad_w"]);
+        command["out_channels"] = stmt.ColumnInt64(20);
+        command["in_channels"]  = stmt.ColumnInt64(19);
+        command["in_d"] = (stmt.ColumnInt64(0) - 1) * static_cast<int>(command["conv_stride_d"]) +
+                          static_cast<int>(command["fil_d"]) -
+                          2 * static_cast<int>(command["pad_d"]);
+        command["in_h"] = (stmt.ColumnInt64(1) - 1) * static_cast<int>(command["conv_stride_h"]) +
+                          static_cast<int>(command["fil_h"]) -
+                          2 * static_cast<int>(command["pad_h"]);
+        command["in_w"] = (stmt.ColumnInt64(2) - 1) * static_cast<int>(command["conv_stride_w"]) +
+                          static_cast<int>(command["fil_w"]) -
+                          2 * static_cast<int>(command["pad_w"]);
     }
 
-    command["batchsize"]     = stmt.ColumnInt64(21);
-    command["group_count"]   = stmt.ColumnInt64(22);
-    command["bias"]          = stmt.ColumnInt64(23);
-    command["mode"]          = "conv";
+    command["batchsize"]   = stmt.ColumnInt64(21);
+    command["group_count"] = stmt.ColumnInt64(22);
+    command["bias"]        = stmt.ColumnInt64(23);
+    command["mode"]        = "conv";
 
-    auto layout = stmt.ColumnText(16);
+    auto layout           = stmt.ColumnText(16);
     command["in_layout"]  = layout;
     command["wei_layout"] = layout;
     command["out_layout"] = layout;
     std::string data_type = stmt.ColumnText(17);
 
-    std::cout << "cfg (" << config_id << ") " << "json command: " << command.dump() << std::endl;
+    std::cout << "cfg (" << config_id << ") "
+              << "json command: " << command.dump() << std::endl;
     miopen::ProblemDescription problem;
     if(data_type == "FP32")
     {
