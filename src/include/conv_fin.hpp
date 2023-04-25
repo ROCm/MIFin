@@ -1705,8 +1705,6 @@ int ConvFin<Tgpu, Tref>::GetandSetData()
     PrintVec(inputTensor.desc.GetStrides());
 
     const std::string in_layout  = inputTensor.desc.GetLayout(inputTensor.desc.GetLayout_str());
-    const std::string wt_layout  = weightTensor.desc.GetLayout(weightTensor.desc.GetLayout_str());
-    const std::string out_layout = outputTensor.desc.GetLayout(outputTensor.desc.GetLayout_str());
     std::cout << "inputTensor layout: " << in_layout
               << ", possible: " << inputTensor.desc.IsPossibleLayout("NCHW", in_layout)
               << std::endl;
