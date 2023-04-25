@@ -9,17 +9,18 @@ RUN dpkg --add-architecture i386
 #install rocm
 ARG ROCMVERSION='5.5 50'
 ARG OSDB_BKC_VERSION=
-ARG DEB_ROCM_REPO=http://repo.radeon.com/rocm/apt/.apt_$ROCMVERSION/
 # Add rocm repository
 RUN apt-get update
 RUN apt-get install -y wget gnupg
 RUN wget -qO - http://repo.radeon.com/rocm/rocm.gpg.key | apt-key add -
 RUN if ! [ -z $OSDB_BKC_VERSION ]; then \
-       echo "Using BKC VERISION: $OSDB_BKC_VERSION";\
+       echo "Using BKC VERSION: $OSDB_BKC_VERSION";\
        sh -c "echo deb [arch=amd64 trusted=yes] http://compute-artifactory.amd.com/artifactory/list/rocm-osdb-20.04-deb/ compute-rocm-dkms-no-npi-hipclang ${OSDB_BKC_VERSION} > /etc/apt/sources.list.d/rocm.list" ;\
        cat  /etc/apt/sources.list.d/rocm.list;\
     else \
-       sh -c "echo deb [arch=amd64] $DEB_ROCM_REPO ubuntu main > /etc/apt/sources.list.d/rocm.list" ;\
+       echo "Using Release VERSION: $ROCMVERSION";\
+       sh -c "echo deb [arch=amd64 trusted=yes] http://compute-artifactory.amd.com/artifactory/list/rocm-osdb-20.04-deb/ compute-rocm-rel-${ROCMVERSION} > /etc/apt/sources.list.d/rocm.list" ;\
+       cat  /etc/apt/sources.list.d/rocm.list;\
     fi
 
 
