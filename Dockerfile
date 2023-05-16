@@ -7,19 +7,20 @@ RUN dpkg --add-architecture i386
 
 
 #install rocm
-ARG ROCMVERSION=
-ARG OSDB_BKC_VERSION=11650
-ARG DEB_ROCM_REPO=http://repo.radeon.com/rocm/apt/.apt_$ROCMVERSION/
+ARG ROCMVERSION='5.5 50'
+ARG OSDB_BKC_VERSION=
 # Add rocm repository
 RUN apt-get update
 RUN apt-get install -y wget gnupg
 RUN wget -qO - http://repo.radeon.com/rocm/rocm.gpg.key | apt-key add -
 RUN if ! [ -z $OSDB_BKC_VERSION ]; then \
-       echo "Using BKC VERISION: $OSDB_BKC_VERSION";\
+       echo "Using BKC VERSION: $OSDB_BKC_VERSION";\
        sh -c "echo deb [arch=amd64 trusted=yes] http://compute-artifactory.amd.com/artifactory/list/rocm-osdb-20.04-deb/ compute-rocm-dkms-no-npi-hipclang ${OSDB_BKC_VERSION} > /etc/apt/sources.list.d/rocm.list" ;\
        cat  /etc/apt/sources.list.d/rocm.list;\
     else \
-       sh -c "echo deb [arch=amd64] $DEB_ROCM_REPO ubuntu main > /etc/apt/sources.list.d/rocm.list" ;\
+       echo "Using Release VERSION: $ROCMVERSION";\
+       sh -c "echo deb [arch=amd64 trusted=yes] http://compute-artifactory.amd.com/artifactory/list/rocm-osdb-20.04-deb/ compute-rocm-rel-${ROCMVERSION} > /etc/apt/sources.list.d/rocm.list" ;\
+       cat  /etc/apt/sources.list.d/rocm.list;\
     fi
 
 
@@ -88,7 +89,7 @@ ARG MIOPEN_DIR=/root/dMIOpen
 #Clone MIOpen
 RUN git clone https://github.com/ROCmSoftwarePlatform/MIOpen.git $MIOPEN_DIR
 WORKDIR $MIOPEN_DIR
-ARG MIOPEN_BRANCH=b4e0a67333ee4bbcbbec1203a0260feff2882cfb
+ARG MIOPEN_BRANCH=d7b2ae7feab0a24a8885758328f59cfbef8e4210
 RUN git pull && git checkout $MIOPEN_BRANCH
 
 # Install dependencies
