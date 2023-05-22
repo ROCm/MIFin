@@ -204,7 +204,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
 #endif
     ctx.SetStream(&handle);
     ctx.DetectRocm();
-    ctx.SetupFloats(problem);
+    problem.conv_problem.SetupFloats(ctx);
 
     const auto network_config   = problem.BuildConfKey();
     const bool is_winograd_only = convDesc.IsWinograd3x3SupportedAndFast(ctx, problem);
@@ -334,7 +334,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
 #endif
     ctx.SetStream(&handle);
     ctx.DetectRocm();
-    ctx.SetupFloats(problem);
+    problem.conv_problem.SetupFloats(ctx);
 
     const auto network_config   = problem.BuildConfKey();
     const bool is_winograd_only = convDesc.IsWinograd3x3SupportedAndFast(ctx, problem);
@@ -455,7 +455,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
     auto& h  = GetHandle();
     ctx.SetStream(&(h));
     ctx.DetectRocm();
-    ctx.SetupFloats(problem);
+    problem.conv_problem.SetupFloats(ctx);
 
     const auto network_config   = problem.BuildConfKey();
     const bool is_winograd_only = convDesc.IsWinograd3x3SupportedAndFast(ctx, problem);
@@ -734,7 +734,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
     auto& h  = GetHandle();
     ctx.SetStream(&(h));
     ctx.DetectRocm();
-    ctx.SetupFloats(problem);
+    problem.conv_problem.SetupFloats(ctx);
 
     const auto network_config   = problem.BuildConfKey();
     const bool is_winograd_only = convDesc.IsWinograd3x3SupportedAndFast(ctx, problem);
@@ -963,7 +963,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
     auto& h  = GetHandle();
     ctx.SetStream(&(h));
     ctx.DetectRocm();
-    ctx.SetupFloats(problem);
+    problem.conv_problem.SetupFloats(ctx);
 
     const auto network_config   = problem.BuildConfKey();
     const bool is_winograd_only = convDesc.IsWinograd3x3SupportedAndFast(ctx, problem);
@@ -1155,7 +1155,7 @@ int ConvFin<Tgpu, Tref>::TestApplicability()
 
     ctx.SetStream(&handle);
     ctx.DetectRocm();
-    ctx.SetupFloats(problem);
+    problem.conv_problem.SetupFloats(ctx);
     const auto network_config = problem.BuildConfKey();
     std::vector<std::string> app_solvers;
     for(const auto& id :
@@ -1401,7 +1401,7 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
             }
             ctx.SetStream(&handle);
             ctx.DetectRocm();
-            ctx.SetupFloats(problem);
+            problem.conv_problem.SetupFloats(ctx);
 
             std::cerr << "test pdb" << std::endl;
             bool success = TestPerfDbEntries(config_id, ctx, problem, perf_ids, err_list, pdb_id);
@@ -1500,7 +1500,7 @@ int ConvFin<Tgpu, Tref>::SearchPreCompiledKernels()
 
         ctx.SetStream(&handle);
         ctx.DetectRocm();
-        ctx.SetupFloats(problem);
+        problem.conv_problem.SetupFloats(ctx);
 
         // const auto network_config = problem.BuildConfKey();
         std::ostringstream ss;
@@ -2167,32 +2167,45 @@ int ConvFin<Tgpu, Tref>::CalcWorkspace()
     size_t ws_sizeof_find_bwd = 0;
     auto is_transform         = IsInputTensorTransform();
 
+    using Direction          = miopen::conv::Direction;
+    using ProblemDescription = miopen::conv::ProblemDescription;
+
+    const auto ctx = [&] {
+        auto tmp = miopen::ExecutionContext{&GetHandle()};
+        tmp.DetectRocm();
+        return tmp;
+    }();
+
     if(is_wrw)
-        ws_sizeof_find_wrw = convDesc.BackwardWeightsGetWorkSpaceSize(
-            GetHandle(), outputTensor.desc, inputTensor.desc, weightTensor.desc);
+        ws_sizeof_find_wrw =
+            convDesc.GetWorkSpaceSize(ctx,
+                                      ProblemDescription{outputTensor.desc,
+                                                         weightTensor.desc,
+                                                         inputTensor.desc,
+                                                         convDesc,
+                                                         Direction::BackwardWeights});
+
+    const auto data_ws_getter = [&](bool fwd) {
+        const auto call_fwd  = fwd == (convDesc.mode != miopenTranspose);
+        const auto direction = call_fwd ? Direction::Forward : Direction::BackwardData;
+
+        auto problem =
+            call_fwd
+                ? ProblemDescription{inputTensor.desc,
+                                     weightTensor.desc,
+                                     outputTensor.desc,
+                                     convDesc,
+                                     direction}
+                : ProblemDescription{
+                      outputTensor.desc, weightTensor.desc, inputTensor.desc, convDesc, direction};
+
+        ws_sizeof_find_bwd = convDesc.GetWorkSpaceSize(ctx, problem);
+    };
+
     if(is_bwd)
-    {
-        ws_sizeof_find_bwd =
-            (convDesc.mode == miopenTranspose)
-                ? convDesc.ForwardGetWorkSpaceSize(
-                      GetHandle(), weightTensor.desc, outputTensor.desc, inputTensor.desc)
-                : convDesc.BackwardDataGetWorkSpaceSize(
-                      GetHandle(), weightTensor.desc, outputTensor.desc, inputTensor.desc);
-    }
+        ws_sizeof_find_bwd = data_ws_getter(false);
     if(is_fwd)
-    {
-        ws_sizeof_find_fwd = (convDesc.mode == miopenTranspose)
-                                 ? convDesc.BackwardDataGetWorkSpaceSize(
-                                       GetHandle(),
-                                       (is_transform ? weightTensor_vect4.desc : weightTensor.desc),
-                                       (is_transform ? inputTensor_vect4.desc : inputTensor.desc),
-                                       outputTensor.desc)
-                                 : convDesc.ForwardGetWorkSpaceSize(
-                                       GetHandle(),
-                                       (is_transform ? weightTensor_vect4.desc : weightTensor.desc),
-                                       (is_transform ? inputTensor_vect4.desc : inputTensor.desc),
-                                       outputTensor.desc);
-    }
+        ws_sizeof_find_bwd = data_ws_getter(true);
 
     const auto wsSizeof =
         std::max(std::max(ws_sizeof_find_bwd, ws_sizeof_find_wrw), ws_sizeof_find_fwd);
