@@ -1410,7 +1410,7 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
         }
         output[filestr]["errors"] = err_list;
 
-        for(auto & val : err_list)
+        for(auto& val : err_list)
         {
             if(err_sum.count(val["solver"]) == 0)
                 err_sum[val["solver"]] = 1;
