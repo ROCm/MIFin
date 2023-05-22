@@ -1319,6 +1319,7 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
         std::map<std::string, std::map<std::string, std::unordered_map<std::string, std::string>>>
             perfdb_entries;
         std::vector<std::map<std::string, std::string>> err_list;
+        std::map<std::string, int> err_sum;
         std::vector<std::string> pdb_id;
         auto select_query = "SELECT config, solver, params, id FROM perf_db;";
         auto stmt         = miopen::SQLite::Statement{sql, select_query};
@@ -1408,6 +1409,15 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
                 ret = false;
         }
         output[filestr]["errors"] = err_list;
+
+        for(auto & val : err_list)
+        {
+            if(err_sum.count(val["solver"]) == 0)
+                err_sum[val["solver"]] = 1;
+            else
+                err_sum[val["solver"]] += 1;
+        }
+        output[filestr]["error_summary"] = err_sum;
 
         if(job.contains("cleanup") && job["cleanup"])
         {
