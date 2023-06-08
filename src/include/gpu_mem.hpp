@@ -47,7 +47,7 @@ struct relMem
 #if FIN_BACKEND_OPENCL
     void operator()(cl_mem ptr) { clReleaseMemObject(ptr); }
 #elif FIN_BACKEND_HIP
-    void operator()(void* ptr) { hipFree(ptr); }
+    void operator()(void* ptr) { std::ignore = hipFree(ptr); }
 #endif
 };
 #if FIN_BACKEND_OPENCL
@@ -87,8 +87,8 @@ struct GPUMem
     GPUMem(uint32_t ctx, size_t psz, size_t pdata_sz) : _ctx(ctx), sz(psz), data_sz(pdata_sz)
     {
         void* tmp = nullptr;
-        hipMalloc(static_cast<void**>(&(tmp)), data_sz * sz);
-        if(tmp == nullptr && sz > 0)
+        const auto status = hipMalloc(static_cast<void**>(&(tmp)), data_sz * sz);
+        if(status != hipSuccess || (tmp == nullptr && sz > 0))
             throw std::runtime_error("Unable to allocate GPU memory");
         buf = gpu_mem_ptr{tmp};
     }
@@ -100,7 +100,9 @@ struct GPUMem
     }
     int FromGPU(hipStream_t q, void* p)
     {
-        hipDeviceSynchronize();
+        const auto status = hipDeviceSynchronize();
+        if(status != hipSuccess)
+            throw std::runtime_error("Error while calling hipDeviceSynchronize()");
         _q = q;
         return static_cast<int>(hipMemcpy(p, buf.get(), data_sz * sz, hipMemcpyDeviceToHost));
     }
