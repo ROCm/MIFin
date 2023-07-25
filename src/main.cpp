@@ -31,7 +31,11 @@
 #include "error.hpp"
 #include "fin.hpp"
 
+#if HIP_PACKAGE_VERSION_FLAT >= 5006000000ULL
+#include <half/half.hpp>
+#else
 #include <half.hpp>
+#endif
 #include <miopen/bfloat16.hpp>
 
 using half_float::half;
@@ -43,7 +47,6 @@ typedef half float16;
 
 #include <algorithm>
 #include <cstdio>
-#include <half.hpp>
 #include <iostream>
 
 using json = nlohmann::json;
