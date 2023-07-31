@@ -27,7 +27,11 @@
 #ifndef GUARD_FIN_TENSOR_HPP
 #define GUARD_FIN_TENSOR_HPP
 
+#if HIP_PACKAGE_VERSION_FLAT >= 5006000000ULL
+#include <half/half.hpp>
+#else
 #include <half.hpp>
+#endif
 #include <miopen/bfloat16.hpp>
 
 #include <gpu_mem.hpp>

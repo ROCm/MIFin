@@ -27,7 +27,11 @@
 #ifndef GUARD_FIN_GPUMEM_HPP
 #define GUARD_FIN_GPUMEM_HPP
 
-#include "half.hpp"
+#if HIP_PACKAGE_VERSION_FLAT >= 5006000000ULL
+#include <half/half.hpp>
+#else
+#include <half.hpp>
+#endif
 #include <algorithm>
 #include <cfloat>
 #include <cstdio>
