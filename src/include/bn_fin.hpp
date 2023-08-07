@@ -134,7 +134,6 @@ int BNFin<Tgpu, Tref>::TestApplicability()
                              "to test applicability");
 #endif
     ctx.SetStream(&handle);
-    ctx.DetectRocm();
 
     std::vector<std::string> app_solvers;
 
@@ -410,7 +409,6 @@ int BNFin<Tgpu, Tref>::MIOpenFindCompile()
                              "for Batch Norm find_compile");
 #endif
     ctx.SetStream(&handle);
-    ctx.DetectRocm();
 
     const auto problem         = GetProblemDescription();
     const auto network_config  = problem.MakeNetworkConfig();

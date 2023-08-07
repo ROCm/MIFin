@@ -208,7 +208,6 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
                              "for MIOpenPerfCompile");
 #endif
     ctx.SetStream(&handle);
-    ctx.DetectRocm();
     problem.conv_problem.SetupFloats(ctx);
 
     const auto network_config   = problem.BuildConfKey();
@@ -343,7 +342,6 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
                              "for MIOpenFindCompile");
 #endif
     ctx.SetStream(&handle);
-    ctx.DetectRocm();
     problem.conv_problem.SetupFloats(ctx);
 
     const auto network_config   = problem.BuildConfKey();
@@ -469,7 +467,6 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
     auto ctx = miopen::ConvolutionContext{};
     auto& h  = GetHandle();
     ctx.SetStream(&(h));
-    ctx.DetectRocm();
     problem.conv_problem.SetupFloats(ctx);
 
     const auto network_config   = problem.BuildConfKey();
@@ -753,7 +750,6 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
     auto ctx = miopen::ConvolutionContext{};
     auto& h  = GetHandle();
     ctx.SetStream(&(h));
-    ctx.DetectRocm();
     problem.conv_problem.SetupFloats(ctx);
 
     const auto network_config   = problem.BuildConfKey();
@@ -987,7 +983,6 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
     auto ctx = miopen::ConvolutionContext{};
     auto& h  = GetHandle();
     ctx.SetStream(&(h));
-    ctx.DetectRocm();
     problem.conv_problem.SetupFloats(ctx);
 
     const auto network_config   = problem.BuildConfKey();
@@ -1184,7 +1179,6 @@ int ConvFin<Tgpu, Tref>::TestApplicability()
 #endif
 
     ctx.SetStream(&handle);
-    ctx.DetectRocm();
     problem.conv_problem.SetupFloats(ctx);
     const auto network_config = problem.BuildConfKey();
     std::vector<std::string> app_solvers;
@@ -1430,7 +1424,6 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
                 continue;
             }
             ctx.SetStream(&handle);
-            ctx.DetectRocm();
             problem.conv_problem.SetupFloats(ctx);
 
             std::cerr << "test pdb" << std::endl;
@@ -1534,7 +1527,6 @@ int ConvFin<Tgpu, Tref>::SearchPreCompiledKernels()
         auto ctx = miopen::ConvolutionContext{};
 
         ctx.SetStream(&handle);
-        ctx.DetectRocm();
         problem.conv_problem.SetupFloats(ctx);
 
         // const auto network_config = problem.BuildConfKey();
@@ -2212,7 +2204,6 @@ int ConvFin<Tgpu, Tref>::CalcWorkspace()
 
     const auto ctx = [&] {
         auto tmp = miopen::ExecutionContext{&GetHandle()};
-        tmp.DetectRocm();
         return tmp;
     }();
 
