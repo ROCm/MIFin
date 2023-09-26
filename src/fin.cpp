@@ -128,6 +128,10 @@ void BaseFin::VerifyDevProps(const std::string& in_arch, const unsigned long in_
     {
         assert(num_cu == 110 || num_cu == 104);
     }
+    else if(arch == "gfx940")
+    {
+        assert(num_cu == 228);
+    }
     else
         throw std::runtime_error("Invalid Arch Name");
 }
