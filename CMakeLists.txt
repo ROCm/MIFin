@@ -50,7 +50,7 @@ include(ROCMCreatePackage)
 include(CheckCXXCompilerFlag)
 
 # Build library with beta apis
-add_definitions("-DMIOPEN_BETA_API_FP8=1")
+add_definitions("-DMIOPEN_BETA_API=1")
 
 option( BUILD_DEV "Build for development only" OFF)
 
