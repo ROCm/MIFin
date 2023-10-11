@@ -49,6 +49,9 @@ include(ROCMInstallSymlinks)
 include(ROCMCreatePackage)
 include(CheckCXXCompilerFlag)
 
+# Build library with beta apis
+add_definitions("-DMIOPEN_BETA_API=1")
+
 option( BUILD_DEV "Build for development only" OFF)
 
 rocm_setup_version(VERSION 1.0.0)
