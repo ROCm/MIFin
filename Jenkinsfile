@@ -127,7 +127,7 @@ pipeline {
                                 -o -iname \'*.cl\' \
                                 | grep -v 'build/' \
                                 | grep -v 'base64' \
-                                | xargs -n 1 -P 1 -I{} -t sh -c \'clang-format -style=file {} | diff - {}\'"
+                                | xargs -n 1 -P 1 -I{} -t sh -c \'clang-format-12 -style=file {} | diff - {}\'"
                     }
                     steps{
                         buildJob('clang++', '-DCMAKE_BUILD_TYPE=release', image, "", cmd)
