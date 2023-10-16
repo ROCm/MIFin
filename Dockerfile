@@ -7,8 +7,8 @@ RUN dpkg --add-architecture i386
 
 
 #install rocm
-ARG ROCMVERSION='5.5 50'
-ARG OSDB_BKC_VERSION=
+ARG ROCMVERSION=
+ARG OSDB_BKC_VERSION=12825
 # Add rocm repository
 RUN apt-get update
 RUN apt-get install -y wget gnupg
