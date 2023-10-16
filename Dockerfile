@@ -31,7 +31,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -f -y --all
     apt-utils \
     build-essential \
     clang \
-    clang-format \
+    clang-format-12 \
     clang-tidy \
     cmake \
     comgr \
