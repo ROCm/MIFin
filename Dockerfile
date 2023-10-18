@@ -23,51 +23,49 @@ RUN if ! [ -z $OSDB_BKC_VERSION ]; then \
        cat  /etc/apt/sources.list.d/rocm.list;\
     fi
 
+RUN set -xe
+# Install dependencies
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -f -y --allow-unauthenticated \
+    rocm-dev \
+    rocm-device-libs \
+    rocm-opencl \
+    rocm-opencl-dev \
+    rocm-cmake \
+    && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
-# Install dependencies required to build hcc
-# Ubuntu csomic contains llvm-7 required to build Tensile
-RUN sh -c "echo deb http://mirrors.kernel.org/ubuntu xenial main universe | tee -a /etc/apt/sources.list"
+
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -f -y --allow-unauthenticated \
     apt-utils \
     build-essential \
-    clang \
     clang-format-12 \
-    clang-tidy \
-    cmake \
-    comgr \
+    cmake \ 
     curl \
     doxygen \
-    g++-5-multilib \
+    gdb \
     git \
-    hsa-rocr-dev \
-    hsakmt-roct-dev \
-    jq \
+    lbzip2 \
     lcov \
-    libelf-dev \
-    libfile-which-perl \
     libncurses5-dev \
-    libpthread-stubs0-dev \
     libnuma-dev \
-    libunwind-dev \
-    nsis \
-    software-properties-common \
-    libboost-all-dev \
-    llvm-7 \
+    libpthread-stubs0-dev \
+    mysql-client \
+    openssh-server \
     pkg-config \
     python3 \
-    python3-distutils \
-    python3-venv \
     python3-dev \
     python3-pip \
-    python3-yaml \
-    cppcheck \
-    rocm-dev \
-    rocm-opencl \
-    rocm-opencl-dev \
+    python3-venv \
     rocblas \
-    miopen-hip && \
+    software-properties-common \
+    sqlite3 \
+    vim \
+    wget \
+    && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
+
 
 # Setup ubsan environment to printstacktrace
 ENV UBSAN_OPTIONS=print_stacktrace=1
@@ -77,7 +75,7 @@ RUN wget https://github.com/Yelp/dumb-init/releases/download/v1.2.0/dumb-init_1.
 RUN dpkg -i dumb-init_*.deb && rm dumb-init_*.deb
 
 # Install cget
-RUN pip install https://github.com/pfultz2/cget/archive/57b3289000fcdb3b7e424c60a35ea09bc44d8538.tar.gz
+RUN pip install cget
 
 # Install rclone
 RUN pip install https://github.com/pfultz2/rclone/archive/master.tar.gz
