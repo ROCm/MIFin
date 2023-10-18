@@ -95,8 +95,7 @@ RUN git pull && git checkout $MIOPEN_BRANCH
 # Install dependencies
 ARG MIOPEN_DEPS=$MIOPEN_DIR/cget
 #issue with upstream for composable kernel install
-RUN sed -i "s#[^\n]*composable_kernel[^\n]*##g" requirements.txt
-RUN cmake -P install_deps.cmake --minimum
+RUN cmake -P install_deps.cmake --prefix $MIOPEN_DEPS
 
 ARG TUNA_USER=miopenpdb
 ARG BACKEND=HIP
