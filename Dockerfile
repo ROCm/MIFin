@@ -91,8 +91,11 @@ ARG MIOPEN_BRANCH=develop
 RUN git pull && git checkout $MIOPEN_BRANCH
 
 # Install dependencies
-ARG MIOPEN_DEPS=$MIOPEN_DIR/cget
-#issue with upstream for composable kernel install
+ARG MIOPEN_DEPS="$MIOPEN_DIR/cget;/opt/rocm"
+#issue with upstream for composable kernel install taking a long time to build from source
+RUN sed -i "s#[^\n]*composable_kernel[^\n]*##g" requirements.txt
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -f -y --allow-unauthenticated \
+    composablekernel-dev
 RUN cmake -P install_deps.cmake --prefix $MIOPEN_DEPS
 
 ARG TUNA_USER=miopenpdb
