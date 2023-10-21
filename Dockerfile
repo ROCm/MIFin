@@ -120,3 +120,6 @@ RUN make install
 # Install dependencies
 ADD requirements.txt /requirements.txt
 RUN CXXFLAGS='-isystem $PREFIX/include' cget -p $PREFIX install -f /requirements.txt
+
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -f -y --allow-unauthenticated \
+    cppcheck
