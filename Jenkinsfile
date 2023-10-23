@@ -127,7 +127,7 @@ pipeline {
                                 -o -iname \'*.cl\' \
                                 | grep -v 'build/' \
                                 | grep -v 'base64' \
-                                | xargs -n 1 -P 1 -I{} -t sh -c \'clang-format -style=file {} | diff - {}\'"
+                                | xargs -n 1 -P 1 -I{} -t sh -c \'clang-format-12 -style=file {} | diff - {}\'"
                     }
                     steps{
                         buildJob('clang++', '-DCMAKE_BUILD_TYPE=release', image, "", cmd)
@@ -140,7 +140,7 @@ pipeline {
                         cmd = "rm -rf build; \
                                 mkdir build; \
                                 cd build; \
-                                CXX=/opt/rocm/llvm/bin/clang++ cmake -DBUILD_DEV=On ..; \
+                                CXX=/opt/rocm/llvm/bin/clang++ cmake -DCMAKE_PREFIX_PATH=/root/dMIOpen/cget -DBUILD_DEV=On ..; \
                                 make -j\$(nproc) -k analyze;"
                     }
                     steps{

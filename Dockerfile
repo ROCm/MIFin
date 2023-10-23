@@ -7,8 +7,8 @@ RUN dpkg --add-architecture i386
 
 
 #install rocm
-ARG ROCMVERSION='5.5 50'
-ARG OSDB_BKC_VERSION=
+ARG ROCMVERSION=
+ARG OSDB_BKC_VERSION=12825
 # Add rocm repository
 RUN apt-get update
 RUN apt-get install -y wget gnupg
@@ -23,51 +23,49 @@ RUN if ! [ -z $OSDB_BKC_VERSION ]; then \
        cat  /etc/apt/sources.list.d/rocm.list;\
     fi
 
+RUN set -xe
+# Install dependencies
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -f -y --allow-unauthenticated \
+    rocm-dev \
+    rocm-device-libs \
+    rocm-opencl \
+    rocm-opencl-dev \
+    rocm-cmake \
+    && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
-# Install dependencies required to build hcc
-# Ubuntu csomic contains llvm-7 required to build Tensile
-RUN sh -c "echo deb http://mirrors.kernel.org/ubuntu xenial main universe | tee -a /etc/apt/sources.list"
+
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -f -y --allow-unauthenticated \
     apt-utils \
     build-essential \
-    clang \
-    clang-format \
-    clang-tidy \
-    cmake \
-    comgr \
+    clang-format-12 \
+    cmake \ 
     curl \
     doxygen \
-    g++-5-multilib \
+    gdb \
     git \
-    hsa-rocr-dev \
-    hsakmt-roct-dev \
-    jq \
+    lbzip2 \
     lcov \
-    libelf-dev \
-    libfile-which-perl \
     libncurses5-dev \
-    libpthread-stubs0-dev \
     libnuma-dev \
-    libunwind-dev \
-    nsis \
-    software-properties-common \
-    libboost-all-dev \
-    llvm-7 \
+    libpthread-stubs0-dev \
+    mysql-client \
+    openssh-server \
     pkg-config \
     python3 \
-    python3-distutils \
-    python3-venv \
     python3-dev \
     python3-pip \
-    python3-yaml \
-    cppcheck \
-    rocm-dev \
-    rocm-opencl \
-    rocm-opencl-dev \
+    python3-venv \
     rocblas \
-    miopen-hip && \
+    software-properties-common \
+    sqlite3 \
+    vim \
+    wget \
+    && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
+
 
 # Setup ubsan environment to printstacktrace
 ENV UBSAN_OPTIONS=print_stacktrace=1
@@ -77,7 +75,7 @@ RUN wget https://github.com/Yelp/dumb-init/releases/download/v1.2.0/dumb-init_1.
 RUN dpkg -i dumb-init_*.deb && rm dumb-init_*.deb
 
 # Install cget
-RUN pip install https://github.com/pfultz2/cget/archive/57b3289000fcdb3b7e424c60a35ea09bc44d8538.tar.gz
+RUN pip install cget
 
 # Install rclone
 RUN pip install https://github.com/pfultz2/rclone/archive/master.tar.gz
@@ -94,9 +92,11 @@ RUN git pull && git checkout $MIOPEN_BRANCH
 
 # Install dependencies
 ARG MIOPEN_DEPS=$MIOPEN_DIR/cget
-#issue with upstream for composable kernel install
+#issue with upstream for composable kernel install taking a long time to build from source
 RUN sed -i "s#[^\n]*composable_kernel[^\n]*##g" requirements.txt
-RUN cmake -P install_deps.cmake --minimum
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -f -y --allow-unauthenticated \
+    composablekernel-dev
+RUN cmake -P install_deps.cmake --prefix $MIOPEN_DEPS
 
 ARG TUNA_USER=miopenpdb
 ARG BACKEND=HIP
@@ -105,7 +105,7 @@ WORKDIR $MIOPEN_DIR/build
 ARG MIOPEN_CACHE_DIR=/tmp/${TUNA_USER}/cache
 ARG MIOPEN_USER_DB_PATH=/tmp/$TUNA_USER/config/miopen
 ARG MIOPEN_USE_MLIR=On
-ARG MIOPEN_CMAKE_ARGS="-DMIOPEN_USE_COMGR=Off -DMIOPEN_USE_MLIR=${MIOPEN_USE_MLIR} -DMIOPEN_INSTALL_CXX_HEADERS=On -DMIOPEN_CACHE_DIR=${MIOPEN_CACHE_DIR} -DMIOPEN_USER_DB_PATH=${MIOPEN_USER_DB_PATH} -DMIOPEN_BACKEND=${BACKEND} -DCMAKE_PREFIX_PATH=${MIOPEN_DEPS} -DMIOPEN_USE_COMPOSABLEKERNEL=Off -DUSE_FIN=Off"
+ARG MIOPEN_CMAKE_ARGS="-DMIOPEN_USE_MLIR=${MIOPEN_USE_MLIR} -DMIOPEN_INSTALL_CXX_HEADERS=On -DMIOPEN_CACHE_DIR=${MIOPEN_CACHE_DIR} -DMIOPEN_USER_DB_PATH=${MIOPEN_USER_DB_PATH} -DMIOPEN_BACKEND=${BACKEND} -DCMAKE_PREFIX_PATH="${MIOPEN_DEPS};${PREFIX}""
 
 RUN echo "MIOPEN: Selected $BACKEND backend."
 RUN if [ $BACKEND = "OpenCL" ]; then \
@@ -120,3 +120,6 @@ RUN make install
 # Install dependencies
 ADD requirements.txt /requirements.txt
 RUN CXXFLAGS='-isystem $PREFIX/include' cget -p $PREFIX install -f /requirements.txt
+
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -f -y --allow-unauthenticated \
+    cppcheck
