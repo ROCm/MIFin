@@ -290,6 +290,7 @@ enable_cppcheck(
         passedByValue
         # preprocessorErrorDirective
         shadowVariable
+        unreadVariable
         uselessCallsSubstr
         unusedFunction
         unusedPrivateFunction
