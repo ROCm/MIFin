@@ -440,7 +440,7 @@ int BNFin<Tgpu, Tref>::MIOpenFindCompile()
         {
             json kernel;
             auto comp_opts   = k.comp_options;
-            auto p           = handle.LoadProgram(k.kernel_file, comp_opts, false, "");
+            auto p           = handle.LoadProgram(k.kernel_file, comp_opts, "");
             const auto hsaco = p.IsCodeObjectInMemory()
                                    ? p.GetCodeObjectBlob()
                                    : miopen::LoadFile(p.GetCodeObjectPathname().string());

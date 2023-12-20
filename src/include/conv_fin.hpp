@@ -571,8 +571,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                                        h.GetTargetProperties(),
                                        h.GetMaxComputeUnits(),
                                        kernel_file_no_ext,
-                                       comp_opts,
-                                       false);
+                                       comp_opts);
                 }
                 else
                 {
@@ -1030,8 +1029,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
                     comp_opts = k.comp_options + " -mcpu=" + arch;
                 }
 
-                const auto hsaco =
-                    miopen::LoadBinary(tgt_props, num_cu, k.kernel_file, comp_opts, false);
+                const auto hsaco = miopen::LoadBinary(tgt_props, num_cu, k.kernel_file, comp_opts);
                 if(hsaco.empty())
                     throw std::runtime_error("Got empty code object");
                 // Compress the blob
@@ -1574,7 +1572,7 @@ int ConvFin<Tgpu, Tref>::SearchPreCompiledKernels()
                     json cdobj_result;
                     auto comp_opts   = k.comp_options;
                     const auto hsaco = miopen::LoadBinary(
-                        tgt_props, num_cu, k.kernel_file, comp_opts + " -mcpu=" + arch, false);
+                        tgt_props, num_cu, k.kernel_file, comp_opts + " -mcpu=" + arch);
                     if(hsaco.empty())
                     {
                         std::cout << "!!!FAILURE !!! - Kernel Db is not present" << std::endl;
