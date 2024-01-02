@@ -1,5 +1,5 @@
 #Use miopen ci base image
-ARG BASEIMAGE=rocm/miopen:ci_3346f2
+ARG BASEIMAGE=rocm/miopen:ci_c1ca2a
 
 #FROM ubuntu:20.04
 FROM $BASEIMAGE
