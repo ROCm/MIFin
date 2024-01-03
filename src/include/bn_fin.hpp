@@ -146,7 +146,7 @@ int BNFin<Tgpu, Tref>::TestApplicability()
         }
         app_solvers.push_back(sln.solver_id);
     }
-    for(auto& elem : app_solvers)
+    for(const auto& elem : app_solvers)
     {
         std::cerr << elem << std::endl;
     }

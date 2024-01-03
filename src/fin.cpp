@@ -84,6 +84,7 @@ std::string BaseFin::ParseBaseArg(const int argc, const char* argv[])
         return arg;
 }
 // cppcheck-suppress constParameter
+// cppcheck-suppress constParameterReference
 void BaseFin::InitNoGpuHandle(miopen::Handle& handle,
                               const std::string& arch,
                               const unsigned long num_cu)
@@ -103,11 +104,13 @@ void BaseFin::InitNoGpuHandle(miopen::Handle& handle,
 
 void BaseFin::VerifyDevProps(const std::string& in_arch, const unsigned long in_num_cu)
 {
-    std::cerr << "Verifying device properties" << std::endl;
     std::string arch    = in_arch;
     arch                = arch.substr(0, arch.find(':'));
     const size_t num_cu = in_num_cu;
     std::ignore         = num_cu;
+    std::cerr << "Verifying device properties, arch: " << arch << ", num_cu: " << num_cu
+              << std::endl;
+
     if(arch == "gfx900")
     {
         assert(num_cu == 56 || num_cu == 64);
@@ -131,6 +134,10 @@ void BaseFin::VerifyDevProps(const std::string& in_arch, const unsigned long in_
     else if(arch == "gfx940")
     {
         assert(num_cu == 228);
+    }
+    else if(arch == "gfx942")
+    {
+        assert(num_cu == 304);
     }
     else
         throw std::runtime_error("Invalid Arch Name");
