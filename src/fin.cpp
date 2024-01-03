@@ -84,6 +84,7 @@ std::string BaseFin::ParseBaseArg(const int argc, const char* argv[])
         return arg;
 }
 // cppcheck-suppress constParameter
+// cppcheck-suppress constParameterReference
 void BaseFin::InitNoGpuHandle(miopen::Handle& handle,
                               const std::string& arch,
                               const unsigned long num_cu)
