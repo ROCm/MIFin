@@ -108,7 +108,8 @@ void BaseFin::VerifyDevProps(const std::string& in_arch, const unsigned long in_
     arch                = arch.substr(0, arch.find(':'));
     const size_t num_cu = in_num_cu;
     std::ignore         = num_cu;
-    std::cerr << "Verifying device properties, arch: " << arch << ", num_cu: " << num_cu << std::endl;
+    std::cerr << "Verifying device properties, arch: " << arch << ", num_cu: " << num_cu
+              << std::endl;
 
     if(arch == "gfx900")
     {
