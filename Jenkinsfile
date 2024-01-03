@@ -140,7 +140,7 @@ pipeline {
                         cmd = "rm -rf build; \
                                 mkdir build; \
                                 cd build; \
-                                CXX=/opt/rocm/llvm/bin/clang++ cmake -DCMAKE_PREFIX_PATH=/root/dMIOpen/cget -DBUILD_DEV=On ..; \
+                                CXX=/opt/rocm/llvm/bin/clang++ cmake -DCMAKE_PREFIX_PATH=/opt/rocm -DBUILD_DEV=On ..; \
                                 make -j\$(nproc) -k analyze;"
                     }
                     steps{
@@ -153,7 +153,7 @@ pipeline {
                         cmd = "rm -rf build; \
                                 mkdir build; \
                                 cd build; \
-                                CXX=/opt/rocm/llvm/bin/clang++ cmake -DBUILD_DEV=On -DCMAKE_PREFIX_PATH=/root/dMIOpen/cget ..; \
+                                CXX=/opt/rocm/llvm/bin/clang++ cmake -DBUILD_DEV=On -DCMAKE_PREFIX_PATH=/opt/rocm ..; \
                                 make -j\$(nproc) all;"
                     }
                     steps{
@@ -166,7 +166,7 @@ pipeline {
                         cmd = "rm -rf build; \
                                 mkdir build; \
                                 cd build; \
-                                CXX=/opt/rocm/llvm/bin/clang++ cmake -DBUILD_DEV=On -DCMAKE_PREFIX_PATH=/root/dMIOpen/cget ..; \
+                                CXX=/opt/rocm/llvm/bin/clang++ cmake -DBUILD_DEV=On -DCMAKE_PREFIX_PATH=/opt/rocm ..; \
                                 make -j\$(nproc) fin_check;"
                     }
                     steps{
