@@ -146,12 +146,11 @@ class BaseFin
             auto hsaco = miopen::LoadBinary(handle.GetTargetProperties(),
                                             handle.GetMaxComputeUnits(),
                                             kern.kernel_file,
-                                            comp_opts,
-                                            false);
+                                            comp_opts);
 
             if(hsaco.empty())
             {
-                auto p = handle.LoadProgram(kern.kernel_file, kern.comp_options, false, "");
+                auto p = handle.LoadProgram(kern.kernel_file, kern.comp_options, "");
                 hsaco  = p.IsCodeObjectInMemory()
                              ? p.GetCodeObjectBlob()
                              : miopen::LoadFile(p.GetCodeObjectPathname().string());
