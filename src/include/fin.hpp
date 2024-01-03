@@ -191,7 +191,7 @@ class BaseFin
     void SolutionHasProgram(const miopen::Handle& handle,
                             const miopen::solver::ConvSolution& solution)
     {
-        for(auto& kern : solution.construction_params)
+        for(const auto& kern : solution.construction_params)
         {
             std::string kernel_file = kern.kernel_file;
             std::string comp_opts   = kern.comp_options;
@@ -296,7 +296,7 @@ template <typename T>
 std::ostream& operator<<(std::ostream& os, const std::vector<T>& vs)
 {
     os << "{ size: " << vs.size() << ", entries: ";
-    for(auto& v : vs)
+    for(const auto& v : vs)
         os << v << " ";
     os << "}";
     return os;
