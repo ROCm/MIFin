@@ -65,6 +65,9 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     endif()
 endif()
 
+include(CheckCXXLinkerFlag)
+check_cxx_linker_flag(stdc++fs HAS_LIB_STD_FILESYSTEM)
+
 ############################################################
 # require C++17
 add_compile_options(-std=c++17)

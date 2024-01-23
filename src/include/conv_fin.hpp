@@ -47,6 +47,7 @@
 #include <miopen/perf_field.hpp>
 #include <miopen/solver_id.hpp>
 #include <miopen/version.h>
+#include <miopen/filesystem.hpp>
 
 #if MIOPEN_MODE_NOGPU
 #include <miopen/kernel_cache.hpp>
@@ -54,7 +55,7 @@
 #endif
 
 #include <boost/range/adaptor/sliced.hpp>
-#include <boost/filesystem.hpp>
+namespace fs = miopen::fs;
 
 #include <algorithm>
 #include <cstdlib>
@@ -236,7 +237,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
     {
         json res_item;
         // remove the user db files
-        boost::filesystem::remove_all(miopen::GetCachePath(false));
+        fs::remove_all(miopen::GetCachePath(false));
         auto process_solver = [&]() -> bool {
             std::cerr << "Processing Solver: " << solver_id.ToString() << std::endl;
             const auto& s           = solver_id.GetSolver();
@@ -373,7 +374,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
     {
         json res_item;
         // remove the user db files
-        boost::filesystem::remove_all(miopen::GetCachePath(false));
+        fs::remove_all(miopen::GetCachePath(false));
         auto process_solver = [&]() -> bool {
             std::cerr << "Processing Solver: " << solver_id.ToString() << std::endl;
             const auto& s           = solver_id.GetSolver();
@@ -488,8 +489,8 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
     {
         // Somehow the direction changes mid loop !
         json res_item;
-        boost::system::error_code ec;
-        boost::filesystem::remove_all(miopen::GetCachePath(false), ec);
+        std::error_code ec;
+        fs::remove_all(miopen::GetCachePath(false), ec);
         // boost::filesystem::remove_all(miopen::GetCachePath(true), ec);
         if(ec)
         {
@@ -772,9 +773,9 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
     {
         // Somehow the direction changes mid loop !
         json res_item;
-        boost::system::error_code ec;
-        boost::filesystem::remove_all(miopen::GetCachePath(false), ec);
-        // boost::filesystem::remove_all(miopen::GetCachePath(true), ec);
+        std::error_code ec;
+        fs::remove_all(miopen::GetCachePath(false), ec);
+        // fs::remove_all(miopen::GetCachePath(true), ec);
         if(ec)
         {
             std::cerr << "Error while removing MIOpen cache: " << ec.message();
@@ -1270,7 +1271,6 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
 #endif
 
     bool ret            = true;
-    namespace fs        = boost::filesystem;
     bool spec_arch      = (job["arch"].size() > 0 and job["num_cu"].size() > 0);
     std::string db_path = miopen::GetSystemDbPath();
 
@@ -1480,19 +1480,17 @@ int ConvFin<Tgpu, Tref>::SearchPreCompiledKernels()
     const size_t num_cu    = handle.GetMaxComputeUnits();
     const std::string arch = tgt_props.Name();
 
-    namespace fs = boost::filesystem;
-
     // to fetch the kdb folder location
     // ex:  /opt/rocm/miopen/share/miopen/db
     auto pathstr = miopen::GetCachePath(true);
 
     // append the json input arch and numcu values to file
-    boost::filesystem::path sys_path =
+    fs::path sys_path =
         pathstr / (miopen::Handle::GetDbBasename(tgt_props, num_cu) + ".kdb");
     std::cout << "System KernDB path = " << sys_path << std::endl;
 
     // checks the file present in shared folder
-    if(boost::filesystem::exists(sys_path))
+    if(fs::exists(sys_path))
     {
         std::cout << "KernDB file Present  =  " << sys_path << std::endl;
 
