@@ -31,9 +31,18 @@ FetchContent_Declare(
   GIT_TAG        f8d7d77c06936315286eb55f8de22cd23c188571
 )
 
+# Suppress ROCMChecks WARNING on GoogleTests
+macro(rocm_check_toolchain_var var access value list_file)
+  if(NOT ROCM_DISABLE_CHECKS)
+    _rocm_check_toolchain_var("${var}" "${access}" "${value}" "${list_file}")
+  endif()
+endmacro()
+
 # Will be necessary for windows build
 # set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+set(ROCM_DISABLE_CHECKS TRUE)
 FetchContent_MakeAvailable(googletest)
+set(ROCM_DISABLE_CHECKS FALSE)
 
 target_compile_options(gtest PRIVATE ${GTEST_CMAKE_CXX_FLAGS})
 target_compile_options(gtest_main PRIVATE ${GTEST_CMAKE_CXX_FLAGS})
