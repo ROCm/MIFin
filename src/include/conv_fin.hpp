@@ -1485,8 +1485,7 @@ int ConvFin<Tgpu, Tref>::SearchPreCompiledKernels()
     auto pathstr = miopen::GetCachePath(true);
 
     // append the json input arch and numcu values to file
-    fs::path sys_path =
-        pathstr / (miopen::Handle::GetDbBasename(tgt_props, num_cu) + ".kdb");
+    fs::path sys_path = pathstr / (miopen::Handle::GetDbBasename(tgt_props, num_cu) + ".kdb");
     std::cout << "System KernDB path = " << sys_path << std::endl;
 
     // checks the file present in shared folder
