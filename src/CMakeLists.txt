@@ -37,6 +37,9 @@ if(rocblas_FOUND)
     target_link_libraries( fin $<BUILD_INTERFACE:roc::rocblas> )
     # target_link_libraries( fin PRIVATE roc::rocblas )
 endif()
+if(HAS_LIB_STD_FILESYSTEM)
+    target_link_libraries(fin stdc++fs)
+endif()
 
 # Cmake does not add flags correctly for gcc
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU") 

@@ -32,6 +32,7 @@
 #include "tensor.hpp"
 
 #include <miopen/execution_context.hpp>
+#include <miopen/filesystem.hpp>
 #include <miopen/miopen.h>
 #include <miopen/batchnorm/problem_description.hpp>
 #include <miopen/batch_norm.hpp>
@@ -44,6 +45,8 @@
 #include <nlohmann/json.hpp>
 
 #define EPSILON 1e-3
+
+namespace fs = miopen::fs;
 
 namespace fin {
 
@@ -146,7 +149,7 @@ int BNFin<Tgpu, Tref>::TestApplicability()
         }
         app_solvers.push_back(sln.solver_id);
     }
-    for(auto& elem : app_solvers)
+    for(const auto& elem : app_solvers)
     {
         std::cerr << elem << std::endl;
     }
@@ -425,7 +428,7 @@ int BNFin<Tgpu, Tref>::MIOpenFindCompile()
     for(const auto& sln : GetBNSolutions(ctx))
     {
         // remove the user db files
-        boost::filesystem::remove_all(miopen::GetCachePath(false));
+        fs::remove_all(miopen::GetCachePath(false));
         json res_item;
         res_item["solver_name"] = sln.solver_id;
         res_item["algorithm"]   = GetAlgorithm();
@@ -440,7 +443,7 @@ int BNFin<Tgpu, Tref>::MIOpenFindCompile()
         {
             json kernel;
             auto comp_opts   = k.comp_options;
-            auto p           = handle.LoadProgram(k.kernel_file, comp_opts, false, "");
+            auto p           = handle.LoadProgram(k.kernel_file, comp_opts, "");
             const auto hsaco = p.IsCodeObjectInMemory()
                                    ? p.GetCodeObjectBlob()
                                    : miopen::LoadFile(p.GetCodeObjectPathname().string());

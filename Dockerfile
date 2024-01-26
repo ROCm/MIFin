@@ -1,40 +1,10 @@
-FROM ubuntu:20.04
+#Use miopen ci base image
+ARG BASEIMAGE=rocm/miopen:ci_c1ca2a
+
+#FROM ubuntu:20.04
+FROM $BASEIMAGE
 
 ARG PREFIX=/opt/rocm
-
-# Support multiarch
-RUN dpkg --add-architecture i386
-
-
-#install rocm
-ARG ROCMVERSION=
-ARG OSDB_BKC_VERSION=12825
-# Add rocm repository
-RUN apt-get update
-RUN apt-get install -y wget gnupg
-RUN wget -qO - http://repo.radeon.com/rocm/rocm.gpg.key | apt-key add -
-RUN if ! [ -z $OSDB_BKC_VERSION ]; then \
-       echo "Using BKC VERSION: $OSDB_BKC_VERSION";\
-       sh -c "echo deb [arch=amd64 trusted=yes] http://compute-artifactory.amd.com/artifactory/list/rocm-osdb-20.04-deb/ compute-rocm-dkms-no-npi-hipclang ${OSDB_BKC_VERSION} > /etc/apt/sources.list.d/rocm.list" ;\
-       cat  /etc/apt/sources.list.d/rocm.list;\
-    else \
-       echo "Using Release VERSION: $ROCMVERSION";\
-       sh -c "echo deb [arch=amd64 trusted=yes] http://compute-artifactory.amd.com/artifactory/list/rocm-osdb-20.04-deb/ compute-rocm-rel-${ROCMVERSION} > /etc/apt/sources.list.d/rocm.list" ;\
-       cat  /etc/apt/sources.list.d/rocm.list;\
-    fi
-
-RUN set -xe
-# Install dependencies
-RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -f -y --allow-unauthenticated \
-    rocm-dev \
-    rocm-device-libs \
-    rocm-opencl \
-    rocm-opencl-dev \
-    rocm-cmake \
-    && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
-
 
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -f -y --allow-unauthenticated \
     apt-utils \
@@ -89,14 +59,6 @@ RUN git clone https://github.com/ROCmSoftwarePlatform/MIOpen.git $MIOPEN_DIR
 WORKDIR $MIOPEN_DIR
 ARG MIOPEN_BRANCH=develop
 RUN git pull && git checkout $MIOPEN_BRANCH
-
-# Install dependencies
-ARG MIOPEN_DEPS=$MIOPEN_DIR/cget
-#issue with upstream for composable kernel install taking a long time to build from source
-RUN sed -i "s#[^\n]*composable_kernel[^\n]*##g" requirements.txt
-RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -f -y --allow-unauthenticated \
-    composablekernel-dev
-RUN cmake -P install_deps.cmake --prefix $MIOPEN_DEPS
 
 ARG TUNA_USER=miopenpdb
 ARG BACKEND=HIP
