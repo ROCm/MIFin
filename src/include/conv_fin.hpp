@@ -608,10 +608,10 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
 
             try
             {
-                float kernel_time = -1;
-                auto perf_ctx = ctx;
-                perf_ctx.do_search     = true;
-                perf_ctx.db_update     = true;
+                float kernel_time  = -1;
+                auto perf_ctx      = ctx;
+                perf_ctx.do_search = true;
+                perf_ctx.db_update = true;
 
                 // This is required because DataInvokeParams switches tensor order due to
                 // direction and it does not have a
@@ -630,7 +630,8 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                                                        workspace.desc.GetNumBytes(),
                                                        convDesc.attribute.gfx90aFp16alt.GetFwd()};
 
-                    solution = s.FindSolution(perf_ctx, problem, db, invoke_ctx); // forcing search here
+                    solution =
+                        s.FindSolution(perf_ctx, problem, db, invoke_ctx); // forcing search here
                     // check if binaries were added, prep invoker for gathering timing
                     SolutionHasProgram(h, solution);
 
@@ -651,7 +652,8 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                                                        workspace.desc.GetNumBytes(),
                                                        convDesc.attribute.gfx90aFp16alt.GetBwd()};
 
-                    solution = s.FindSolution(perf_ctx, problem, db, invoke_ctx); // forcing search here
+                    solution =
+                        s.FindSolution(perf_ctx, problem, db, invoke_ctx); // forcing search here
                     // check if binaries were added, prep invoker for gathering timing
                     SolutionHasProgram(h, solution);
 
@@ -672,7 +674,8 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                                                       workspace.desc.GetNumBytes(),
                                                       convDesc.attribute.gfx90aFp16alt.GetWrW()};
 
-                    solution = s.FindSolution(perf_ctx, problem, db, invoke_ctx); // forcing search here
+                    solution =
+                        s.FindSolution(perf_ctx, problem, db, invoke_ctx); // forcing search here
                     // check if binaries were added, prep invoker for gathering timing
                     SolutionHasProgram(h, solution);
 
