@@ -57,7 +57,7 @@ ARG MIOPEN_DIR=/root/dMIOpen
 #Clone MIOpen
 RUN git clone https://github.com/ROCmSoftwarePlatform/MIOpen.git $MIOPEN_DIR
 WORKDIR $MIOPEN_DIR
-ARG MIOPEN_BRANCH=develop
+ARG MIOPEN_BRANCH=77b42cb6486a9da71add35bf648063256165fc41
 RUN git pull && git checkout $MIOPEN_BRANCH
 
 ARG TUNA_USER=miopenpdb
