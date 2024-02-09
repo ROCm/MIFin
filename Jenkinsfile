@@ -67,11 +67,11 @@ def buildJob(compiler, flags, image, prefixpath="/opt/rocm", cmd = ""){
             dockerArgs = ""
         }
         def date = sh(script: 'date +"%m%d%H"', returnStdout: true).trim()
-        dockerArgs += " --build-arg CACHE_DATE=${date}"
+        dockerArgs += " --build-arg CACHE_DATE=${date} "
         def retimage
         try {
             echo "build docker"
-            retimage = docker.build("${image}", dockerArgs + '.')
+            retimage = docker.build("${image}", dockerArgs + ' .')
             withDockerContainer(image: image, args: dockerOpts) {
                 timeout(time: 5, unit: 'MINUTES')
                 {
@@ -80,7 +80,7 @@ def buildJob(compiler, flags, image, prefixpath="/opt/rocm", cmd = ""){
             }
         } catch(Exception ex) {
             echo "exception ocurred"
-            retimage = docker.build("${image}", dockerArgs + "--no-cache .")
+            retimage = docker.build("${image}", dockerArgs + " --no-cache .")
             withDockerContainer(image: image, args: dockerOpts) {
                 timeout(time: 5, unit: 'MINUTES')
                 {
