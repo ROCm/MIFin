@@ -66,6 +66,8 @@ def buildJob(compiler, flags, image, prefixpath="/opt/rocm", cmd = ""){
         {
             dockerArgs = ""
         }
+        def date = sh(script: 'date +"%m%d%H"', returnStdout: true).trim()
+        dockerArgs += " --build-arg CACHE_DATE=${date}"
         def retimage
         try {
             echo "build docker"
