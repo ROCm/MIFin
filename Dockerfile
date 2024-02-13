@@ -1,5 +1,5 @@
 #Use miopen ci base image
-ARG BASEIMAGE=rocm/miopen:ci_c1ca2a
+ARG BASEIMAGE=rocm/miopen:ci_441044
 
 #FROM ubuntu:20.04
 FROM $BASEIMAGE
@@ -57,6 +57,7 @@ ARG MIOPEN_DIR=/root/dMIOpen
 #Clone MIOpen
 RUN git clone https://github.com/ROCmSoftwarePlatform/MIOpen.git $MIOPEN_DIR
 WORKDIR $MIOPEN_DIR
+ARG CACHE_DATE=1
 ARG MIOPEN_BRANCH=develop
 RUN git pull && git checkout $MIOPEN_BRANCH
 
