@@ -1151,12 +1151,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
 template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::TestApplicability()
 {
-#if MIOPEN_MODE_NOGPU
     GetandSetData();
-#else
-    throw std::runtime_error("MIOpen needs to be compiled with the NOGPU backend "
-                             "to test applicability");
-#endif
     const auto conv_dir = GetDirection();
     const auto problem =
         (conv_dir == miopen::conv::Direction::Forward)
@@ -1168,12 +1163,7 @@ int ConvFin<Tgpu, Tref>::TestApplicability()
     auto ctx = miopen::ConvolutionContext{};
     // cppcheck-suppress unreadVariable
     auto handle = miopen::Handle{};
-#if MIOPEN_MODE_NOGPU
     BaseFin::InitNoGpuHandle(handle, job["arch"], job["num_cu"]);
-#else
-    throw std::runtime_error("MIOpen needs to be compiled with the NOGPU backend "
-                             "to test applicability");
-#endif
 
     ctx.SetStream(&handle);
     problem.SetupFloats(ctx);
