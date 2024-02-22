@@ -941,8 +941,8 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
                     throw std::runtime_error("Invalid Direction");
                 }
 
-                params    = s.GetPerfCfgParams(ctx, problem, db);
-                kern_objs = BuildJsonKernelList(h, solution.construction_params);
+                std::string params    = s.GetPerfCfgParams(ctx, problem, db);
+                json kern_objs = BuildJsonKernelList(h, solution.construction_params);
 
                 res_item["params"]         = params;
                 res_item["time"]           = kernel_time;
