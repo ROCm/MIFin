@@ -115,7 +115,7 @@ endif()
 if( FIN_BACKEND STREQUAL "HIP" OR FIN_BACKEND STREQUAL "HIPOC")
     message(STATUS "HIP Backend")
     set(FIN_BACKEND_HIP 1)
-    find_program(HIP_OC_COMPILER clang
+    find_program(HIP_OC_COMPILER amdclang
         PATH_SUFFIXES bin
         PATHS
             /opt/rocm
