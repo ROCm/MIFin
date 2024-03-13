@@ -115,16 +115,6 @@ endif()
 if( FIN_BACKEND STREQUAL "HIP" OR FIN_BACKEND STREQUAL "HIPOC")
     message(STATUS "HIP Backend")
     set(FIN_BACKEND_HIP 1)
-    find_program(HIP_OC_COMPILER clang-ocl
-        PATH_SUFFIXES bin
-        PATHS /opt/rocm
-    )
-    if(HIP_OC_COMPILER)
-        message(STATUS "hip compiler: ${HIP_OC_COMPILER}")
-        set(HIP_OC_COMPILER "${HIP_OC_COMPILER}")
-    else()
-        message(FATAL_ERROR "clang-ocl not found")
-    endif()
     
     if(CMAKE_CXX_COMPILER MATCHES ".*hcc")
         link_libraries(stdc++)
