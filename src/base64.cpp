@@ -179,8 +179,9 @@ std::string base64_encode(unsigned char const* bytes_to_encode, size_t in_len, b
     return ret;
 }
 
+namespace detail {
 template <typename String>
-static std::string decode(String encoded_string, bool remove_linebreaks)
+static std::vector<char> decode(String encoded_string)
 {
     //
     // decode(…) is templated so that it can be used with String = const std::string&
@@ -188,17 +189,7 @@ static std::string decode(String encoded_string, bool remove_linebreaks)
     //
 
     if(encoded_string.empty())
-        return std::string();
-
-    if(remove_linebreaks)
-    {
-
-        std::string copy(encoded_string);
-
-        copy.erase(std::remove(copy.begin(), copy.end(), '\n'), copy.end());
-
-        return base64_decode(copy, false);
-    }
+        return {};
 
     size_t length_of_string = encoded_string.length();
     size_t pos              = 0;
@@ -209,9 +200,9 @@ static std::string decode(String encoded_string, bool remove_linebreaks)
     // in the encoded string. This approximation is needed to reserve
     // enough space in the string to be returned.
     //
-    size_t approx_length_of_decoded_string = length_of_string / 4 * 3;
-    std::string ret;
-    ret.reserve(approx_length_of_decoded_string);
+    size_t approx_length_of_decoded_buffer = length_of_string / 4 * 3;
+    std::vector<char> ret;
+    ret.reserve(approx_length_of_decoded_buffer);
 
     while(pos < length_of_string)
     {
@@ -240,8 +231,21 @@ static std::string decode(String encoded_string, bool remove_linebreaks)
 
     return ret;
 }
+} // namespace detail
 
-std::string base64_decode(std::string const& s, bool remove_linebreaks)
+template <typename String>
+static std::vector<char> decode(String encoded_string, bool remove_linebreaks)
+{
+    if(remove_linebreaks)
+    {
+        std::string copy{encoded_string};
+        copy.erase(std::remove(copy.begin(), copy.end(), '\n'), copy.end());
+        return detail::decode(copy);
+    }
+    return detail::decode(encoded_string);
+}
+
+std::vector<char> base64_decode(std::string const& s, bool remove_linebreaks)
 {
     return decode(s, remove_linebreaks);
 }
@@ -265,7 +269,7 @@ std::string base64_encode_pem(std::string_view s) { return encode_pem(s); }
 
 std::string base64_encode_mime(std::string_view s) { return encode_mime(s); }
 
-std::string base64_decode(std::string_view s, bool remove_linebreaks)
+std::vector<char> base64_decode(std::string_view s, bool remove_linebreaks)
 {
     return decode(s, remove_linebreaks);
 }
