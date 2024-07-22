@@ -548,7 +548,8 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                 }
                 catch(const std::exception& e)
                 {
-                    std::cerr << "Binary decompression failed, will try re-compiling: " << e.what() << std::endl;
+                    std::cerr << "Binary decompression failed, will try re-compiling: " << e.what()
+                              << std::endl;
                     continue;
                 }
 
@@ -840,7 +841,8 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
                 }
                 catch(const std::exception& e)
                 {
-                    std::cerr << "Binary decompression failed, will try re-compiling: " << e.what() << std::endl;
+                    std::cerr << "Binary decompression failed, will try re-compiling: " << e.what()
+                              << std::endl;
                     continue;
                 }
 
