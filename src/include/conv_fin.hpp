@@ -541,7 +541,17 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                 const auto md5_sum       = kernel_obj["md5_sum"];
                 const auto encoded_hsaco = kernel_obj["blob"];
                 const auto decoded_hsaco = base64_decode(encoded_hsaco);
-                const auto hsaco         = miopen::decompress(decoded_hsaco, size);
+                std::vector<char> hsaco;
+                try
+                {
+                    hsaco = miopen::decompress(decoded_hsaco, size);
+                }
+                catch(const std::exception& e)
+                {
+                    std::cerr << "Binary decompression failed, will try re-compiling: " << e.what()
+                              << std::endl;
+                    continue;
+                }
 
                 std::string kernel_file_no_ext = kernel_obj["kernel_file"];
                 std::string kernel_file        = kernel_file_no_ext + ".o";
@@ -576,10 +586,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
                 }
                 else
                 {
-                    res_item["reason"] = "Corrupt Binary";
-                    std::cerr << "Corrupt Binary Object" << std::endl;
-                    throw std::runtime_error("Corrupt binary object");
-                    return false;
+                    std::cerr << "Corrupt Binary Object, will try re-compiling" << std::endl;
                 }
             }
 
@@ -708,6 +715,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
             catch(const std::exception& e)
             {
                 res_item["reason"] = std::string("Invoker exception: ") + e.what();
+                std::cerr << res_item["reason"] << std::endl;
                 return false;
             }
 
@@ -826,7 +834,17 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
                 const auto md5_sum       = kernel_obj["md5_sum"];
                 const auto encoded_hsaco = kernel_obj["blob"];
                 const auto decoded_hsaco = base64_decode(encoded_hsaco);
-                const auto hsaco         = miopen::decompress(decoded_hsaco, size);
+                std::vector<char> hsaco;
+                try
+                {
+                    hsaco = miopen::decompress(decoded_hsaco, size);
+                }
+                catch(const std::exception& e)
+                {
+                    std::cerr << "Binary decompression failed, will try re-compiling: " << e.what()
+                              << std::endl;
+                    continue;
+                }
 
                 std::string kernel_file_no_ext = kernel_obj["kernel_file"];
                 std::string kernel_file        = kernel_file_no_ext + ".o";
@@ -854,9 +872,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
                 }
                 else
                 {
-                    std::cerr << "Corrupt Binary Object" << std::endl;
-                    throw std::runtime_error("Corrupt binary object");
-                    return false;
+                    std::cerr << "Corrupt Binary Object, will try re-compiling" << std::endl;
                 }
             }
 
@@ -955,7 +971,8 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
             }
             catch(const std::exception& e)
             {
-                res_item["reason"] = std::string("Invoker exeception: ") + e.what();
+                res_item["reason"] = std::string("Invoker exception: ") + e.what();
+                std::cerr << res_item["reason"] << std::endl;
                 return false;
             }
 
@@ -1139,7 +1156,8 @@ int ConvFin<Tgpu, Tref>::MIOpenFind()
             }
             catch(const std::exception& e)
             {
-                res_item["reason"] = std::string("Invoker exeception: ") + e.what();
+                res_item["reason"] = std::string("Invoker exception: ") + e.what();
+                std::cerr << res_item["reason"] << std::endl;
                 return false;
             }
 

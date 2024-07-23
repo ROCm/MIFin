@@ -151,13 +151,21 @@ class BaseFin
             if(hsaco.empty())
             {
                 auto p = handle.LoadProgram(kern.kernel_file, kern.comp_options, "");
-                hsaco  = p.IsCodeObjectInMemory()
-                             ? p.GetCodeObjectBlob()
-                             : miopen::LoadFile(p.GetCodeObjectPathname().string());
-                if(hsaco.empty())
+
+                try
                 {
-                    std::cerr << "Got empty code object" << std::endl;
-                    throw std::runtime_error("Got empty code object");
+                    hsaco = p.IsCodeObjectInMemory()
+                                ? p.GetCodeObjectBlob()
+                                : miopen::LoadFile(p.GetCodeObjectPathname().string());
+                    if(hsaco.empty())
+                    {
+                        throw std::runtime_error("Got empty code object");
+                    }
+                }
+                catch(const std::exception& e)
+                {
+                    std::cerr << "No code object, skipping: " << e.what() << std::endl;
+                    continue;
                 }
             }
             // Compress the blob
