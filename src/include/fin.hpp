@@ -129,6 +129,66 @@ class BaseFin
         return 0;
     }
 
+    bool LoadJsonKernelList(const miopen::Handle& handle,
+                           const json kernel_objects)
+    {
+        for(const auto& kernel_obj : kernel_objects)
+        {
+            const auto size          = kernel_obj["uncompressed_size"];
+            const auto md5_sum       = kernel_obj["md5_sum"];
+            const auto encoded_hsaco = kernel_obj["blob"];
+            const auto decoded_hsaco = base64_decode(encoded_hsaco);
+            std::vector<char> hsaco;
+            try
+            {
+                hsaco = miopen::decompress(decoded_hsaco, size);
+            }
+            catch(const std::exception& e)
+            {
+                std::cerr << "Binary decompression failed, will try re-compiling: " << e.what()
+                          << std::endl;
+                continue;
+            }
+
+            std::string kernel_file_no_ext = kernel_obj["kernel_file"];
+            std::string kernel_file        = kernel_file_no_ext + ".o";
+            std::string comp_opts          = kernel_obj["comp_options"];
+            // LoadProgram doesn't add -mcpu for mlir
+            if(!miopen::EndsWith(kernel_file_no_ext, ".mlir"))
+            {
+                comp_opts += " -mcpu=" + handle.GetDeviceName();
+            }
+
+            if(miopen::md5(hsaco) == md5_sum)
+            {
+                try
+                {
+                    auto p = miopen::Program{kernel_file, hsaco};
+                    handle.AddProgram(p, kernel_file, comp_opts);
+                }
+                catch(const std::exception& e)
+                {
+                    std::cerr << "Error Adding Program: (" << kernel_file << ", " << comp_opts
+                              << ") :" << e.what() << std::endl;
+                    res_item["reason"] = std::string("Make Program exception: ") + e.what();
+                    return false;
+                }
+
+                // SaveBinary adds ".o" to kernel_file
+                miopen::SaveBinary(hsaco,
+                                   handle.GetTargetProperties(),
+                                   handle.GetMaxComputeUnits(),
+                                   kernel_file_no_ext,
+                                   comp_opts);
+            }
+            else
+            {
+                std::cerr << "Corrupt Binary Object, Skipping" << std::endl;
+            }
+        }
+        return true;
+    }
+
     json BuildJsonKernelList(const miopen::Handle& handle,
                              const std::vector<miopen::solver::KernelInfo>& kernels)
     {
