@@ -146,6 +146,15 @@ class ConvFin : public BaseFin
     int MIOpenPerfCompile();
     int MIOpenPerfEval();
 
+    float PerfTune(const miopen::Handle& h,
+               const miopen::conv::ProblemDescription& problem,
+               const miopen::solver::Id& solver_id,
+               miopen::PerformanceDb& db,
+               miopen::ConvolutionContext& perf_ctx);
+
+    float FindTune(const miopen::Handle& h,
+               const miopen::solver::ConvSolution& solution);
+
     // Utility functions
     bool IsInputTensorTransform() const;
     json command;
@@ -440,16 +449,18 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
 }
 
 
-float PerfTune(const miopen::Handle& h,
+template <typename Tgpu, typename Tref>
+float ConvFin<Tgpu, Tref>::PerfTune(const miopen::Handle& h,
                const miopen::conv::ProblemDescription& problem,
                const miopen::solver::Id& solver_id,
                miopen::PerformanceDb& db,
                miopen::ConvolutionContext& perf_ctx)
 {
-    const auto& s      = solver_id.GetSolver();
-    float kernel_time  = -1;
-    perf_ctx.do_search = true;
-    perf_ctx.db_update = true;
+    const auto& s       = solver_id.GetSolver();
+    const auto conv_dir = GetDirection();
+    float kernel_time   = -1;
+    perf_ctx.do_search  = true;
+    perf_ctx.db_update  = true;
 
     // This is required because DataInvokeParams switches tensor order due to
     // direction and it does not have a
@@ -468,7 +479,7 @@ float PerfTune(const miopen::Handle& h,
                                            workspace.desc.GetNumBytes(),
                                            convDesc.attribute.gfx90aFp16alt.GetFwd()};
 
-        solution =
+        auto solution =
             s.FindSolution(perf_ctx, problem, db, invoke_ctx); // forcing search here
         // check if binaries were added, prep invoker for gathering timing
         SolutionHasProgram(h, solution);
@@ -490,7 +501,7 @@ float PerfTune(const miopen::Handle& h,
                                            workspace.desc.GetNumBytes(),
                                            convDesc.attribute.gfx90aFp16alt.GetBwd()};
 
-        solution =
+        auto solution =
             s.FindSolution(perf_ctx, problem, db, invoke_ctx); // forcing search here
         // check if binaries were added, prep invoker for gathering timing
         SolutionHasProgram(h, solution);
@@ -512,7 +523,7 @@ float PerfTune(const miopen::Handle& h,
                                           workspace.desc.GetNumBytes(),
                                           convDesc.attribute.gfx90aFp16alt.GetWrW()};
 
-        solution =
+        auto solution =
             s.FindSolution(perf_ctx, problem, db, invoke_ctx); // forcing search here
         // check if binaries were added, prep invoker for gathering timing
         SolutionHasProgram(h, solution);
@@ -524,8 +535,7 @@ float PerfTune(const miopen::Handle& h,
     else
     {
         std::ostringstream ss;
-        ss << "Invalid Direction: " << solver_name << ": dir "
-           << static_cast<int>(conv_dir);
+        ss << "Invalid Direction: " << static_cast<int>(conv_dir);
         throw std::runtime_error(ss.str());
     }
 
@@ -655,7 +665,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
             {
                 auto perf_ctx    = ctx;
                 auto kernel_time = PerfTune(h, problem, solver_id, db, perf_ctx);
-                json kern_objs = BuildJsonKernelList(h, solution.construction_params);
+                json kern_objs   = BuildJsonKernelList(h, solution.construction_params);
 
                 res_item["params"]         = s.GetPerfCfgParams(perf_ctx, problem, db);
                 res_item["time"]           = kernel_time;
@@ -691,10 +701,12 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
 }
 
 
-float FindTune(const miopen::Handle& h,
+template <typename Tgpu, typename Tref>
+float ConvFin<Tgpu, Tref>::FindTune(const miopen::Handle& h,
                const miopen::solver::ConvSolution& solution)
 {
-    float kernel_time = -1;
+    const auto conv_dir = GetDirection();
+    float kernel_time   = -1;
 
     std::cerr << "Preparing invokers" << std::endl;
     const auto invoker =
@@ -749,8 +761,7 @@ float FindTune(const miopen::Handle& h,
     else
     {
         std::ostringstream ss;
-        ss << "Invalid Direction: " << solver_name << ": dir "
-           << static_cast<int>(conv_dir);
+        ss << "Invalid Direction: " << static_cast<int>(conv_dir);
         throw std::runtime_error(ss.str());
     }
 
