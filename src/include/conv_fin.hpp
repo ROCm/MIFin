@@ -534,7 +534,7 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
             std::cerr << solver_name << " is applicable" << std::endl;
             // Get the binary
             std::cerr << "loading binaries from fin input" << std::endl;
-            if not(LoadJsonKernelList(h, kinder["kernel_objects"]))
+            if(!LoadJsonKernelList(h, kinder["kernel_objects"], res_item))
                 return false;
 
             //miopen::solver::ConvSolution solution;
@@ -774,7 +774,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
             std::cerr << solver_name << " is applicable" << std::endl;
             // Get the binary
             std::cerr << "loading binaries from fin input" << std::endl;
-            if not(LoadJsonKernelList(h, kinder["kernel_objects"]))
+            if(!LoadJsonKernelList(h, kinder["kernel_objects"], res_item))
                 return false;
 
             auto solution = s.FindSolution(ctx, problem, db, {}); // auto tune is not expected here

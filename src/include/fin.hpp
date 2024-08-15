@@ -130,7 +130,8 @@ class BaseFin
     }
 
     bool LoadJsonKernelList(const miopen::Handle& handle,
-                           const json kernel_objects)
+                            const json kernel_objects,
+                            json res_item)
     {
         for(const auto& kernel_obj : kernel_objects)
         {
@@ -170,7 +171,7 @@ class BaseFin
                 {
                     std::cerr << "Error Adding Program: (" << kernel_file << ", " << comp_opts
                               << ") :" << e.what() << std::endl;
-                    res_item["reason"] = std::string("Make Program exception: ") + e.what();
+                    res_item["reason"] = std::string("Program Build Exception: ") + e.what();
                     return false;
                 }
 
