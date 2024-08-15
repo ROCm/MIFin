@@ -439,6 +439,99 @@ int ConvFin<Tgpu, Tref>::MIOpenFindCompile()
     return 1;
 }
 
+
+float PerfTune(const miopen::Handle& h,
+               const miopen::conv::ProblemDescription& problem,
+               const miopen::solver::Id& solver_id,
+               miopen::PerformanceDb& db,
+               miopen::ConvolutionContext& perf_ctx)
+{
+    const auto& s      = solver_id.GetSolver();
+    float kernel_time  = -1;
+    perf_ctx.do_search = true;
+    perf_ctx.db_update = true;
+
+    // This is required because DataInvokeParams switches tensor order due to
+    // direction and it does not have a
+    // copy constructor or a default constructor
+    std::cerr << "Find Solution" << std::endl;
+    if(conv_dir == miopen::conv::Direction::Forward)
+    {
+        const auto invoke_ctx =
+            miopen::conv::DataInvokeParams{{inputTensor.desc,
+                                            inputTensor.gpuData.buf.get(),
+                                            weightTensor.desc,
+                                            weightTensor.gpuData.buf.get(),
+                                            outputTensor.desc,
+                                            outputTensor.gpuData.buf.get()},
+                                           workspace.gpuData.buf.get(),
+                                           workspace.desc.GetNumBytes(),
+                                           convDesc.attribute.gfx90aFp16alt.GetFwd()};
+
+        solution =
+            s.FindSolution(perf_ctx, problem, db, invoke_ctx); // forcing search here
+        // check if binaries were added, prep invoker for gathering timing
+        SolutionHasProgram(h, solution);
+
+        const auto invoker =
+            h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
+        kernel_time = BenchmarkInvoker(invoker, h, invoke_ctx);
+    }
+    else if(conv_dir == miopen::conv::Direction::BackwardData)
+    {
+        const auto invoke_ctx =
+            miopen::conv::DataInvokeParams{{outputTensor.desc,
+                                            outputTensor.gpuData.buf.get(),
+                                            weightTensor.desc,
+                                            weightTensor.gpuData.buf.get(),
+                                            inputTensor.desc,
+                                            inputTensor.gpuData.buf.get()},
+                                           workspace.gpuData.buf.get(),
+                                           workspace.desc.GetNumBytes(),
+                                           convDesc.attribute.gfx90aFp16alt.GetBwd()};
+
+        solution =
+            s.FindSolution(perf_ctx, problem, db, invoke_ctx); // forcing search here
+        // check if binaries were added, prep invoker for gathering timing
+        SolutionHasProgram(h, solution);
+
+        const auto invoker =
+            h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
+        kernel_time = BenchmarkInvoker(invoker, h, invoke_ctx);
+    }
+    else if(conv_dir == miopen::conv::Direction::BackwardWeights)
+    {
+        const auto invoke_ctx =
+            miopen::conv::WrWInvokeParams{{outputTensor.desc,
+                                           outputTensor.gpuData.buf.get(),
+                                           inputTensor.desc,
+                                           inputTensor.gpuData.buf.get(),
+                                           weightTensor.desc,
+                                           weightTensor.gpuData.buf.get()},
+                                          workspace.gpuData.buf.get(),
+                                          workspace.desc.GetNumBytes(),
+                                          convDesc.attribute.gfx90aFp16alt.GetWrW()};
+
+        solution =
+            s.FindSolution(perf_ctx, problem, db, invoke_ctx); // forcing search here
+        // check if binaries were added, prep invoker for gathering timing
+        SolutionHasProgram(h, solution);
+
+        const auto invoker =
+            h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
+        kernel_time = BenchmarkInvoker(invoker, h, invoke_ctx);
+    }
+    else
+    {
+        std::ostringstream ss;
+        ss << "Invalid Direction: " << solver_name << ": dir "
+           << static_cast<int>(conv_dir);
+        throw std::runtime_error(ss.str());
+    }
+
+    return kernel_time;
+}
+
 template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
 {
@@ -503,8 +596,6 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
             const auto algo         = solver_id.GetAlgo(conv_dir);
             res_item["solver_name"] = solver_name;
             res_item["algorithm"]   = algo;
-            std::string params      = "";
-            json kern_objs;
 
             if(s.IsEmpty())
             {
@@ -562,90 +653,9 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
 
             try
             {
-                float kernel_time  = -1;
-                auto perf_ctx      = ctx;
-                perf_ctx.do_search = true;
-                perf_ctx.db_update = true;
-
-                // This is required because DataInvokeParams switches tensor order due to
-                // direction and it does not have a
-                // copy constructor or a default constructor
-                std::cerr << "Find Solution" << std::endl;
-                if(conv_dir == miopen::conv::Direction::Forward)
-                {
-                    const auto invoke_ctx =
-                        miopen::conv::DataInvokeParams{{inputTensor.desc,
-                                                        inputTensor.gpuData.buf.get(),
-                                                        weightTensor.desc,
-                                                        weightTensor.gpuData.buf.get(),
-                                                        outputTensor.desc,
-                                                        outputTensor.gpuData.buf.get()},
-                                                       workspace.gpuData.buf.get(),
-                                                       workspace.desc.GetNumBytes(),
-                                                       convDesc.attribute.gfx90aFp16alt.GetFwd()};
-
-                    solution =
-                        s.FindSolution(perf_ctx, problem, db, invoke_ctx); // forcing search here
-                    // check if binaries were added, prep invoker for gathering timing
-                    SolutionHasProgram(h, solution);
-
-                    const auto invoker =
-                        h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
-                    kernel_time = BenchmarkInvoker(invoker, h, invoke_ctx);
-                }
-                else if(conv_dir == miopen::conv::Direction::BackwardData)
-                {
-                    const auto invoke_ctx =
-                        miopen::conv::DataInvokeParams{{outputTensor.desc,
-                                                        outputTensor.gpuData.buf.get(),
-                                                        weightTensor.desc,
-                                                        weightTensor.gpuData.buf.get(),
-                                                        inputTensor.desc,
-                                                        inputTensor.gpuData.buf.get()},
-                                                       workspace.gpuData.buf.get(),
-                                                       workspace.desc.GetNumBytes(),
-                                                       convDesc.attribute.gfx90aFp16alt.GetBwd()};
-
-                    solution =
-                        s.FindSolution(perf_ctx, problem, db, invoke_ctx); // forcing search here
-                    // check if binaries were added, prep invoker for gathering timing
-                    SolutionHasProgram(h, solution);
-
-                    const auto invoker =
-                        h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
-                    kernel_time = BenchmarkInvoker(invoker, h, invoke_ctx);
-                }
-                else if(conv_dir == miopen::conv::Direction::BackwardWeights)
-                {
-                    const auto invoke_ctx =
-                        miopen::conv::WrWInvokeParams{{outputTensor.desc,
-                                                       outputTensor.gpuData.buf.get(),
-                                                       inputTensor.desc,
-                                                       inputTensor.gpuData.buf.get(),
-                                                       weightTensor.desc,
-                                                       weightTensor.gpuData.buf.get()},
-                                                      workspace.gpuData.buf.get(),
-                                                      workspace.desc.GetNumBytes(),
-                                                      convDesc.attribute.gfx90aFp16alt.GetWrW()};
-
-                    solution =
-                        s.FindSolution(perf_ctx, problem, db, invoke_ctx); // forcing search here
-                    // check if binaries were added, prep invoker for gathering timing
-                    SolutionHasProgram(h, solution);
-
-                    const auto invoker =
-                        h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
-                    kernel_time = BenchmarkInvoker(invoker, h, invoke_ctx);
-                }
-                else
-                {
-                    ss.str("");
-                    ss << "Invalid Direction: solver " << solver_name << ", dir "
-                       << static_cast<int>(conv_dir);
-                    throw std::runtime_error(ss.str());
-                }
-
-                kern_objs = BuildJsonKernelList(h, solution.construction_params);
+                auto perf_ctx    = ctx;
+                auto kernel_time = PerfTune(h, problem, solver_id, db, perf_ctx);
+                json kern_objs = BuildJsonKernelList(h, solution.construction_params);
 
                 res_item["params"]         = s.GetPerfCfgParams(perf_ctx, problem, db);
                 res_item["time"]           = kernel_time;
@@ -680,6 +690,72 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
 #endif
 }
 
+
+float FindTune(const miopen::Handle& h,
+               const miopen::solver::ConvSolution& solution)
+{
+    float kernel_time = -1;
+
+    std::cerr << "Preparing invokers" << std::endl;
+    const auto invoker =
+        h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
+    std::cerr << "Finished preparing invokers" << std::endl;
+
+    // This is required because DataInvokeParams switches tensor order due to
+    // direction and it does not have a
+    // copy constructor or a default constructor
+    if(conv_dir == miopen::conv::Direction::Forward)
+    {
+        const auto invoke_ctx =
+            miopen::conv::DataInvokeParams{{inputTensor.desc,
+                                            inputTensor.gpuData.buf.get(),
+                                            weightTensor.desc,
+                                            weightTensor.gpuData.buf.get(),
+                                            outputTensor.desc,
+                                            outputTensor.gpuData.buf.get()},
+                                           workspace.gpuData.buf.get(),
+                                           workspace.desc.GetNumBytes(),
+                                           convDesc.attribute.gfx90aFp16alt.GetFwd()};
+        kernel_time = BenchmarkInvoker(invoker, h, invoke_ctx);
+    }
+    else if(conv_dir == miopen::conv::Direction::BackwardData)
+    {
+        const auto invoke_ctx =
+            miopen::conv::DataInvokeParams{{outputTensor.desc,
+                                            outputTensor.gpuData.buf.get(),
+                                            weightTensor.desc,
+                                            weightTensor.gpuData.buf.get(),
+                                            inputTensor.desc,
+                                            inputTensor.gpuData.buf.get()},
+                                           workspace.gpuData.buf.get(),
+                                           workspace.desc.GetNumBytes(),
+                                           convDesc.attribute.gfx90aFp16alt.GetBwd()};
+        kernel_time = BenchmarkInvoker(invoker, h, invoke_ctx);
+    }
+    else if(conv_dir == miopen::conv::Direction::BackwardWeights)
+    {
+        const auto invoke_ctx =
+            miopen::conv::WrWInvokeParams{{outputTensor.desc,
+                                           outputTensor.gpuData.buf.get(),
+                                           inputTensor.desc,
+                                           inputTensor.gpuData.buf.get(),
+                                           weightTensor.desc,
+                                           weightTensor.gpuData.buf.get()},
+                                          workspace.gpuData.buf.get(),
+                                          workspace.desc.GetNumBytes(),
+                                          convDesc.attribute.gfx90aFp16alt.GetWrW()};
+        kernel_time = BenchmarkInvoker(invoker, h, invoke_ctx);
+    }
+    else
+    {
+        std::ostringstream ss;
+        ss << "Invalid Direction: " << solver_name << ": dir "
+           << static_cast<int>(conv_dir);
+        throw std::runtime_error(ss.str());
+    }
+
+    return kernel_time;
+}
 
 template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::MIOpenFindEval()
@@ -801,63 +877,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
             }
             try
             {
-                float kernel_time = -1;
-
-                std::cerr << "Preparing invokers" << std::endl;
-                const auto invoker =
-                    h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
-                std::cerr << "Finished preparing invokers" << std::endl;
-
-                // This is required because DataInvokeParams switches tensor order due to
-                // direction and it does not have a
-                // copy constructor or a default constructor
-                if(conv_dir == miopen::conv::Direction::Forward)
-                {
-                    const auto invoke_ctx =
-                        miopen::conv::DataInvokeParams{{inputTensor.desc,
-                                                        inputTensor.gpuData.buf.get(),
-                                                        weightTensor.desc,
-                                                        weightTensor.gpuData.buf.get(),
-                                                        outputTensor.desc,
-                                                        outputTensor.gpuData.buf.get()},
-                                                       workspace.gpuData.buf.get(),
-                                                       workspace.desc.GetNumBytes(),
-                                                       convDesc.attribute.gfx90aFp16alt.GetFwd()};
-                    kernel_time = BenchmarkInvoker(invoker, h, invoke_ctx);
-                }
-                else if(conv_dir == miopen::conv::Direction::BackwardData)
-                {
-                    const auto invoke_ctx =
-                        miopen::conv::DataInvokeParams{{outputTensor.desc,
-                                                        outputTensor.gpuData.buf.get(),
-                                                        weightTensor.desc,
-                                                        weightTensor.gpuData.buf.get(),
-                                                        inputTensor.desc,
-                                                        inputTensor.gpuData.buf.get()},
-                                                       workspace.gpuData.buf.get(),
-                                                       workspace.desc.GetNumBytes(),
-                                                       convDesc.attribute.gfx90aFp16alt.GetBwd()};
-                    kernel_time = BenchmarkInvoker(invoker, h, invoke_ctx);
-                }
-                else if(conv_dir == miopen::conv::Direction::BackwardWeights)
-                {
-                    const auto invoke_ctx =
-                        miopen::conv::WrWInvokeParams{{outputTensor.desc,
-                                                       outputTensor.gpuData.buf.get(),
-                                                       inputTensor.desc,
-                                                       inputTensor.gpuData.buf.get(),
-                                                       weightTensor.desc,
-                                                       weightTensor.gpuData.buf.get()},
-                                                      workspace.gpuData.buf.get(),
-                                                      workspace.desc.GetNumBytes(),
-                                                      convDesc.attribute.gfx90aFp16alt.GetWrW()};
-                    kernel_time = BenchmarkInvoker(invoker, h, invoke_ctx);
-                }
-                else
-                {
-                    throw std::runtime_error("Invalid Direction");
-                }
-
+                auto kernel_time = FindTune(h, solution);
                 json kern_objs = BuildJsonKernelList(h, solution.construction_params);
 
                 res_item["params"]         = s.GetPerfCfgParams(ctx, problem, db);
