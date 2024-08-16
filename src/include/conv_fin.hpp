@@ -70,8 +70,6 @@ namespace fs = miopen::fs;
 #include <type_traits>
 #include <vector>
 
-#define MIOPEN_ALLSOLVER 1
-
 namespace fin {
 
 using json = nlohmann::json;
@@ -188,7 +186,6 @@ miopen::conv::Direction ConvFin<Tgpu, Tref>::GetDirection() const
 template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
 {
-#if MIOPEN_ALLSOLVER
     std::cerr << "MIOpenPerfCompile" << std::endl;
     std::cerr << "Processing command: " << command << std::endl;
 #if MIOPEN_MODE_NOGPU
@@ -313,9 +310,6 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfCompile()
         perf_result.push_back(res_item);
     }
     output["miopen_perf_compile_result"] = perf_result;
-#else
-    throw std::runtime_error("Unsupported feature");
-#endif
     return 1;
 }
 
@@ -545,7 +539,6 @@ float ConvFin<Tgpu, Tref>::PerfTune(const miopen::Handle& h,
 template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
 {
-#if MIOPEN_ALLSOLVER
     std::cerr << "MIOpenPerfEval" << std::endl;
     std::cerr << "Processing command: " << command << std::endl;
 // Before this step is executed, the following steps should have been evaluated
@@ -694,10 +687,6 @@ int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
     }
     output["miopen_perf_eval_result"] = perf_result;
     return 1;
-#else
-    throw std::runtime_error("Unsupported feature");
-    return 0;
-#endif
 }
 
 
