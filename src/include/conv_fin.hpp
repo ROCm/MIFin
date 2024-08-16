@@ -72,6 +72,12 @@ namespace fs = miopen::fs;
 
 namespace fin {
 
+enum TuningOp
+{
+    Perf = 0,
+    Find = 1,
+};
+
 using json = nlohmann::json;
 // TODO: Create a config class to encapsulate config
 // related code, such as checking direction etc
@@ -137,12 +143,10 @@ class ConvFin : public BaseFin
 
     int TestPerfDbValid();
     int GetandSetData();
-    int MIOpenFindCompile();
-    int MIOpenFindEval();
     // function used to Search the Precompiled Kernels
     int SearchPreCompiledKernels();
     int MIOpenPerfCompile();
-    int MIOpenPerfEval();
+    int MIOpenFindCompile();
 
     float PerfTune(const miopen::Handle& h,
                const miopen::conv::ProblemDescription& problem,
@@ -152,6 +156,7 @@ class ConvFin : public BaseFin
 
     float FindTune(const miopen::Handle& h,
                const miopen::solver::ConvSolution& solution);
+    int MIOpenEval(TuningOp tuning_op);
 
     // Utility functions
     bool IsInputTensorTransform() const;
@@ -536,159 +541,6 @@ float ConvFin<Tgpu, Tref>::PerfTune(const miopen::Handle& h,
     return kernel_time;
 }
 
-template <typename Tgpu, typename Tref>
-int ConvFin<Tgpu, Tref>::MIOpenPerfEval()
-{
-    std::cerr << "MIOpenPerfEval" << std::endl;
-    std::cerr << "Processing command: " << command << std::endl;
-// Before this step is executed, the following steps should have been evaluated
-// alloc_buf only if only timing is required
-// alloc_buf, fill_buf and copy_buf_to_device if numerical accuracy would be
-// checked ??
-#if MIOPEN_MODE_NOGPU
-    throw std::runtime_error("Unable to run MIOpenPerfEval, Invalid MIOpen backend: HIPNOGPU");
-#endif
-    const auto conv_dir = GetDirection();
-    // The first arg to the DataInvokeParams changes based on direction
-    const auto problem =
-        (conv_dir == miopen::conv::Direction::Forward)
-            ? miopen::conv::ProblemDescription(
-                  inputTensor.desc, weightTensor.desc, outputTensor.desc, convDesc, conv_dir)
-            : miopen::conv::ProblemDescription(
-                  outputTensor.desc, weightTensor.desc, inputTensor.desc, convDesc, conv_dir);
-    GetHandle().EnableProfiling(true);
-    auto ctx = miopen::ConvolutionContext{};
-    auto& h  = GetHandle();
-    ctx.SetStream(&(h));
-    problem.SetupFloats(ctx);
-
-    const auto network_config   = problem.BuildConfKey();
-    const bool is_winograd_only = convDesc.IsWinograd3x3SupportedAndFast(ctx, problem);
-    output["is_winograd_only"]  = is_winograd_only;
-    output["network_config"]    = network_config;
-    std::ostringstream ss;
-    problem.Serialize(ss);
-    output["db_key"] = ss.str();
-
-    auto db = GetDb(ctx);
-    json perf_result;
-    const auto& tgt_props  = h.GetTargetProperties();
-    const std::string arch = tgt_props.Name();
-    const size_t num_cu    = h.GetMaxComputeUnits();
-    std::cerr << "Job Arch: " << job["arch"] << ": Handle Arch: " << arch << std::endl;
-    std::cerr << "Job Num CU: " << job["num_cu"] << ": Handle Num Cu: " << num_cu << std::endl;
-
-    for(const auto& kinder :
-        job["miopen_perf_compile_result"]) // The "miopen_perf_compile_result" list generated
-                                           // by miopen_perf_compile operation
-    {
-        // Somehow the direction changes mid loop !
-        json res_item;
-        std::error_code ec;
-        fs::remove_all(miopen::GetCachePath(false), ec);
-        // boost::filesystem::remove_all(miopen::GetCachePath(true), ec);
-        if(ec)
-        {
-            std::cerr << "Error while removing MIOpen cache: " << ec.message();
-        }
-        auto process_solver = [&]() -> bool {
-            const std::string solver_name = kinder["solver_name"];
-            std::cerr << "Processing solver: " << solver_name << std::endl;
-            const auto solver_id    = miopen::solver::Id{solver_name};
-            const auto& s           = solver_id.GetSolver();
-            const auto algo         = solver_id.GetAlgo(conv_dir);
-            res_item["solver_name"] = solver_name;
-            res_item["algorithm"]   = algo;
-
-            if(s.IsEmpty())
-            {
-                res_item["reason"] = "Empty Solver";
-                std::cerr << "Skipping invalid solver: " << solver_id.ToString() << std::endl;
-                return false;
-            }
-            if(!s.IsApplicable(ctx, problem))
-            {
-                res_item["reason"] = "Not Applicable";
-                std::cerr << "Solver inapplicable: " << solver_name << std::endl;
-                return false;
-            }
-            if(solver_id.ToString() == "ConvBiasActivAsm1x1U" ||
-               solver_id.ToString().find("Fused") != std::string::npos)
-            {
-                res_item["reason"] = "Skip Fused";
-                std::cerr << "Skipping fused solvers" << std::endl;
-                return false;
-            }
-
-            res_item["tunable"] = true;
-            // allowing non-tunable solvers to enter here for fdb generation
-            if(!s.IsTunable())
-                res_item["tunable"] = false;
-
-            std::cerr << solver_name << " is applicable" << std::endl;
-            // Get the binary
-            std::cerr << "loading binaries from fin input" << std::endl;
-            if(!LoadJsonKernelList(h, kinder["kernel_objects"], res_item))
-                return false;
-
-            //miopen::solver::ConvSolution solution;
-            auto solution = s.FindSolution(ctx, problem, db, {}); // auto tune is not expected here
-            res_item["workspace"] = solution.workspace_sz;
-
-            std::cerr << "Checking for workspace: " << solution.workspace_sz << std::endl;
-            if(solution.workspace_sz > workspace.desc.GetNumBytes())
-            {
-                std::cerr << "Allocating " << solution.workspace_sz << " bytes for workspace"
-                          << std::endl;
-                workspace = tensor<Tgpu, Tref>{
-                    q,
-                    std::vector<size_t>{static_cast<size_t>(solution.workspace_sz / sizeof(Tgpu))},
-                    false,
-                    false};
-                workspace.AllocateBuffers();
-            }
-            if(!solution.invoker_factory)
-            {
-                std::cerr << "Invoker not implemeted" << std::endl;
-                res_item["reason"] = "Invoker not implemented";
-                return false;
-            }
-
-            try
-            {
-                auto perf_ctx    = ctx;
-                auto kernel_time = PerfTune(h, problem, solver_id, db, perf_ctx);
-                json kern_objs   = BuildJsonKernelList(h, solution.construction_params);
-
-                res_item["params"]         = s.GetPerfCfgParams(perf_ctx, problem, db);
-                res_item["time"]           = kernel_time;
-                res_item["layout"]         = problem.GetInLayout();
-                res_item["data_type"]      = problem.GetInDataType();
-                res_item["direction"]      = conv_dir;
-                res_item["bias"]           = problem.GetBias();
-                res_item["kernel_objects"] = kern_objs;
-                res_item["reason"]         = "Success";
-                if(kernel_time == 0.0)
-                    res_item["reason"] = "Invoker returned time = 0";
-            }
-            catch(const std::exception& e)
-            {
-                res_item["reason"] = std::string("Invoker exception: ") + e.what();
-                std::cerr << res_item["reason"] << std::endl;
-                return false;
-            }
-
-            return true;
-        };
-
-        auto res              = process_solver();
-        res_item["evaluated"] = res;
-        perf_result.push_back(res_item);
-    }
-    output["miopen_perf_eval_result"] = perf_result;
-    return 1;
-}
-
 
 template <typename Tgpu, typename Tref>
 float ConvFin<Tgpu, Tref>::FindTune(const miopen::Handle& h,
@@ -757,17 +609,18 @@ float ConvFin<Tgpu, Tref>::FindTune(const miopen::Handle& h,
     return kernel_time;
 }
 
+
 template <typename Tgpu, typename Tref>
-int ConvFin<Tgpu, Tref>::MIOpenFindEval()
+int ConvFin<Tgpu, Tref>::MIOpenEval(TuningOp tuning_op)
 {
-    std::cerr << "MIOpenFindEval" << std::endl;
+    std::cerr << "MIOpenEval" << std::endl;
     std::cerr << "Processing command: " << command << std::endl;
 // Before this step is executed, the following steps should have been evaluated
 // alloc_buf only if only timing is required
 // alloc_buf, fill_buf and copy_buf_to_device if numerical accuracy would be
 // checked ??
 #if MIOPEN_MODE_NOGPU
-    throw std::runtime_error("Unable to run MIOpenFindEval, Invalid MIOpen backend: HIPNOGPU");
+    throw std::runtime_error("Unable to run MIOpenEval, Invalid MIOpen backend: HIPNOGPU");
 #endif
     const auto conv_dir = GetDirection();
     // The first arg to the DataInvokeParams changes based on direction
@@ -792,7 +645,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
     output["db_key"] = ss.str();
 
     auto db = GetDb(ctx);
-    json find_result;
+    json eval_result;
     const auto& tgt_props  = h.GetTargetProperties();
     const std::string arch = tgt_props.Name();
     const size_t num_cu    = h.GetMaxComputeUnits();
@@ -802,11 +655,14 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
     if(job.contains("dynamic_only"))
         dynamic_only = job["dynamic_only"];
 
-    for(const auto& kinder :
-        job["miopen_find_compile_result"]) // The "miopen_find_compile_result" list generated
-                                           // by miopen_find_compile operation
+    std::string comp_res_str;
+    if(tuning_op == TuningOp::Perf)
+        comp_res_str = "miopen_perf_compile_result";
+    else if(tuning_op == TuningOp::Find)
+        comp_res_str = "miopen_find_compile_result";
+
+    for(const auto& eval_slv : job[comp_res_str]) 
     {
-        // Somehow the direction changes mid loop !
         json res_item;
         std::error_code ec;
         fs::remove_all(miopen::GetCachePath(false), ec);
@@ -816,7 +672,7 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
             std::cerr << "Error while removing MIOpen cache: " << ec.message();
         }
         auto process_solver = [&]() -> bool {
-            const std::string solver_name = kinder["solver_name"];
+            const std::string solver_name = eval_slv["solver_name"];
             std::cerr << "Processing solver: " << solver_name << std::endl;
             const auto solver_id    = miopen::solver::Id{solver_name};
             const auto& s           = solver_id.GetSolver();
@@ -843,21 +699,28 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
                 return false;
             }
 
-            res_item["tunable"] = false;
-            if(s.IsTunable())
-                res_item["tunable"] = true;
+            if(tuning_op == TuningOp::Perf)
+            {
+                if(solver_id.ToString() == "ConvBiasActivAsm1x1U" ||
+                   solver_id.ToString().find("Fused") != std::string::npos)
+                {
+                    res_item["reason"] = "Skip Fused";
+                    std::cerr << "Skipping fused solvers" << std::endl;
+                    return false;
+                }
+            }
 
-            std::cerr << solver_name << " is applicable" << std::endl;
+
             // Get the binary
-            std::cerr << "loading binaries from fin input" << std::endl;
-            if(!LoadJsonKernelList(h, kinder["kernel_objects"], res_item))
+            std::cerr << "Applicable solver: " << solver_name
+                << ", loading binaries from fin input" << std::endl;
+            if(!LoadJsonKernelList(h, eval_slv["kernel_objects"], res_item))
                 return false;
 
             auto solution = s.FindSolution(ctx, problem, db, {}); // auto tune is not expected here
-            res_item["workspace"] = solution.workspace_sz;
             SolutionHasProgram(h, solution);
 
-            std::cerr << "Checking for workspace" << std::endl;
+            std::cerr << "Checking workspace size" << std::endl;
             if(solution.workspace_sz > workspace.desc.GetNumBytes())
             {
                 std::cerr << "Allocating " << solution.workspace_sz << " bytes for workspace"
@@ -877,10 +740,17 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
             }
             try
             {
-                auto kernel_time = FindTune(h, solution);
+                float kernel_time = -1;
+                if(tuning_op == TuningOp::Perf)
+                    kernel_time = PerfTune(h, problem, solver_id, db, ctx);
+                else if(tuning_op == TuningOp::Find)
+                    kernel_time = FindTune(h, solution);
+
                 json kern_objs = BuildJsonKernelList(h, solution.construction_params);
 
+                res_item["tunable"]        = s.IsTunable();
                 res_item["params"]         = s.GetPerfCfgParams(ctx, problem, db);
+                res_item["workspace"]      = solution.workspace_sz;
                 res_item["time"]           = kernel_time;
                 res_item["layout"]         = problem.GetInLayout();
                 res_item["data_type"]      = problem.GetInDataType();
@@ -890,6 +760,8 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
                 res_item["reason"]         = "Success";
                 if(kernel_time == 0.0)
                     res_item["reason"] = "Invoker returned time = 0";
+                if(kernel_time < 0)
+                    res_item["reson"] = "kernel_time not measured";
             }
             catch(const std::exception& e)
             {
@@ -903,9 +775,12 @@ int ConvFin<Tgpu, Tref>::MIOpenFindEval()
 
         auto res              = process_solver();
         res_item["evaluated"] = res;
-        find_result.push_back(res_item);
+        eval_result.push_back(res_item);
     }
-    output["miopen_find_eval_result"] = find_result;
+    if(tuning_op == TuningOp::Perf)
+        output["miopen_perf_eval_result"] = eval_result;
+    else if(tuning_op == TuningOp::Find)
+        output["miopen_find_eval_result"] = eval_result;
     return 1;
 }
 
@@ -1437,16 +1312,16 @@ int ConvFin<Tgpu, Tref>::ProcessStep(const std::string& step_name)
         return TestApplicability();
     if(step_name == "perf_db_test")
         return TestPerfDbValid();
-    if(step_name == "miopen_find_compile")
-        return MIOpenFindCompile();
-    if(step_name == "miopen_find_eval")
-        return MIOpenFindEval();
     if(step_name == "chk_pre_compiled_kernels")
         return SearchPreCompiledKernels();
     if(step_name == "miopen_perf_compile")
         return MIOpenPerfCompile();
     if(step_name == "miopen_perf_eval")
-        return MIOpenPerfEval();
+        return MIOpenEval(TuningOp::Perf);
+    if(step_name == "miopen_find_compile")
+        return MIOpenFindCompile();
+    if(step_name == "miopen_find_eval")
+        return MIOpenEval(TuningOp::Find);
     return 0;
 }
 
