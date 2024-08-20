@@ -164,6 +164,7 @@ find_package(Boost REQUIRED COMPONENTS ${BOOST_COMPONENTS})
 
 find_path(HALF_INCLUDE_DIR half.hpp HINTS ${CMAKE_INSTALL_PREFIX}/include ${CMAKE_INSTALL_PREFIX}/include/half )
 message(STATUS "HALF_INCLUDE_DIR: ${HALF_INCLUDE_DIR}")
+include_directories(${HALF_INCLUDE_DIR})
 
 option( BUILD_SHARED_LIBS "Build as a shared library" ON )
 
