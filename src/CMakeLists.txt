@@ -31,6 +31,7 @@ configure_file("${PROJECT_SOURCE_DIR}/src/include/config.h.in" "${PROJECT_BINARY
 include_directories(include "${PROJECT_BINARY_DIR}/src/include")
 add_executable(fin main.cpp fin.cpp base64.cpp)
 target_compile_definitions( fin PRIVATE -D__HIP_PLATFORM_HCC__=1 )
+target_include_directories(fin PRIVATE ${HALF_INCLUDE_DIR})
 target_link_libraries(fin MIOpen ${Boost_LIBRARIES} hip::host)
 target_link_libraries(fin ${CMAKE_THREAD_LIBS_INIT})
 if(rocblas_FOUND)
