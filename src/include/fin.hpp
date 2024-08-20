@@ -129,9 +129,7 @@ class BaseFin
         return 0;
     }
 
-    bool LoadJsonKernelList(const miopen::Handle& handle,
-                            const json kernel_objects,
-                            json res_item)
+    bool LoadJsonKernelList(const miopen::Handle& handle, const json kernel_objects, json res_item)
     {
         for(const auto& kernel_obj : kernel_objects)
         {

@@ -149,13 +149,12 @@ class ConvFin : public BaseFin
     int MIOpenCompile(TuningOp tuning_op);
 
     float PerfTune(const miopen::Handle& h,
-               const miopen::conv::ProblemDescription& problem,
-               const miopen::solver::Id& solver_id,
-               miopen::PerformanceDb& db,
-               miopen::ConvolutionContext& perf_ctx);
+                   const miopen::conv::ProblemDescription& problem,
+                   const miopen::solver::Id& solver_id,
+                   miopen::PerformanceDb& db,
+                   miopen::ConvolutionContext& perf_ctx);
 
-    float FindTune(const miopen::Handle& h,
-               const miopen::solver::ConvSolution& solution);
+    float FindTune(const miopen::Handle& h, const miopen::solver::ConvSolution& solution);
     int MIOpenEval(TuningOp tuning_op);
 
     // Utility functions
@@ -321,7 +320,8 @@ int ConvFin<Tgpu, Tref>::MIOpenCompile(TuningOp tuning_op)
                 miopen::solver::ConvSolution solution;
                 try
                 {
-                    solution = s.FindSolution(ctx, problem, db, {}); // auto tune is not expected here
+                    solution =
+                        s.FindSolution(ctx, problem, db, {}); // auto tune is not expected here
                 }
                 catch(const std::exception& e)
                 {
@@ -330,11 +330,11 @@ int ConvFin<Tgpu, Tref>::MIOpenCompile(TuningOp tuning_op)
                               << solver_id.ToString() << e.what() << std::endl;
                     return false;
                 }
-                res_item["params"]         = s.GetPerfCfgParams(ctx, problem, db);
-                res_item["workspace"]      = solution.workspace_sz;
-                res_item["kernel_objects"] = BuildJsonKernelList(handle, solution.construction_params);
+                res_item["params"]    = s.GetPerfCfgParams(ctx, problem, db);
+                res_item["workspace"] = solution.workspace_sz;
+                res_item["kernel_objects"] =
+                    BuildJsonKernelList(handle, solution.construction_params);
             }
-
 
             res_item["tunable"] = s.IsTunable();
             res_item["reason"]  = "Success";
@@ -356,13 +356,12 @@ int ConvFin<Tgpu, Tref>::MIOpenCompile(TuningOp tuning_op)
     return 1;
 }
 
-
 template <typename Tgpu, typename Tref>
 float ConvFin<Tgpu, Tref>::PerfTune(const miopen::Handle& h,
-               const miopen::conv::ProblemDescription& problem,
-               const miopen::solver::Id& solver_id,
-               miopen::PerformanceDb& db,
-               miopen::ConvolutionContext& perf_ctx)
+                                    const miopen::conv::ProblemDescription& problem,
+                                    const miopen::solver::Id& solver_id,
+                                    miopen::PerformanceDb& db,
+                                    miopen::ConvolutionContext& perf_ctx)
 {
     const auto& s       = solver_id.GetSolver();
     const auto conv_dir = GetDirection();
@@ -387,8 +386,7 @@ float ConvFin<Tgpu, Tref>::PerfTune(const miopen::Handle& h,
                                            workspace.desc.GetNumBytes(),
                                            convDesc.attribute.gfx90aFp16alt.GetFwd()};
 
-        auto solution =
-            s.FindSolution(perf_ctx, problem, db, invoke_ctx); // forcing search here
+        auto solution = s.FindSolution(perf_ctx, problem, db, invoke_ctx); // forcing search here
         // check if binaries were added, prep invoker for gathering timing
         SolutionHasProgram(h, solution);
 
@@ -409,8 +407,7 @@ float ConvFin<Tgpu, Tref>::PerfTune(const miopen::Handle& h,
                                            workspace.desc.GetNumBytes(),
                                            convDesc.attribute.gfx90aFp16alt.GetBwd()};
 
-        auto solution =
-            s.FindSolution(perf_ctx, problem, db, invoke_ctx); // forcing search here
+        auto solution = s.FindSolution(perf_ctx, problem, db, invoke_ctx); // forcing search here
         // check if binaries were added, prep invoker for gathering timing
         SolutionHasProgram(h, solution);
 
@@ -431,8 +428,7 @@ float ConvFin<Tgpu, Tref>::PerfTune(const miopen::Handle& h,
                                           workspace.desc.GetNumBytes(),
                                           convDesc.attribute.gfx90aFp16alt.GetWrW()};
 
-        auto solution =
-            s.FindSolution(perf_ctx, problem, db, invoke_ctx); // forcing search here
+        auto solution = s.FindSolution(perf_ctx, problem, db, invoke_ctx); // forcing search here
         // check if binaries were added, prep invoker for gathering timing
         SolutionHasProgram(h, solution);
 
@@ -450,17 +446,15 @@ float ConvFin<Tgpu, Tref>::PerfTune(const miopen::Handle& h,
     return kernel_time;
 }
 
-
 template <typename Tgpu, typename Tref>
 float ConvFin<Tgpu, Tref>::FindTune(const miopen::Handle& h,
-               const miopen::solver::ConvSolution& solution)
+                                    const miopen::solver::ConvSolution& solution)
 {
     const auto conv_dir = GetDirection();
     float kernel_time   = -1;
 
     std::cerr << "Preparing invokers" << std::endl;
-    const auto invoker =
-        h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
+    const auto invoker = h.PrepareInvoker(*solution.invoker_factory, solution.construction_params);
     std::cerr << "Finished preparing invokers" << std::endl;
 
     // This is required because DataInvokeParams switches tensor order due to
@@ -518,7 +512,6 @@ float ConvFin<Tgpu, Tref>::FindTune(const miopen::Handle& h,
     return kernel_time;
 }
 
-
 template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::MIOpenEval(TuningOp tuning_op)
 {
@@ -570,7 +563,7 @@ int ConvFin<Tgpu, Tref>::MIOpenEval(TuningOp tuning_op)
     else if(tuning_op == TuningOp::Find)
         comp_res_str = "miopen_find_compile_result";
 
-    for(const auto& eval_slv : job[comp_res_str]) 
+    for(const auto& eval_slv : job[comp_res_str])
     {
         json res_item;
         std::error_code ec;
@@ -619,10 +612,9 @@ int ConvFin<Tgpu, Tref>::MIOpenEval(TuningOp tuning_op)
                 }
             }
 
-
             // Get the binary
-            std::cerr << "Applicable solver: " << solver_name
-                << ", loading binaries from fin input" << std::endl;
+            std::cerr << "Applicable solver: " << solver_name << ", loading binaries from fin input"
+                      << std::endl;
             if(!LoadJsonKernelList(h, eval_slv["kernel_objects"], res_item))
                 return false;
 
@@ -692,7 +684,6 @@ int ConvFin<Tgpu, Tref>::MIOpenEval(TuningOp tuning_op)
         output["miopen_find_eval_result"] = eval_result;
     return 1;
 }
-
 
 template <typename Tgpu, typename Tref>
 int ConvFin<Tgpu, Tref>::TestApplicability()
