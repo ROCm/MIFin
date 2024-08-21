@@ -144,8 +144,7 @@ class BaseFin
             }
             catch(const std::exception& e)
             {
-                std::cerr << "Binary Decompression Failed, Skipping: " << e.what()
-                          << std::endl;
+                std::cerr << "Binary Decompression Failed, Skipping: " << e.what() << std::endl;
                 continue;
             }
 
