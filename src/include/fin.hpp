@@ -66,6 +66,11 @@ using json = nlohmann::json;
 namespace fin {
 
 const int INVOKE_LIMIT = 4;
+enum TuningOp
+{
+    Perf = 0,
+    Find = 1,
+};
 
 class BaseFin
 {

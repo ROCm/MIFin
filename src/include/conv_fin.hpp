@@ -72,12 +72,6 @@ namespace fs = miopen::fs;
 
 namespace fin {
 
-enum TuningOp
-{
-    Perf = 0,
-    Find = 1,
-};
-
 using json = nlohmann::json;
 // TODO: Create a config class to encapsulate config
 // related code, such as checking direction etc
@@ -663,7 +657,7 @@ int ConvFin<Tgpu, Tref>::MIOpenEval(TuningOp tuning_op)
                     res_item["reason"] = "Invoker returned time = 0";
                 if(kernel_time < 0)
                     res_item["reson"] = "kernel_time not measured";
-            }
+            o
             catch(const std::exception& e)
             {
                 res_item["reason"] = std::string("Invoker exception: ") + e.what();
