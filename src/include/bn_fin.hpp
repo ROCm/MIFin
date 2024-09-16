@@ -41,6 +41,7 @@
 #include <miopen/find_solution.hpp>
 #include <miopen/solver.hpp>
 #include <miopen/solver_id.hpp>
+#include <miopen/driver_arguments.hpp>
 
 #include <nlohmann/json.hpp>
 
@@ -77,6 +78,7 @@ class BNFin : public BaseFin
     std::vector<int> GetInputTensorLengths();
     std::vector<int> GetBiasTensorLengths();
     int SetBNDescriptor();
+    miopen::debug::BatchNormDirection_t GetDirection() const;
 
     int ProcessStep(const std::string& step_name) override;
 
@@ -117,6 +119,13 @@ class BNFin : public BaseFin
     tensor<Tgpu, Tcpu> dxOutputTensor;
 };
 
+template <typename Tgpu, typename Tref>
+miopen::debug::BatchNormDirection_t BNFin<Tgpu, Tref>::GetDirection() const
+{
+    return is_fwd_train ? miopen::debug::BatchNormDirection_t::ForwardTraining
+                        : (is_fwd_infer ? miopen::debug::BatchNormDirection_t::ForwardInference
+                                        : miopen::debug::BatchNormDirection_t::Backward);
+}
 template <typename Tgpu, typename Tref>
 int BNFin<Tgpu, Tref>::TestApplicability()
 {
@@ -434,32 +443,29 @@ int BNFin<Tgpu, Tref>::MIOpenCompile(TuningOp tuning_op)
     else
         solver_list = miopen::solver::GetSolversByPrimitive(miopen::solver::Primitive::Batchnorm);
 
-
     if(job.contains("dynamic_only"))
         ctx.use_dynamic_solutions_only = true;
 
     auto db = GetDb(ctx);
     json comp_res;
+    solver_list = miopen::solver::GetSolversByPrimitive(miopen::solver::Primitive::Batchnorm);
 
     for(const auto& sln : GetBNSolutions(ctx))
     {
         json res_item;
+        res_item["reason"]    = std::string("No solutions: ") + e.what();
         auto process_solution = [&]() -> bool {
-        // remove the user db files
-        //fs::remove_all(miopen::GetCachePath(false));
+            // remove the user db files
+            fs::remove_all(miopen::GetCachePath(false));
             std::cerr << "Processing Solver: " << sln.solver_id << std::endl;
-            //const auto& s           = sln.GetSolver();
+            // const auto& s           = sln.GetSolver();
             res_item["solver_name"] = sln.solver_id;
             res_item["algorithm"]   = GetAlgorithm();
 
             if(tuning_op == TuningOp::Perf)
             {
-
-                // PrecompileKernels call saves to binary_cache,
-                // this needs to be escaped if KERN_CACHE is not on.
                 std::vector<miopen::solver::KernelInfo> kernels;
-                for(auto&& kernel :
-                    sln.construction_params) // cppcheck-suppress useStlAlgorithm
+                for(auto&& kernel : sln.construction_params) // cppcheck-suppress useStlAlgorithm
                     kernels.push_back(kernel);
                 std::ignore = miopen::solver::PrecompileKernels(handle, kernels);
 
@@ -467,14 +473,12 @@ int BNFin<Tgpu, Tref>::MIOpenCompile(TuningOp tuning_op)
             }
             else if(tuning_op == TuningOp::Find)
             {
-                //NOTE: how to get params from solution? and not solver
-                //res_item["params"]    = s.GetPerfCfgParams(ctx, problem, db);
-                res_item["workspace"] = sln.workspace_sz;
-                res_item["kernel_objects"] =
-                    BuildJsonKernelList(handle, sln.construction_params);
+                //  NOTE: how to get params from solution?
+                //  res_item["params"]    = ???s.GetPerfCfgParams(ctx, problem, db);
+                res_item["workspace"]      = sln.workspace_sz;
+                res_item["kernel_objects"] = BuildJsonKernelList(handle, sln.construction_params);
             }
-            //NOTE:tunable?
-            //res_item["tunable"] = s.IsTunable();
+            res_item["tunable"] = true;
             res_item["reason"]  = "Success";
             return true;
         };
@@ -497,8 +501,7 @@ int BNFin<Tgpu, Tref>::MIOpenCompile(TuningOp tuning_op)
 template <typename Tgpu, typename Tref>
 int BNFin<Tgpu, Tref>::MIOpenEval(TuningOp tuning_op)
 {
-
-  return true;
+    return true;
 }
 
 } // namespace fin
