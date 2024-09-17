@@ -448,7 +448,6 @@ int BNFin<Tgpu, Tref>::MIOpenCompile(TuningOp tuning_op)
 
     auto db = GetDb(ctx);
     json comp_res;
-    solver_list = miopen::solver::GetSolversByPrimitive(miopen::solver::Primitive::Batchnorm);
 
     for(const auto& sln : GetBNSolutions(ctx))
     {
