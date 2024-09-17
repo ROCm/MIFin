@@ -657,7 +657,7 @@ int ConvFin<Tgpu, Tref>::MIOpenEval(TuningOp tuning_op)
                     res_item["reason"] = "Invoker returned time = 0";
                 if(kernel_time < 0)
                     res_item["reson"] = "kernel_time not measured";
-            o
+            }
             catch(const std::exception& e)
             {
                 res_item["reason"] = std::string("Invoker exception: ") + e.what();
