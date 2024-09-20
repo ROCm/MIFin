@@ -528,13 +528,13 @@ int BNFin<Tgpu, Tref>::MIOpenEval(TuningOp tuning_op)
     // cppcheck-suppress unreadVariable
     auto ctx = miopen::ExecutionContext(&h);
     ctx.SetStream(&(h));
-    //problem.SetupFloats(ctx);
+    // problem.SetupFloats(ctx);
 
-    output["is_winograd_only"]  = false;
+    output["is_winograd_only"] = false;
     const auto network_config  = problem.MakeNetworkConfig();
-    output["network_config"]    = network_config;
+    output["network_config"]   = network_config;
     std::ostringstream ss;
-    //problem.Serialize(ss);
+    // problem.Serialize(ss);
     output["db_key"] = ss.str();
 
     auto db = GetDb(ctx, problem);
@@ -585,14 +585,13 @@ int BNFin<Tgpu, Tref>::MIOpenEval(TuningOp tuning_op)
                 return false;
             }
 
-
             // Get the binary
             std::cerr << "Applicable solver: " << solver_name << ", loading binaries from fin input"
                       << std::endl;
             if(!LoadJsonKernelList(h, eval_slv["kernel_objects"], res_item))
                 return false;
 
-            //auto solution = s.FindSolution(ctx, problem, db, {}); // auto tune is not expected here
+            // auto solution = s.FindSolution(ctx, problem, db, {}); // auto tune is not expected
             auto solution = FindSolution(s, ctx, problem, db, ctx, "", std::nullopt);
             if(!solution.Succeeded())
                 std::cerr << "Applicable solver did not succeeded" << std::endl;
@@ -626,14 +625,14 @@ int BNFin<Tgpu, Tref>::MIOpenEval(TuningOp tuning_op)
 
                 json kern_objs = BuildJsonKernelList(h, solution.construction_params);
 
-                res_item["tunable"]        = s.IsTunable();
-                //??res_item["params"]         = s.GetPerfCfgParams(ctx, problem, db);
-                res_item["workspace"]      = solution.workspace_sz;
-                res_item["time"]           = kernel_time;
-                //?res_item["layout"]         = problem.GetInLayout();
-                //?res_item["data_type"]      = problem.GetInDataType();
-                res_item["direction"]      = conv_dir;
-                //??res_item["bias"]           = problem.GetBias();
+                res_item["tunable"] = s.IsTunable();
+                // ??res_item["params"     = s.GetPerfCfgParams(ctx, problem, db);
+                res_item["workspace"] = solution.workspace_sz;
+                res_item["time"]      = kernel_time;
+                // ?res_item["layout"]     = problem.GetInLayout();
+                // ?res_item["data_type"]  = problem.GetInDataType();
+                res_item["direction"] = conv_dir;
+                // ??res_item["bias"]      = problem.GetBias();
                 res_item["kernel_objects"] = kern_objs;
                 res_item["reason"]         = "Success";
                 if(kernel_time == 0.0)
@@ -650,15 +649,16 @@ int BNFin<Tgpu, Tref>::MIOpenEval(TuningOp tuning_op)
 
             return true;
         };
+        auto res = process_solver();
     }
     return true;
 }
 
 float BNFin<Tgpu, Tref>::PerfTune(const miopen::Handle& h,
-                                    const miopen::conv::ProblemDescription& problem,
-                                    const miopen::solver::Id& solver_id,
-                                    miopen::PerformanceDb& db,
-                                    miopen::ExecutionContext& perf_ctx)
+                                  const miopen::conv::ProblemDescription& problem,
+                                  const miopen::solver::Id& solver_id,
+                                  miopen::PerformanceDb& db,
+                                  miopen::ExecutionContext& perf_ctx)
 {
     return true;
 }
@@ -667,9 +667,8 @@ template <typename Tgpu, typename Tref>
 float ConvFin<Tgpu, Tref>::FindTune(const miopen::Handle& h,
                                     const miopen::solver::ConvSolution& solution)
 {
-		return true;
+    return true;
 }
-
 
 } // namespace fin
 #endif // GUARD_MIOPEN_BN_FIN_HPP
