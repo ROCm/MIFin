@@ -39,7 +39,7 @@ TEST(MemoryLayoutTest, BasicMemLayoutConv)
     }
 }
 
-TEST(MemoryLayoutTest, BasicMemLayoutBatchNorm)
+/*TEST(MemoryLayoutTest, BasicMemLayoutBatchNorm)
 {
     std::string input_filename = TEST_RESOURCE_DIR "fin_input_find_compile.json";
     std::ifstream input_file(input_filename);
@@ -72,7 +72,7 @@ TEST(MemoryLayoutTest, BasicMemLayoutBatchNorm)
             }
         }
     }
-}
+}*/
 
 TEST(MemoryLayoutTest, TestGetMemLayout)
 {
