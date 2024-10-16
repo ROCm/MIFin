@@ -312,29 +312,29 @@ miopen::batchnorm::ProblemDescription BNFin<Tgpu, Tref>::GetProblemDescription()
 {
     if(is_fwd_train)
     {
-        return miopen::batchnorm::ProblemDescription{bn_mode,
-                                                     inputTensor.desc,
-                                                     outputTensor.desc,
-                                                     biasScaleTensor.desc,
-                                                     expAvgFactor,
-                                                     epsilon,
-                                                     saveMeanVar,
-                                                     keepRunningMeanVar};
+        // return miopen::batchnorm::ProblemDescription{bn_mode,
+        //                                              inputTensor.desc,
+        //                                              outputTensor.desc,
+        //                                              biasScaleTensor.desc,
+        //                                              expAvgFactor,
+        //                                              epsilon,
+        //                                              saveMeanVar,
+        //                                              keepRunningMeanVar};
     }
     else if(is_fwd_infer)
     {
-        return miopen::batchnorm::ProblemDescription(
-            bn_mode, inputTensor.desc, outputTensor.desc, biasScaleTensor.desc, epsilon);
+        // return miopen::batchnorm::ProblemDescription(
+        //     bn_mode, inputTensor.desc, outputTensor.desc, biasScaleTensor.desc, epsilon);
     }
     else if(is_bwd)
     {
-        return miopen::batchnorm::ProblemDescription(bn_mode,
-                                                     inputTensor.desc,
-                                                     dyInputTensor.desc,
-                                                     dxOutputTensor.desc,
-                                                     biasScaleTensor.desc,
-                                                     epsilon,
-                                                     saveMeanVar);
+        // return miopen::batchnorm::ProblemDescription(bn_mode,
+        //                                              inputTensor.desc,
+        //                                              dyInputTensor.desc,
+        //                                              dxOutputTensor.desc,
+        //                                              biasScaleTensor.desc,
+        //                                              epsilon,
+        //                                              saveMeanVar);
     }
     else
     {
