@@ -29,7 +29,11 @@
 
 #include "error.hpp"
 #include "fin.hpp"
-#include "tensor.hpp"
+#include "random.hpp"
+#include "rocrand_wrapper.hpp"
+#include "gpuMemTensor.hpp"
+#include "random_test.hpp"
+#include "tensor_holder.hpp"
 
 #include <miopen/execution_context.hpp>
 #include <miopen/filesystem.hpp>
@@ -42,6 +46,8 @@
 #include <miopen/solver.hpp>
 #include <miopen/solver_id.hpp>
 #include <miopen/driver_arguments.hpp>
+#include <miopen/tensor.hpp>
+#include <miopen/fin/fin_interface.hpp>
 
 #include <nlohmann/json.hpp>
 
@@ -49,10 +55,11 @@
 
 namespace fs = miopen::fs;
 
+
 namespace fin {
 
-using json = nlohmann::json;
-template <typename Tgpu, typename Tcpu>
+//using json = nlohmann::json;
+template <typename Tgpu, typename Tref, typename Tmix = Tgpu>
 class BNFin : public BaseFin
 {
     public:
@@ -69,13 +76,13 @@ class BNFin : public BaseFin
         command         = job["config"];
         command["bias"] = 0;
         SetBNDescriptor();
-        is_fwd_train = (job["direction"].get<int>() == 0 || job["direction"].get<int>() & 1);
-        is_fwd_infer = (job["direction"].get<int>() == 0 || job["direction"].get<int>() & 2);
-        is_bwd       = (job["direction"].get<int>() == 0 || job["direction"].get<int>() & 4);
+        isFwdTrain = (job["direction"].get<int>() == 0 || job["direction"].get<int>() & 1);
+        isFwdInfer = (job["direction"].get<int>() == 0 || job["direction"].get<int>() & 2);
+        isBwd       = (job["direction"].get<int>() == 0 || job["direction"].get<int>() & 4);
     }
 
     // Getters and setters
-    std::vector<int> GetInputTensorLengths();
+    std::vector<int> GetInputTensorLengths(); //checked
     std::vector<int> GetBiasTensorLengths();
     int SetBNDescriptor();
     miopen::debug::BatchNormDirection_t GetDirection() const;
@@ -100,44 +107,92 @@ class BNFin : public BaseFin
     float FindTune(const miopen::Handle& h, const miopen::solver::ConvSolution& solution);
     int MIOpenEval(TuningOp tuning_op);
 
+
     // Utility functions
     auto GetFwdTrainSolvers();
     auto GetFwdInferSolvers();
     auto GetBwdSolvers();
 
+    std::string GetPerfCfgParams(miopen::solver::Id id,
+											const miopen::ExecutionContext& ctx,
+											const miopen::batchnorm::ProblemDescription& problem,
+                      miopen::PerformanceDb& db);
+
     json command;
     json job;
 
     miopenBatchNormMode_t bn_mode;
+    miopenActivationMode_t activ_mode = miopenActivationRELU;
     std::vector<std::string> steps_processed;
-    bool saveMeanVar        = false;
-    bool keepRunningMeanVar = false;
-    double epsilon          = 1.0;
+    bool saveMeanVar        = false; //checked
+    bool keepRunningMeanVar = false; //checked
+    Tref epsilon = static_cast<Tref>(EPSILON); //checked
+    //double epsilon          = 1.0;
     double expAvgFactor     = 1.0;
     bool isDepthSpecified   = false;
-    bool is_fwd_train       = true;
-    bool is_fwd_infer       = false;
-    bool is_bwd             = false;
+    bool isFwdTrain       = true;
+    bool isFwdInfer       = false;
+    bool isBwd             = false;
 
-    tensor<Tgpu, Tcpu> inputTensor;
-    tensor<Tgpu, Tcpu> outputTensor;
-    tensor<Tgpu, Tcpu> biasScaleTensor;
-    tensor<Tgpu, Tcpu> workspace;
+    tensor<Tgpu> workspace;
+    GpumemTensor<Tgpu> in;
+    GpumemTensor<Tgpu> out;
+    GpumemTensor<Tref> out_ref;
+
+    // forward
+    GpumemTensor<Tgpu> scale;
+    GpumemTensor<Tgpu> bias;
+
+    // forward inference
+    GpumemTensor<Tmix> estMean;
+    GpumemTensor<Tmix> estVariance;
+
+    GpumemTensor<Tmix> savedMean;
+    Tensor<Tref> savedMean_ref;
+
+    // forward training
+    GpumemTensor<Tmix> savedVariance;
+    GpumemTensor<Tmix> runMean;
+    GpumemTensor<Tmix> runVariance;
+    // ref
+    Tensor<Tref> savedVariance_ref;
+    Tensor<Tref> runMean_ref;
+    Tensor<Tref> runVariance_ref;
+
+    // backward needed different type for bwd.
+    GpumemTensor<Tmix> out_bwd;
+
+    GpumemTensor<Tgpu> bnScale;
+    GpumemTensor<Tmix> dScale;
+    GpumemTensor<Tmix> dBias;
+    // savedMean declared above as Tmix as well
+    GpumemTensor<Tmix> savedInvVar;
+    GpumemTensor<Tmix> dy;
+
+    Tensor<Tref> dBias_ref;
+    Tensor<Tref> dScale_ref;
 
     // for backward
-    tensor<Tgpu, Tcpu> dyInputTensor;
-    tensor<Tgpu, Tcpu> dxOutputTensor;
+    // Tensor<Tgpu, Tcpu> dyInputTensor;
+    // Tensor<Tgpu, Tcpu> dxOutputTensor;
+
+
+    //Tref maxval;
+
+    miopenTensorLayout_t bn_layout;
+
 };
 
-template <typename Tgpu, typename Tref>
-miopen::debug::BatchNormDirection_t BNFin<Tgpu, Tref>::GetDirection() const
+template <typename Tgpu, typename Tref, typename Tmix>
+miopen::debug::BatchNormDirection_t BNFin<Tgpu, Tref, Tmix>::GetDirection() const
 {
-    return is_fwd_train ? miopen::debug::BatchNormDirection_t::ForwardTraining
-                        : (is_fwd_infer ? miopen::debug::BatchNormDirection_t::ForwardInference
+    return isFwdTrain ? miopen::debug::BatchNormDirection_t::ForwardTraining
+                        : (isFwdInfer ? miopen::debug::BatchNormDirection_t::ForwardInference
                                         : miopen::debug::BatchNormDirection_t::Backward);
 }
-template <typename Tgpu, typename Tref>
-int BNFin<Tgpu, Tref>::TestApplicability()
+
+template <typename Tgpu, typename Tref, typename Tmix>
+int BNFin<Tgpu, Tref, Tmix>::TestApplicability()
 {
 #if MIOPEN_MODE_NOGPU
     GetandSetData();
@@ -160,6 +215,7 @@ int BNFin<Tgpu, Tref>::TestApplicability()
     std::vector<std::string> app_solvers;
 
     for(const auto& sln : GetBNSolutions(ctx))
+
     {
         std::cerr << sln.solver_id << std::endl;
         if(!sln.invoker_factory)
@@ -177,65 +233,118 @@ int BNFin<Tgpu, Tref>::TestApplicability()
     return 0;
 }
 
-template <typename Tgpu, typename Tref>
-int BNFin<Tgpu, Tref>::GetandSetData()
+template <typename Tgpu, typename Tref, typename Tmix>
+int BNFin<Tgpu, Tref, Tmix>::GetandSetData()
 {
 
     SetBNDescriptor();
-
     auto in_len = GetInputTensorLengths();
+    auto gen_value = [](auto...) { return prng::gen_descreet_uniform_sign<Tgpu>(1e-2, 100); };
 
-    std::vector<int> sb_len;
-    if(bn_mode == miopenBNPerActivation)
+    in.AllocOnHost(Tensor<Tgpu>{bn_layout, in_len});
+    in.InitHostData(in.GetTensor().desc.GetElementSize(), true, gen_value);
+
+    auto derivedBnDesc = miopen::TensorDescriptor{};
+    miopen::DeriveBNTensorDescriptor(derivedBnDesc, in.GetTensor().desc, bn_mode);
+
+    if(isFwdInfer || isFwdTrain)
     {
-        // 1xCxHxW | in_len.size = 4
-        sb_len = {1, in_len[1], in_len[2], in_len[3]};
+        out.AllocOnHost(Tensor<Tgpu>{bn_layout, in_len});
+        scale.AllocOnHost(Tensor<Tgpu>{bn_layout, derivedBnDesc.GetLengths()});
+        bias.AllocOnHost(Tensor<Tgpu>{bn_layout, derivedBnDesc.GetLengths()});
 
-        // 1xCxDxHxW | in_len.size = 5
-        if(in_len.size() == 5)
-        {
-            sb_len.push_back(in_len[4]);
-        }
-    }
-    else if(bn_mode == miopenBNSpatial)
-    { // 1xCx1x1
-        sb_len = {1, in_len[1], 1, 1};
+        auto gen_value_scale_bias = [](auto...) {
+            return prng::gen_descreet_uniform_sign<Tgpu>(1e-2, 100);
+        };
 
-        // 1xCx1x1x1
-        if(in_len.size() == 5)
-        {
-            sb_len.push_back(1);
-        }
+        scale.InitHostData(scale.GetTensor().desc.GetElementSize(), true, gen_value_scale_bias);
+        bias.InitHostData(bias.GetTensor().desc.GetElementSize(), true, gen_value_scale_bias);
     }
-    if(command["bias"].get<int>() != 0)
+    if(isFwdInfer)
     {
-        biasScaleTensor = {GetHandle().GetStream(), GetBiasTensorLengths(), true, true};
+        estMean.AllocOnHost(Tensor<Tmix>{bn_layout, derivedBnDesc.GetLengths()});
+        estVariance.AllocOnHost(Tensor<Tmix>{bn_layout, derivedBnDesc.GetLengths()});
+
+        auto gen_value_emean = [](auto...) {
+            return prng::gen_descreet_uniform_sign<Tmix>(1e-2, 100);
+        };
+        estMean.InitHostData(estMean.GetTensor().desc.GetElementSize(), true, gen_value_emean);
+    }
+    else if(isFwdTrain)
+    {
+        savedMean.AllocOnHost(Tensor<Tmix>{bn_layout, derivedBnDesc.GetLengths()});
+        savedVariance.AllocOnHost(Tensor<Tmix>{bn_layout, derivedBnDesc.GetLengths()});
+        runMean.AllocOnHost(Tensor<Tmix>{bn_layout, derivedBnDesc.GetLengths()});
+        runVariance.AllocOnHost(Tensor<Tmix>{bn_layout, derivedBnDesc.GetLengths()});
+
+        auto gen_var = [](auto...) {
+            return static_cast<Tmix>(1e-2 * (prng::gen_0_to_B(100) + 1));
+        };
+        runMean.InitHostData(runMean.GetTensor().desc.GetElementSize(), true, gen_var);
+        runVariance.InitHostData(runVariance.GetTensor().desc.GetElementSize(), true, gen_var);
+    }
+    else if(isBwd)
+    {
+
+        out_bwd.AllocOnHost(Tensor<Tmix>{bn_layout, in_len});
+
+        bnScale.AllocOnHost(Tensor<Tgpu>{bn_layout, derivedBnDesc.GetLengths()});
+        dy.AllocOnHost(Tensor<Tmix>{bn_layout, in_len});
+
+        auto gen_var_bwd = [](auto...) {
+            return static_cast<Tmix>(1e-2 * (prng::gen_0_to_B(100) + 1));
+        };
+        dy.InitHostData(dy.GetTensor().desc.GetElementSize(), true, gen_var_bwd);
+
+        dScale.AllocOnHost(Tensor<Tmix>{bn_layout, derivedBnDesc.GetLengths()});
+        dBias.AllocOnHost(Tensor<Tmix>{bn_layout, derivedBnDesc.GetLengths()});
+        savedMean.AllocOnHost(Tensor<Tmix>{bn_layout, derivedBnDesc.GetLengths()});
+        savedInvVar.AllocOnHost(Tensor<Tmix>{bn_layout, derivedBnDesc.GetLengths()});
+
+        bnScale.InitHostData(bnScale.GetTensor().desc.GetElementSize(), true, gen_value);
+
+        savedMean.InitHostData(savedMean.GetTensor().desc.GetElementSize(), true, gen_var_bwd);
+
+        auto gen_in_var = [](auto...) {
+            return static_cast<Tmix>(1e-2 * (prng::gen_0_to_B(100) + 1));
+        };
+        savedInvVar.InitHostData(savedInvVar.GetTensor().desc.GetElementSize(), true, gen_in_var);
     }
     else
     {
-        biasScaleTensor = {GetHandle().GetStream(), sb_len, true, true};
+        std::cout << "\nUnknown batch norm state!\n";
+        exit(EXIT_FAILURE);
     }
 
     // sanity check for memory layout
-    if(GetMemLayout(command["in_layout"]) != miopenTensorLayout_t::miopenTensorNCHW)
-        throw std::runtime_error("Provided memory layout is :" + std::string(command["in_layout"]) +
-                                 ". Batch norm only support default NCHW");
-    if(GetMemLayout(command["in_layout"]) != miopenTensorLayout_t::miopenTensorNCHW)
+    if(command["in_layout"] == "NCHW")
+    {
+        bn_layout = miopenTensorLayout_t::miopenTensorNCHW;
+    }
+    else if(command["in_layout"] == "NHWC")
+    {
+        bn_layout = miopenTensorLayout_t::miopenTensorNHWC;
+    }
+    else if(command["in_layout"] == "NCDHW")
+    {
+        bn_layout = miopenTensorLayout_t::miopenTensorNCDHW;
+    }
+    else if(command["in_layout"] == "NDHWC")
+    {
+        bn_layout = miopenTensorLayout_t::miopenTensorNDHWC;
+    }
+    else
+    {
         throw std::runtime_error(
             "Provided memory layout is : " + std::string(command["in_layout"]) +
-            ". Batch norm only support default NCHW");
+            ". Batch norm only support default NCHW, NHWC, NCDHW, NDHWC");
+    }
 
-    inputTensor  = {GetHandle().GetStream(), in_len, true, false};
-    outputTensor = {GetHandle().GetStream(), in_len, false, true};
-
-    // backwards
-    dyInputTensor  = {GetHandle().GetStream(), in_len, false, true};
-    dxOutputTensor = {GetHandle().GetStream(), in_len, true, false};
     return (0);
 }
 
-template <typename Tgpu, typename Tref>
-std::vector<int> BNFin<Tgpu, Tref>::GetInputTensorLengths()
+template <typename Tgpu, typename Tref, typename Tmix>
+std::vector<int> BNFin<Tgpu, Tref, Tmix>::GetInputTensorLengths()
 {
     int in_n = command["batchsize"];
     int in_c = command["in_channels"];
@@ -256,8 +365,8 @@ std::vector<int> BNFin<Tgpu, Tref>::GetInputTensorLengths()
     }
 }
 
-template <typename Tgpu, typename Tref>
-std::vector<int> BNFin<Tgpu, Tref>::GetBiasTensorLengths()
+template <typename Tgpu, typename Tref, typename Tmix>
+std::vector<int> BNFin<Tgpu, Tref, Tmix>::GetBiasTensorLengths()
 {
     int spatial_dim = 2;
     if(command["in_d"] > 1)
@@ -272,8 +381,8 @@ std::vector<int> BNFin<Tgpu, Tref>::GetBiasTensorLengths()
     return bias_lens;
 }
 
-template <typename Tgpu, typename Tref>
-int BNFin<Tgpu, Tref>::ProcessStep(const std::string& step_name)
+template <typename Tgpu, typename Tref, typename Tmix>
+int BNFin<Tgpu, Tref, Tmix>::ProcessStep(const std::string& step_name)
 {
     steps_processed.push_back(step_name);
     if(step_name == "applicability")
@@ -289,8 +398,8 @@ int BNFin<Tgpu, Tref>::ProcessStep(const std::string& step_name)
     return 0;
 }
 
-template <typename Tgpu, typename Tref>
-int BNFin<Tgpu, Tref>::SetBNDescriptor()
+template <typename Tgpu, typename Tref, typename Tmix>
+int BNFin<Tgpu, Tref, Tmix>::SetBNDescriptor()
 {
     // batch norm mode type
     bn_mode = command["mode"] == 0 ? miopenBNPerActivation : miopenBNSpatial;
@@ -301,59 +410,72 @@ int BNFin<Tgpu, Tref>::SetBNDescriptor()
     // keep running mean and variance
     keepRunningMeanVar = command["run"] == 0 ? false : true;
 
-    epsilon = 1;
+    //epsilon = 1;
 
     return miopenStatusSuccess;
 }
 
-template <typename Tgpu, typename Tref>
-auto BNFin<Tgpu, Tref>::GetFwdTrainSolvers()
+template <typename Tgpu, typename Tref, typename Tmix>
+auto BNFin<Tgpu, Tref, Tmix>::GetFwdTrainSolvers()
 {
     return miopen::solver::SolverContainer<miopen::solver::batchnorm::BnFwdTrainingSpatialSingle,
                                            miopen::solver::batchnorm::BnFwdTrainingSpatialMultiple,
                                            miopen::solver::batchnorm::BnFwdTrainingPerActivation>{};
 }
 
-template <typename Tgpu, typename Tref>
-auto BNFin<Tgpu, Tref>::GetFwdInferSolvers()
+template <typename Tgpu, typename Tref, typename Tmix>
+auto BNFin<Tgpu, Tref, Tmix>::GetFwdInferSolvers()
 {
     return miopen::solver::SolverContainer<miopen::solver::batchnorm::BnFwdInference>{};
 }
 
-template <typename Tgpu, typename Tref>
-auto BNFin<Tgpu, Tref>::GetBwdSolvers()
+template <typename Tgpu, typename Tref, typename Tmix>
+auto BNFin<Tgpu, Tref, Tmix>::GetBwdSolvers()
 {
     return miopen::solver::SolverContainer<miopen::solver::batchnorm::BnBwdTrainingSpatialSingle,
                                            miopen::solver::batchnorm::BnBwdTrainingSpatialMultiple,
                                            miopen::solver::batchnorm::BnBwdTrainingPerActivation>{};
 }
 
-template <typename Tgpu, typename Tref>
-miopen::batchnorm::ProblemDescription BNFin<Tgpu, Tref>::GetProblemDescription()
+
+template <typename Tgpu, typename Tref, typename Tmix>
+miopen::batchnorm::ProblemDescription BNFin<Tgpu, Tref, Tmix>::GetProblemDescription()
 {
-    if(is_fwd_train)
+    if(isFwdTrain)
     {
         return miopen::batchnorm::ProblemDescription{bn_mode,
-                                                     inputTensor.desc,
-                                                     outputTensor.desc,
-                                                     biasScaleTensor.desc,
+                                                     in.GetTensor().desc,
+                                                     out.GetTensor().desc,
+                                                     scale.GetTensor().desc,
+                                                     bias.GetTensor().desc,
+                                                     savedMean.GetTensor().desc,
+                                                     savedVariance.GetTensor().desc,
                                                      expAvgFactor,
                                                      epsilon,
-                                                     saveMeanVar,
-                                                     keepRunningMeanVar};
+                                                     saveMeanVar,//?
+                                                     keepRunningMeanVar}; //?
     }
-    else if(is_fwd_infer)
-    {
-        return miopen::batchnorm::ProblemDescription(
-            bn_mode, inputTensor.desc, outputTensor.desc, biasScaleTensor.desc, epsilon);
-    }
-    else if(is_bwd)
+    else if(isFwdInfer)
     {
         return miopen::batchnorm::ProblemDescription(bn_mode,
-                                                     inputTensor.desc,
-                                                     dyInputTensor.desc,
-                                                     dxOutputTensor.desc,
-                                                     biasScaleTensor.desc,
+                                                     in.GetTensor().desc,
+                                                     out.GetTensor().desc,
+                                                     scale.GetTensor().desc,
+                                                     bias.GetTensor().desc,
+                                                     savedMean.GetTensor().desc,
+                                                     savedVariance.GetTensor().desc,
+                                                     epsilon);
+    }
+    else if(isBwd)
+    {
+        return miopen::batchnorm::ProblemDescription(bn_mode,
+                                                     in.GetTensor().desc,
+                                                     out.GetTensor().desc,
+                                                     out_ref.GetTensor().desc,
+                                                     scale.GetTensor().desc,
+                                                     bias.GetTensor().desc,
+                                                     savedMean.GetTensor().desc,
+                                                     savedVariance.GetTensor().desc,
                                                      epsilon,
                                                      saveMeanVar);
     }
@@ -363,20 +485,20 @@ miopen::batchnorm::ProblemDescription BNFin<Tgpu, Tref>::GetProblemDescription()
     }
 }
 
-template <typename Tgpu, typename Tref>
+template <typename Tgpu, typename Tref, typename Tmix>
 std::vector<miopen::solver::ConvSolution>
-BNFin<Tgpu, Tref>::GetBNSolutions(miopen::ExecutionContext& ctx)
+BNFin<Tgpu, Tref, Tmix>::GetBNSolutions(miopen::ExecutionContext& ctx)
 {
     const auto problem = GetProblemDescription();
-    if(is_fwd_train)
+    if(isFwdTrain)
     {
         return GetFwdTrainSolvers().SearchForSolutions(ctx, problem, 1);
     }
-    else if(is_fwd_infer)
+    else if(isFwdInfer)
     {
         return GetFwdInferSolvers().SearchForSolutions(ctx, problem, 1);
     }
-    else if(is_bwd)
+    else if(isBwd)
     {
         return GetBwdSolvers().SearchForSolutions(ctx, problem, 1);
     }
@@ -386,20 +508,20 @@ BNFin<Tgpu, Tref>::GetBNSolutions(miopen::ExecutionContext& ctx)
     }
 }
 
-template <typename Tgpu, typename Tref>
-auto BNFin<Tgpu, Tref>::GetAlgorithm()
+template <typename Tgpu, typename Tref, typename Tmix>
+auto BNFin<Tgpu, Tref, Tmix>::GetAlgorithm()
 {
-    if(is_fwd_train)
+    if(isFwdTrain)
     {
         return bn_mode == miopenBNSpatial
                    ? miopen::AlgorithmName{"miopenBatchNormForwardTrainingSpatial"}
                    : miopen::AlgorithmName{"miopenBatchNormForwardTrainingPerActivation"};
     }
-    else if(is_fwd_infer)
+    else if(isFwdInfer)
     {
         return miopen::AlgorithmName{"miopenBatchNormalizationForwardInference"};
     }
-    else if(is_bwd)
+    else if(isBwd)
     {
         return bn_mode == miopenBNSpatial
                    ? miopen::AlgorithmName{"miopenBatchNormBackwardPropSpatial"}
@@ -411,8 +533,8 @@ auto BNFin<Tgpu, Tref>::GetAlgorithm()
     }
 }
 
-template <typename Tgpu, typename Tref>
-int BNFin<Tgpu, Tref>::MIOpenCompile(TuningOp tuning_op)
+template <typename Tgpu, typename Tref, typename Tmix>
+int BNFin<Tgpu, Tref, Tmix>::MIOpenCompile(TuningOp tuning_op)
 {
     std::cerr << "MIOpenFinCompile" << std::endl;
     std::cerr << "Processing command: " << command << std::endl;
@@ -446,12 +568,18 @@ int BNFin<Tgpu, Tref>::MIOpenCompile(TuningOp tuning_op)
     std::cerr << "Job Num CU: " << job["num_cu"]
               << ": Handle Num Cu: " << handle.GetMaxComputeUnits() << std::endl;
 
-    std::vector<miopen::solver::Id> solver_list;
-    if(job.contains("solvers"))
-        for(std::string solver_str : job["solvers"]) // cppcheck-suppress useStlAlgorithm
-            solver_list.push_back(miopen::solver::Id(solver_str));
-    else
-        solver_list = miopen::solver::GetSolversByPrimitive(miopen::solver::Primitive::Batchnorm);
+    //std::vector<miopen::solver::Id> solver_list;
+    /*
+    const auto solver_list = [&] {
+        std::vector<miopen::fin::FinInterface::BatchNormSolver> solvers;
+				if(job.contains("solvers"))
+						for(std::string solver_str : job["solvers"]) // cppcheck-suppress useStlAlgorithm
+								solvers.emplace_back(miopen::fin::FinInterface::GetBatchNormSolver(solver_str));
+				else
+            solvers = miopen::fin::FinInterface::GetAllBatchNormSolvers();
+        return solvers;
+    } ;*/
+    //solvers = miopen::fin::FinInterface::GetAllBatchNormSolvers();
 
     if(job.contains("dynamic_only"))
         ctx.use_dynamic_solutions_only = true;
@@ -459,37 +587,41 @@ int BNFin<Tgpu, Tref>::MIOpenCompile(TuningOp tuning_op)
     auto db = GetDb(ctx);
     json comp_res;
 
+    
     for(const auto& sln : GetBNSolutions(ctx))
     {
         json res_item;
-        res_item["reason"]    = "";
+        res_item["reason"]    = std::string("No solutions: ");
         auto process_solution = [&]() -> bool {
             // remove the user db files
             fs::remove_all(miopen::GetCachePath(false));
             std::cerr << "Processing Solver: " << sln.solver_id << std::endl;
-            // const auto& s           = sln.GetSolver();
-            res_item["solver_name"] = sln.solver_id;
-            res_item["algorithm"]   = GetAlgorithm();
+            if((job.contains("solvers") &&
+               (std::find(std::begin(job["solvers"]), std::end(job["solvers"]), sln.solver_id) != std::end(job["solvers"]))) ||
+               (!job.contains("solvers")))
+								res_item["solver_name"] = sln.solver_id;
+								const auto solver = miopen::fin::FinInterface::GetBatchNormSolver(sln.solver_id);
+								res_item["algorithm"]   = GetAlgorithm();
 
-            if(tuning_op == TuningOp::Perf)
-            {
-                std::vector<miopen::solver::KernelInfo> kernels;
-                for(auto&& kernel : sln.construction_params) // cppcheck-suppress useStlAlgorithm
-                    kernels.push_back(kernel);
-                std::ignore = miopen::solver::PrecompileKernels(handle, kernels);
+								if(tuning_op == TuningOp::Perf)
+								{
+										std::vector<miopen::solver::KernelInfo> kernels;
+										for(auto&& kernel : sln.construction_params) // cppcheck-suppress useStlAlgorithm
+												kernels.push_back(kernel);
+										std::ignore = miopen::solver::PrecompileKernels(handle, kernels);
 
-                res_item["kernel_objects"] = BuildJsonKernelList(handle, kernels);
-            }
-            else if(tuning_op == TuningOp::Find)
-            {
-                //  NOTE: how to get params from solution?
-                //  res_item["params"]    = ???s.GetPerfCfgParams(ctx, problem, db);
-                res_item["workspace"]      = sln.workspace_sz;
-                res_item["kernel_objects"] = BuildJsonKernelList(handle, sln.construction_params);
-            }
-            res_item["tunable"] = true;
-            res_item["reason"]  = "Success";
-            return true;
+										res_item["kernel_objects"] = BuildJsonKernelList(handle, kernels);
+								}
+								else if(tuning_op == TuningOp::Find)
+								{
+										//  NOTE: how to get params from solution?
+										res_item["params"]    =    solver.GetPerfCfgParams(ctx, problem, db);
+										res_item["workspace"]      = sln.workspace_sz;
+										res_item["kernel_objects"] = BuildJsonKernelList(handle, sln.construction_params);
+								}
+								res_item["tunable"] = true;
+								res_item["reason"]  = "Success";
+								return true;
         };
 
         auto res = process_solution();
@@ -500,6 +632,7 @@ int BNFin<Tgpu, Tref>::MIOpenCompile(TuningOp tuning_op)
             res_item["find_compiled"] = res;
         comp_res.push_back(res_item);
     }
+
     if(tuning_op == TuningOp::Perf)
         output["miopen_perf_compile_result"] = comp_res;
     if(tuning_op == TuningOp::Find)
@@ -507,8 +640,8 @@ int BNFin<Tgpu, Tref>::MIOpenCompile(TuningOp tuning_op)
     return 1;
 }
 
-template <typename Tgpu, typename Tref>
-int BNFin<Tgpu, Tref>::MIOpenEval(TuningOp tuning_op)
+template <typename Tgpu, typename Tref, typename Tmix>
+int BNFin<Tgpu, Tref, Tmix>::MIOpenEval(TuningOp tuning_op)
 {
     std::cerr << "MIOpenEval" << std::endl;
     std::cerr << "Processing command: " << command << std::endl;
@@ -602,7 +735,7 @@ int BNFin<Tgpu, Tref>::MIOpenEval(TuningOp tuning_op)
             {
                 std::cerr << "Allocating " << solution.workspace_sz << " bytes for workspace"
                           << std::endl;
-                workspace = tensor<Tgpu, Tref>{
+                workspace = tensor<Tgpu>{
                     q,
                     std::vector<size_t>{static_cast<size_t>(solution.workspace_sz / sizeof(Tgpu))},
                     false,

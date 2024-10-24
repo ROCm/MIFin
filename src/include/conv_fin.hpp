@@ -156,13 +156,13 @@ class ConvFin : public BaseFin
     json command;
     json job;
 
-    tensor<Tgpu, Tcpu> inputTensor;
-    tensor<Tgpu, Tcpu> inputTensor_vect4;
-    tensor<Tgpu, Tcpu> outputTensor;
-    tensor<Tgpu, Tcpu> weightTensor;
-    tensor<Tgpu, Tcpu> weightTensor_vect4;
-    tensor<Tgpu, Tcpu> biasTensor;
-    tensor<Tgpu, Tcpu> workspace;
+    tensor<Tgpu> inputTensor;
+    tensor<Tgpu> inputTensor_vect4;
+    tensor<Tgpu> outputTensor;
+    tensor<Tgpu> weightTensor;
+    tensor<Tgpu> weightTensor_vect4;
+    tensor<Tgpu> biasTensor;
+    tensor<Tgpu> workspace;
     miopen::ConvolutionDescriptor convDesc;
 
     bool wrw_allowed = 0, bwd_allowed = 0, forward_allowed = 1;
@@ -620,7 +620,7 @@ int ConvFin<Tgpu, Tref>::MIOpenEval(TuningOp tuning_op)
             {
                 std::cerr << "Allocating " << solution.workspace_sz << " bytes for workspace"
                           << std::endl;
-                workspace = tensor<Tgpu, Tref>{
+                workspace = tensor<Tgpu>{
                     q,
                     std::vector<size_t>{static_cast<size_t>(solution.workspace_sz / sizeof(Tgpu))},
                     false,
@@ -1662,7 +1662,7 @@ namespace detail {
 template <typename T>
 T RanGenWeights()
 {
-    return RAN_GEN<T>(static_cast<T>(-0.5), static_cast<T>(0.5));
+    return prng::RAN_GEN<T>(static_cast<T>(-0.5), static_cast<T>(0.5));
 }
 
 // Shift FP16 distribution towards positive numbers,
@@ -1670,7 +1670,7 @@ T RanGenWeights()
 template <>
 float16 RanGenWeights()
 {
-    return RAN_GEN<float16>(static_cast<float16>(-1.0 / 3.0), static_cast<float16>(0.5));
+    return prng::RAN_GEN<float16>(static_cast<float16>(-1.0 / 3.0), static_cast<float16>(0.5));
 }
 
 } // namespace detail
@@ -1748,7 +1748,7 @@ int ConvFin<Tgpu, Tref>::CalcWorkspace()
     const auto wsSizeof =
         std::max(std::max(ws_sizeof_find_bwd, ws_sizeof_find_wrw), ws_sizeof_find_fwd);
     if(wsSizeof != 0)
-        workspace = tensor<Tgpu, Tref>{q,
+        workspace = tensor<Tgpu>{q,
                                        std::vector<unsigned int>{static_cast<unsigned int>(
                                            std::ceil(wsSizeof / sizeof(Tgpu)))},
                                        true,
@@ -1764,12 +1764,12 @@ Tgpu init_in(bool is_int8, size_t idx)
     {
         float Data_scale = 127.0;
         return static_cast<Tgpu>(Data_scale *
-                                 RAN_GEN<float>(static_cast<float>(0.0), static_cast<float>(1.0)));
+                                 prng::RAN_GEN<float>(static_cast<float>(0.0), static_cast<float>(1.0)));
     }
     else
     {
         Tgpu Data_scale = static_cast<Tgpu>(0.01);
-        return Data_scale * RAN_GEN<Tgpu>(static_cast<Tgpu>(0.0), static_cast<Tgpu>(1.0));
+        return Data_scale * prng::RAN_GEN<Tgpu>(static_cast<Tgpu>(0.0), static_cast<Tgpu>(1.0));
     }
 }
 
@@ -1784,7 +1784,7 @@ Tgpu init_out(bool is_int8, size_t idx)
     else
     {
         Tgpu Data_scale = static_cast<Tgpu>(0.01);
-        return Data_scale * RAN_GEN<Tgpu>(static_cast<Tgpu>(0.0), static_cast<Tgpu>(1.0));
+        return Data_scale * prng::RAN_GEN<Tgpu>(static_cast<Tgpu>(0.0), static_cast<Tgpu>(1.0));
     }
 }
 
@@ -1810,7 +1810,7 @@ Tgpu init_bias(bool is_int8, size_t idx)
     (void)idx;
     (void)is_int8;
     return static_cast<Tgpu>(idx % 8) +
-           RAN_GEN<Tgpu>(static_cast<Tgpu>(0.0), static_cast<Tgpu>(1.0));
+           prng::RAN_GEN<Tgpu>(static_cast<Tgpu>(0.0), static_cast<Tgpu>(1.0));
 }
 
 template <typename Tgpu, typename Tref>
