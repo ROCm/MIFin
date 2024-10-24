@@ -47,6 +47,7 @@
 #include <miopen/solver_id.hpp>
 #include <miopen/driver_arguments.hpp>
 #include <miopen/tensor.hpp>
+#include <miopen/fin/fin_interface.hpp>
 
 #include <nlohmann/json.hpp>
 
@@ -97,10 +98,16 @@ class BNFin : public BaseFin
     int MIOpenCompile(TuningOp tuning_op);
     int MIOpenEval(TuningOp tuning_op);
 
+
     // Utility functions
     auto GetFwdTrainSolvers();
     auto GetFwdInferSolvers();
     auto GetBwdSolvers();
+
+    std::string GetPerfCfgParams(miopen::solver::Id id,
+											const miopen::ExecutionContext& ctx,
+											const miopen::batchnorm::ProblemDescription& problem,
+                      miopen::PerformanceDb& db);
 
     json command;
     json job;
@@ -173,6 +180,7 @@ miopen::debug::BatchNormDirection_t BNFin<Tgpu, Tref, Tmix>::GetDirection() cons
                         : (isFwdInfer ? miopen::debug::BatchNormDirection_t::ForwardInference
                                         : miopen::debug::BatchNormDirection_t::Backward);
 }
+
 template <typename Tgpu, typename Tref, typename Tmix>
 int BNFin<Tgpu, Tref, Tmix>::TestApplicability()
 {
@@ -197,6 +205,7 @@ int BNFin<Tgpu, Tref, Tmix>::TestApplicability()
     std::vector<std::string> app_solvers;
 
     for(const auto& sln : GetBNSolutions(ctx))
+
     {
         std::cerr << sln.solver_id << std::endl;
         if(!sln.invoker_factory)
@@ -418,6 +427,7 @@ auto BNFin<Tgpu, Tref, Tmix>::GetBwdSolvers()
                                            miopen::solver::batchnorm::BnBwdTrainingPerActivation>{};
 }
 
+
 template <typename Tgpu, typename Tref, typename Tmix>
 miopen::batchnorm::ProblemDescription BNFin<Tgpu, Tref, Tmix>::GetProblemDescription()
 {
@@ -426,18 +436,24 @@ miopen::batchnorm::ProblemDescription BNFin<Tgpu, Tref, Tmix>::GetProblemDescrip
         return miopen::batchnorm::ProblemDescription{bn_mode,
                                                      in.GetTensor().desc,
                                                      out.GetTensor().desc,
+                                                     scale.GetTensor().desc,
                                                      bias.GetTensor().desc,
+                                                     savedMean.GetTensor().desc,
+                                                     savedVariance.GetTensor().desc,
                                                      expAvgFactor,
                                                      epsilon,
-                                                     saveMeanVar,
-                                                     keepRunningMeanVar};
+                                                     saveMeanVar,//?
+                                                     keepRunningMeanVar}; //?
     }
     else if(isFwdInfer)
     {
         return miopen::batchnorm::ProblemDescription(bn_mode,
                                                      in.GetTensor().desc,
                                                      out.GetTensor().desc,
+                                                     scale.GetTensor().desc,
                                                      bias.GetTensor().desc,
+                                                     savedMean.GetTensor().desc,
+                                                     savedVariance.GetTensor().desc,
                                                      epsilon);
     }
     else if(isBwd)
@@ -446,7 +462,10 @@ miopen::batchnorm::ProblemDescription BNFin<Tgpu, Tref, Tmix>::GetProblemDescrip
                                                      in.GetTensor().desc,
                                                      out.GetTensor().desc,
                                                      out_ref.GetTensor().desc,
+                                                     scale.GetTensor().desc,
                                                      bias.GetTensor().desc,
+                                                     savedMean.GetTensor().desc,
+                                                     savedVariance.GetTensor().desc,
                                                      epsilon,
                                                      saveMeanVar);
     }
@@ -539,14 +558,18 @@ int BNFin<Tgpu, Tref, Tmix>::MIOpenCompile(TuningOp tuning_op)
     std::cerr << "Job Num CU: " << job["num_cu"]
               << ": Handle Num Cu: " << handle.GetMaxComputeUnits() << std::endl;
 
-    std::vector<miopen::solver::Id> solver_list;
-    if(job.contains("solvers"))
-        for(std::string solver_str : job["solvers"]) // cppcheck-suppress useStlAlgorithm
-            solver_list.push_back(miopen::solver::Id(solver_str));
-    else
-        solver_list = miopen::solver::GetSolversByPrimitive(miopen::solver::Primitive::Batchnorm);
-
-    //const auto bn_dir = GetDirection();
+    //std::vector<miopen::solver::Id> solver_list;
+    /*
+    const auto solver_list = [&] {
+        std::vector<miopen::fin::FinInterface::BatchNormSolver> solvers;
+				if(job.contains("solvers"))
+						for(std::string solver_str : job["solvers"]) // cppcheck-suppress useStlAlgorithm
+								solvers.emplace_back(miopen::fin::FinInterface::GetBatchNormSolver(solver_str));
+				else
+            solvers = miopen::fin::FinInterface::GetAllBatchNormSolvers();
+        return solvers;
+    } ;*/
+    //solvers = miopen::fin::FinInterface::GetAllBatchNormSolvers();
 
     if(job.contains("dynamic_only"))
         ctx.use_dynamic_solutions_only = true;
@@ -554,6 +577,7 @@ int BNFin<Tgpu, Tref, Tmix>::MIOpenCompile(TuningOp tuning_op)
     auto db = GetDb(ctx);
     json comp_res;
 
+    
     for(const auto& sln : GetBNSolutions(ctx))
     {
         json res_item;
@@ -562,31 +586,32 @@ int BNFin<Tgpu, Tref, Tmix>::MIOpenCompile(TuningOp tuning_op)
             // remove the user db files
             fs::remove_all(miopen::GetCachePath(false));
             std::cerr << "Processing Solver: " << sln.solver_id << std::endl;
-            const auto solver_id    = miopen::solver::Id{sln.solver_id};
-            const auto& s           = solver_id.GetSolver();
-            //const auto& s           = sln.GetSolver();
-            res_item["solver_name"] = sln.solver_id;
-            res_item["algorithm"]   = GetAlgorithm();
+            if((job.contains("solvers") &&
+               (std::find(std::begin(job["solvers"]), std::end(job["solvers"]), sln.solver_id) != std::end(job["solvers"]))) ||
+               (!job.contains("solvers")))
+								res_item["solver_name"] = sln.solver_id;
+								const auto solver = miopen::fin::FinInterface::GetBatchNormSolver(sln.solver_id);
+								res_item["algorithm"]   = GetAlgorithm();
 
-            if(tuning_op == TuningOp::Perf)
-            {
-                std::vector<miopen::solver::KernelInfo> kernels;
-                for(auto&& kernel : sln.construction_params) // cppcheck-suppress useStlAlgorithm
-                    kernels.push_back(kernel);
-                std::ignore = miopen::solver::PrecompileKernels(handle, kernels);
+								if(tuning_op == TuningOp::Perf)
+								{
+										std::vector<miopen::solver::KernelInfo> kernels;
+										for(auto&& kernel : sln.construction_params) // cppcheck-suppress useStlAlgorithm
+												kernels.push_back(kernel);
+										std::ignore = miopen::solver::PrecompileKernels(handle, kernels);
 
-                res_item["kernel_objects"] = BuildJsonKernelList(handle, kernels);
-            }
-            else if(tuning_op == TuningOp::Find)
-            {
-                //  NOTE: how to get params from solution?
-                //  res_item["params"]    = ???s.GetPerfCfgParams(ctx, problem, db);
-                res_item["workspace"]      = sln.workspace_sz;
-                res_item["kernel_objects"] = BuildJsonKernelList(handle, sln.construction_params);
-            }
-            res_item["tunable"] = true;
-            res_item["reason"]  = "Success";
-            return true;
+										res_item["kernel_objects"] = BuildJsonKernelList(handle, kernels);
+								}
+								else if(tuning_op == TuningOp::Find)
+								{
+										//  NOTE: how to get params from solution?
+										res_item["params"]    =    solver.GetPerfCfgParams(ctx, problem, db);
+										res_item["workspace"]      = sln.workspace_sz;
+										res_item["kernel_objects"] = BuildJsonKernelList(handle, sln.construction_params);
+								}
+								res_item["tunable"] = true;
+								res_item["reason"]  = "Success";
+								return true;
         };
 
         auto res = process_solution();
@@ -597,6 +622,7 @@ int BNFin<Tgpu, Tref, Tmix>::MIOpenCompile(TuningOp tuning_op)
             res_item["find_compiled"] = res;
         comp_res.push_back(res_item);
     }
+
     if(tuning_op == TuningOp::Perf)
         output["miopen_perf_compile_result"] = comp_res;
     if(tuning_op == TuningOp::Find)
@@ -624,7 +650,7 @@ int BNFin<Tgpu, Tref, Tmix>::MIOpenEval(TuningOp tuning_op)
     output["db_key"]           = network_config.ToString();
     output["is_winograd_only"] = false;
     std::ostringstream ss;
-    //problem.Serialize(ss);
+    problem.Serialize(ss);
     output["db_key"] = ss.str();
 
     auto db = GetDb(ctx);
@@ -652,20 +678,12 @@ int BNFin<Tgpu, Tref, Tmix>::MIOpenEval(TuningOp tuning_op)
         auto process_solver = [&]() -> bool {
             const std::string solver_name = eval_slv["solver_name"];
             std::cerr << "Processing solver: " << solver_name << std::endl;
-            const auto solver_id    = miopen::solver::Id{solver_name};
-            const auto& s           = solver_id.GetSolver();
-            //const auto algo         = solver_id.GetAlgo(conv_dir);
+            const auto solver = miopen::fin::FinInterface::GetBatchNormSolver(solver_name);
             const auto algo         = GetAlgorithm();
             res_item["solver_name"] = solver_name;
             res_item["algorithm"]   = algo;
 
-            if(s.IsEmpty())
-            {
-                res_item["reason"] = "Empty Solver";
-                std::cerr << "Skipping invalid solver: " << solver_id.ToString() << std::endl;
-                return false;
-            }
-            if(IsApplicable(ctx, problem))
+            if(solver.IsApplicable(ctx, problem))
             {
                 res_item["reason"] = "Not Applicable";
                 std::cerr << "Solver inapplicable: " << solver_name << std::endl;
