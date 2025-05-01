@@ -48,6 +48,7 @@
 #include <miopen/conv/data_invoke_params.hpp>
 #include <miopen/conv/wrw_invoke_params.hpp>
 #include <miopen/load_file.hpp>
+#include <miopen/utility/modified_z.hpp>
 #include <numeric>
 #include <vector>
 
@@ -294,9 +295,10 @@ class BaseFin
         }
     }
 
+    template <typename InvokeContext>
     float BenchmarkInvoker(const miopen::Invoker& invoker,
                            const miopen::Handle& h,
-                           const miopen::conv::DataInvokeParams& invoke_ctx)
+                           InvokeContext& invoke_ctx)
     {
         float kernel_time;
         std::vector<float> ktimes;
@@ -307,40 +309,8 @@ class BaseFin
             ktimes.push_back(kernel_time);
             std::cerr << "kernel_time : " << kernel_time << std::endl;
         }
-        //discard slow times
-        sort(ktimes.begin(), ktimes.end());
-        kernel_time = 0;
-        for(auto idx = 0; idx < INVOKE_LIMIT - INVOKE_DISCARD; idx++)
-        {
-            kernel_time += ktimes[idx];
-        }
-        kernel_time /= (INVOKE_LIMIT - INVOKE_DISCARD);
 
-        std::cerr << "kernel_time average : " << kernel_time << std::endl;
-        return kernel_time;
-    }
-
-    float BenchmarkInvoker(const miopen::Invoker& invoker,
-                           const miopen::Handle& h,
-                           const miopen::conv::WrWInvokeParams& invoke_ctx)
-    {
-        float kernel_time;
-        std::vector<float> ktimes;
-        for(auto idx = 0; idx < INVOKE_LIMIT; idx++)
-        {
-            invoker(h, invoke_ctx);
-            kernel_time = h.GetKernelTime();
-            ktimes.push_back(kernel_time);
-            std::cerr << "kernel_time : " << kernel_time << std::endl;
-        }
-        //discard slow times
-        sort(ktimes.begin(), ktimes.end());
-        kernel_time = 0;
-        for(auto idx = 0; idx < INVOKE_LIMIT - INVOKE_DISCARD; idx++)
-        {
-            kernel_time += ktimes[idx];
-        }
-        kernel_time /= (INVOKE_LIMIT - INVOKE_DISCARD);
+        kernel_time = miopen::removeHighOutliersAndGetMean(ktimes, 2.0f);
 
         std::cerr << "kernel_time average : " << kernel_time << std::endl;
         return kernel_time;
