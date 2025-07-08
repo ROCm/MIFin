@@ -1309,8 +1309,11 @@ int ConvFin<Tgpu, Tref>::GetandSetData()
     PrintVec(inputTensor.desc.GetStrides());
 
     const std::string in_layout = inputTensor.desc.GetLayout(inputTensor.desc.GetLayout_str());
-    std::cout << "inputTensor layout: " << in_layout
-              << ", possible: " << inputTensor.desc.IsPossibleLayout(in_layout, in_layout, false)
+    std::cout << "inputTensor layout: " << in_layout << ", possible: "
+              << inputTensor.desc.IsPossibleLayout(
+                     in_layout,
+                     in_layout,
+                     TensorDescriptor::LayoutValidationMode::StrictDecreasingStrides)
               << std::endl;
 
     if(IsInputTensorTransform())
