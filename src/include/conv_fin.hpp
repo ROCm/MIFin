@@ -1313,7 +1313,7 @@ int ConvFin<Tgpu, Tref>::GetandSetData()
               << inputTensor.desc.IsPossibleLayout(
                      in_layout,
                      in_layout,
-                     TensorDescriptor::LayoutValidationMode::StrictDecreasingStrides)
+                     miopen::TensorDescriptor::LayoutValidationMode::StrictDecreasingStrides)
               << std::endl;
 
     if(IsInputTensorTransform())
