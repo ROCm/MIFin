@@ -69,8 +69,8 @@ include(CheckCXXLinkerFlag)
 check_cxx_linker_flag(stdc++fs HAS_LIB_STD_FILESYSTEM)
 
 ############################################################
-# require C++17
-add_compile_options(-std=c++17)
+# require C++20
+add_compile_options(-std=c++20)
 
 ############################################################
 # OPTION - MIOpen Backend
