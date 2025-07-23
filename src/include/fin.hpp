@@ -158,7 +158,7 @@ class BaseFin
                 comp_opts += " -mcpu=" + handle.GetDeviceName();
             }
 
-            if(miopen::md5(hsaco) == md5_sum)
+            if(miopen::md5(hsaco) == static_cast<std::string>(md5_sum))
             {
                 try
                 {

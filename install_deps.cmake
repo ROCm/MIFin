@@ -77,7 +77,7 @@ if(NOT DEFINED ENV{CXX} AND NOT DEFINED CMAKE_CXX_COMPILER AND NOT DEFINED CMAKE
     endif()
 endif()
 
-cmake_get(ROCmSoftwarePlatform/rocm-recipes@d7b71f8ff71572833c8cf15b74279dd034e66f9d PREFIX ${PREFIX} CMAKE_ARGS ${PARSE_UNPARSED_ARGUMENTS})
+cmake_get(ROCmSoftwarePlatform/rocm-recipes@20dee476ed2c52f082376f2563d2efd3331f5b5f PREFIX ${PREFIX} CMAKE_ARGS ${PARSE_UNPARSED_ARGUMENTS})
 
 if(PARSE_--minimum)
     message(STATUS "MIOpen minimum dependency install.")
