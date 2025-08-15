@@ -294,10 +294,9 @@ class BaseFin
         }
     }
 
-    template <typename InvokeContext>
     float BenchmarkInvoker(const miopen::Invoker& invoker,
                            const miopen::Handle& h,
-                           const InvokeContext& invoke_ctx)
+                           const miopen::AnyInvokeParams& invoke_ctx)
     {
         float kernel_time;
         std::vector<float> ktimes;
