@@ -427,10 +427,17 @@ float ConvFin<Tgpu, Tref>::PerfTune(const miopen::Handle& h,
     // this path will not save result to udb
     if(s.IsTunable())
     {
-        perf_cfg = s.GenericSearch(perf_ctx, problem, invoke_ctx, &perf_sols);
-        // check if binaries were added, prep invoker for gathering timing
-        solution = s.GetSolution(perf_ctx, problem, perf_cfg);
-        SolutionHasProgram(h, solution);
+        try
+        {
+            perf_cfg = s.GenericSearch(perf_ctx, problem, invoke_ctx, &perf_sols);
+            // check if binaries were added, prep invoker for gathering timing
+            solution = s.GetSolution(perf_ctx, problem, perf_cfg);
+            SolutionHasProgram(h, solution);
+        }
+        catch(const std::exception& e)
+        {
+            std::cerr << "Skipping GenericSearch: " << e.what();
+        }
     }
 
     // this saves result to udb
