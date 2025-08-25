@@ -436,7 +436,7 @@ float ConvFin<Tgpu, Tref>::PerfTune(const miopen::Handle& h,
         }
         catch(const std::exception& e)
         {
-            std::cerr << "Skipping GenericSearch: " << e.what();
+            std::cerr << "Skipping GenericSearch: " << e.what() << std::endl;
         }
     }
 
