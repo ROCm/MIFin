@@ -1,31 +1,9 @@
-/*******************************************************************************
- *
- * MIT License
- *
- * Copyright (c) 2020 Advanced Micro Devices, Inc.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- *all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- *
- *******************************************************************************/
+// Copyright (c) Advanced Micro Devices, Inc., or its affiliates.
+// SPDX-License-Identifier:  MIT
+
 #ifndef GUARD_CONV_FIN_HPP
 #define GUARD_CONV_FIN_HPP
+
 #include "base64.hpp"
 #include "error.hpp"
 #include "fin.hpp"
@@ -54,7 +32,6 @@
 #include <miopen/nogpu/handle_impl.hpp>
 #endif
 
-#include <boost/range/adaptor/sliced.hpp>
 namespace fs = miopen::fs;
 
 #include <algorithm>
@@ -66,6 +43,7 @@ namespace fs = miopen::fs;
 #include <memory>
 #include <nlohmann/json.hpp>
 #include <numeric>
+#include <ranges>
 #include <sstream>
 #include <type_traits>
 #include <vector>
@@ -1372,7 +1350,7 @@ std::vector<int> ConvFin<Tgpu, Tref>::GetInputTensorLengths()
     in_lens[0] = command["batchsize"];
     in_lens[1] = command["in_channels"];
 
-    auto in_spatial_lens = boost::adaptors::slice(in_lens, 2, 2 + spatial_dim);
+    auto in_spatial_lens = in_lens | std::views::drop(2) | std::views::take(spatial_dim);
 
     if(spatial_dim == 2)
     {
@@ -1406,7 +1384,7 @@ std::vector<int> ConvFin<Tgpu, Tref>::GetWeightTensorLengths()
     int spatial_dim = command["spatial_dim"];
     wei_lens.resize(2 + spatial_dim);
 
-    auto wei_spatial_lens = boost::adaptors::slice(wei_lens, 2, 2 + spatial_dim);
+    auto wei_spatial_lens = wei_lens | std::views::drop(2) | std::views::take(spatial_dim);
 
     int group_count = std::max(int(command["group_count"]), 1);
 
