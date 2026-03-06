@@ -14,7 +14,7 @@ function(add_gtest TEST_NAME)
   target_include_directories(test_${TEST_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/src/include  
 	  					       $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/src/include>)
   target_compile_definitions(test_${TEST_NAME} PUBLIC TEST_RESOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/")
-  target_link_libraries(test_${TEST_NAME} gtest_main MIOpen ${Boost_LIBRARIES} hip::host $<BUILD_INTERFACE:roc::rocblas>)
+  target_link_libraries(test_${TEST_NAME} gtest_main MIOpen hip::host $<BUILD_INTERFACE:roc::rocblas>)
   gtest_discover_tests(test_${TEST_NAME})
   if(HAS_LIB_STD_FILESYSTEM)
     target_link_libraries(test_${TEST_NAME} stdc++fs)
