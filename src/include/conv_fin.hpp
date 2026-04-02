@@ -220,6 +220,7 @@ int ConvFin<Tgpu, Tref>::MIOpenCompile(TuningOp tuning_op)
 #endif
     ctx.SetStream(&handle);
     problem.SetupFloats(ctx);
+    problem.SetupComputeType(ctx);
 
     const auto network_config   = problem.BuildConfKey();
     const bool is_winograd_only = convDesc.IsWinograd3x3SupportedAndFast(ctx, problem);
@@ -562,6 +563,7 @@ int ConvFin<Tgpu, Tref>::MIOpenEval(TuningOp tuning_op)
     auto& h  = GetHandle();
     ctx.SetStream(&(h));
     problem.SetupFloats(ctx);
+    problem.SetupComputeType(ctx);
 
     const auto network_config   = problem.BuildConfKey();
     const bool is_winograd_only = convDesc.IsWinograd3x3SupportedAndFast(ctx, problem);
@@ -748,6 +750,7 @@ int ConvFin<Tgpu, Tref>::TestApplicability()
 
     ctx.SetStream(&handle);
     problem.SetupFloats(ctx);
+    problem.SetupComputeType(ctx);
     const auto network_config = problem.BuildConfKey();
     std::vector<std::string> app_solvers;
     for(const auto& id :
@@ -1019,6 +1022,7 @@ int ConvFin<Tgpu, Tref>::TestPerfDbValid()
             }
             ctx.SetStream(&handle);
             problem.SetupFloats(ctx);
+            problem.SetupComputeType(ctx);
 
             std::cerr << "test pdb" << std::endl;
             bool success = TestPerfDbEntries(config_id, ctx, problem, perf_ids, err_list, pdb_id);
@@ -1118,6 +1122,7 @@ int ConvFin<Tgpu, Tref>::SearchPreCompiledKernels()
 
         ctx.SetStream(&handle);
         problem.SetupFloats(ctx);
+        problem.SetupComputeType(ctx);
 
         // const auto network_config = problem.BuildConfKey();
         std::ostringstream ss;
